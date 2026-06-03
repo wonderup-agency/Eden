@@ -1,0 +1,20 @@
+name: Purge jsDelivr CDN cache
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - dist/**
+
+jobs:
+  purge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Purge jsDelivr cache for all dist files
+        run: |
+          find dist -type f \( -name "*.js" -o -name "*.css" \) | while read file; do
+            echo "Purging: $file"
+            curl -s "https://purge.jsdelivr.net/gh/${{ github.repository }}@main/$file"
+          done

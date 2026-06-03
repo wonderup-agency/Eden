@@ -1,0 +1,63 @@
+name: Initialize project
+
+# Patches webflow-snippet.html and package.json with the actual repo name
+# the first time a derived project pushes to main. Subsequent pushes are
+# no-ops thanks to the idempotency guard.
+#
+# The job is skipped on the template repo itself (is_template == true),
+# so the placeholders stay intact and ship to every derived project.
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  setup:
+    if: ${{ github.event.repository.is_template == false }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check if setup is needed
+        id: check
+        run: |
+          if grep -q "your-repo" webflow-snippet.html; then
+            echo "needed=true" >> $GITHUB_OUTPUT
+          else
+            echo "needed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Apply replacements
+        if: steps.check.outputs.needed == 'true'
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          export REPO_NAME="${REPO##*/}"
+
+          # webflow-snippet.html and README.md
+          sed -i "s|wonderup-agency/your-repo|${REPO}|g" webflow-snippet.html README.md
+
+          # package.json (use Node for reliable JSON editing)
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf-8'));
+            pkg.name = process.env.REPO_NAME;
+            pkg.repository.url = 'git+https://github.com/' + process.env.REPO;
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Commit and push
+        if: steps.check.outputs.needed == 'true'
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          REPO_NAME="${REPO##*/}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "chore: initialize project for ${REPO_NAME}"
+          git push

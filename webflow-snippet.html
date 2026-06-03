@@ -1,0 +1,108 @@
+<!--
+Dev/Prod Switcher
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CDN assets are always preloaded for fast production delivery.
+An inline script checks localStorage and loads either:
+  - CDN (production, default)
+  - localhost:8080 (dev mode)
+
+Toggle dev mode from browser devtools console:
+  Enable:  localStorage.dev = '1'
+  Disable: delete localStorage.dev
+
+Setup:
+  Assets are always served from the latest @main branch via jsDelivr.
+  Note: jsDelivr aggressively caches @main — changes may take time to
+  propagate. Use the jsDelivr purge API if you need instant updates.
+-->
+
+<!-- Preload CDN assets — browser fetches these immediately during HTML parse,
+     before any JS runs. In dev mode these requests are wasted but harmless. -->
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist/main.js" crossorigin>
+<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist/styles.css">
+
+<script>
+  (function () {
+    var dev = localStorage.dev
+    var cdn = 'https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist'
+    var base = dev ? 'http://127.0.0.1:8080' : cdn
+
+    var link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = base + '/styles.css'
+    document.head.appendChild(link)
+
+    var script = document.createElement('script')
+    script.src = base + '/main.js'
+    script.type = 'module'
+    script.defer = true
+    document.head.appendChild(script)
+
+    // Expose base URL so per-page bundle snippets reuse the same decision
+    window.__devBase = base
+
+    // Auto-reload when localStorage.dev is set or cleared from devtools
+    setInterval(function () {
+      if (!!localStorage.dev !== !!dev) location.reload()
+    }, 500)
+
+    // Dev mode indicator — only rendered when localStorage.dev is set
+    if (dev) {
+      document.addEventListener('DOMContentLoaded', function () {
+        var s = document.createElement('style')
+        s.textContent = '@keyframes dev-dot{0%,100%{opacity:1}50%{opacity:0.2}}'
+        document.head.appendChild(s)
+
+        var btn = document.createElement('button')
+        btn.title = 'Exit dev mode'
+        btn.innerHTML =
+          '<span style="width:6px;height:6px;border-radius:50%;background:#4ade80;' +
+          'animation:dev-dot 1.5s ease-in-out infinite;flex-shrink:0"></span>DEV' +
+          '<span style="margin-left:4px;font-size:10px;opacity:0.6">✕</span>'
+        btn.style.cssText =
+          'all:unset;box-sizing:border-box;position:fixed;bottom:16px;right:16px;' +
+          'z-index:2147483647;display:flex;align-items:center;gap:7px;' +
+          'background:rgba(0,0,0,0.8);color:#4ade80;' +
+          'border:1px solid rgba(74,222,128,0.35);border-radius:6px;' +
+          'padding:6px 10px;font:600 11px/1 monospace;letter-spacing:0.5px;' +
+          'cursor:pointer;backdrop-filter:blur(6px);' +
+          'box-shadow:0 2px 10px rgba(0,0,0,0.4);opacity:0.5;transition:opacity 0.15s'
+        btn.onmouseenter = function () {
+          btn.style.opacity = '1'
+          btn.style.borderColor = 'rgba(74,222,128,0.8)'
+        }
+        btn.onmouseleave = function () {
+          btn.style.opacity = '0.5'
+          btn.style.borderColor = 'rgba(74,222,128,0.35)'
+        }
+        btn.onclick = function () {
+          delete localStorage.dev
+          location.reload()
+        }
+        document.body.appendChild(btn)
+      })
+    }
+  })()
+</script>
+
+<!--
+Per-page bundle snippet
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+For page-specific bundles (src/pages/), add this to:
+  Webflow → Page Settings → Custom Code → Before </head>
+
+Replace "bundle-name" with your page bundle name.
+The create-page script outputs the correct snippet automatically.
+
+  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist/bundle-name.js" crossorigin>
+  <script>
+    (function () {
+      var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : 'https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist')
+      var s = document.createElement('script')
+      s.src = base + '/bundle-name.js'
+      s.type = 'module'
+      s.defer = true
+      document.head.appendChild(s)
+    })()
+  </script>
+-->

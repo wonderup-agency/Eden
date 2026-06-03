@@ -1,0 +1,53 @@
+{
+  "name": "your-repo",
+  "author": "Napu 😎",
+  "description": "Webflow custom code starter with component-based code splitting and Rollup bundling.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wonderup-agency/your-repo"
+  },
+  "version": "1.0.0",
+  "type": "module",
+  "main": "dist/main.js",
+  "scripts": {
+    "dev": "concurrently \"rollup --config rollup.config.dev.js --watch\" \"http-server -c-1 --cors --proxy http://127.0.0.1:8080? ./dist\"",
+    "dev:build": "rollup --config rollup.config.dev.js --watch",
+    "dev:server": "http-server -c-1 --cors --proxy http://127.0.0.1:8080? ./dist",
+    "build": "rollup --config rollup.config.prod.js",
+    "prebuild": "eslint src/ && prettier . --write",
+    "format": "prettier . --write",
+    "lint": "eslint src/",
+    "setup": "node scripts/setup.js",
+    "create-component": "node scripts/create-component.js",
+    "create-page": "node scripts/create-page.js",
+    "tunnel": "npx cloudflared tunnel --url http://127.0.0.1:8080"
+  },
+  "keywords": [
+    "javascript",
+    "starter",
+    "rollup",
+    "postcss",
+    "bundle"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "ISC",
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@rollup/plugin-commonjs": "^28.0.6",
+    "@rollup/plugin-node-resolve": "^16.0.1",
+    "@rollup/plugin-terser": "^1.0.0",
+    "concurrently": "^9.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^10.0.0",
+    "http-server": "^14.1.1",
+    "picocolors": "^1.1.1",
+    "postcss": "^8.5.6",
+    "postcss-preset-env": "^10.0.0",
+    "prettier": "^3.6.2",
+    "rollup": "^4.47.1",
+    "rollup-plugin-delete": "^3.0.1",
+    "rollup-plugin-postcss": "^4.0.2"
+  }
+}
