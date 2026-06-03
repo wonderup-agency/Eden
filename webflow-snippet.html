@@ -18,13 +18,13 @@ Setup:
 
 <!-- Preload CDN assets — browser fetches these immediately during HTML parse,
      before any JS runs. In dev mode these requests are wasted but harmless. -->
-<link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist/main.js" crossorigin>
-<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist/styles.css">
+<link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist/main.js" crossorigin>
+<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist/styles.css">
 
 <script>
   (function () {
     var dev = localStorage.dev
-    var cdn = 'https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist'
+    var cdn = 'https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist'
     var base = dev ? 'http://127.0.0.1:8080' : cdn
 
     var link = document.createElement('link')
@@ -94,10 +94,10 @@ For page-specific bundles (src/pages/), add this to:
 Replace "bundle-name" with your page bundle name.
 The create-page script outputs the correct snippet automatically.
 
-  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist/bundle-name.js" crossorigin>
+  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist/bundle-name.js" crossorigin>
   <script>
     (function () {
-      var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : 'https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist')
+      var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : 'https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist')
       var s = document.createElement('script')
       s.src = base + '/bundle-name.js'
       s.type = 'module'

@@ -1,10 +1,10 @@
 {
-  "name": "your-repo",
+  "name": "Eden",
   "author": "Napu 😎",
   "description": "Webflow custom code starter with component-based code splitting and Rollup bundling.",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wonderup-agency/your-repo"
+    "url": "git+https://github.com/wonderup-agency/Eden"
   },
   "version": "1.0.0",
   "type": "module",
