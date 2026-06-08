@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='logo-wall']",
+    importFn: () => import('./components/logo-wall.js'),
+  },
+  {
     selector: "[data-component='tabs-stats']",
     importFn: () => import('./components/tabs-stats.js'),
   },

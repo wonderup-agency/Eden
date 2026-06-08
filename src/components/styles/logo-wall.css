@@ -1,0 +1,63 @@
+/* logo-wall — testimonial reveal on hover. Paste into Webflow global head.
+   Layout, sizing and the logo roll are handled by Webflow's own logo-wall
+   classes — this ONLY adds the per-logo testimonial (the JS toggles the classes).
+   Don't add layout rules here; they fight Webflow's and collapse the slot. */
+
+[data-component='logo-wall'] {
+  --logo-wall-fade: 0.4s; /* testimonial show/hide fade */
+}
+
+/* Positioning context for the testimonial overlay. */
+[data-component='logo-wall'] .logo-wall__logo {
+  position: relative;
+}
+
+/* Testimonial overlay — hidden until JS adds .is-visible
+   (overrides the display:none / opacity:0 set in Webflow). */
+[data-component='logo-wall'] .logo-wall_testimonial {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--logo-wall-fade) ease,
+    visibility var(--logo-wall-fade) ease;
+}
+
+[data-component='logo-wall'] .logo-wall_testimonial.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Keep the large testimonial image inside its slot. */
+[data-component='logo-wall'] .logo-wall_testimonial-image {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Hide the logo while its testimonial shows. */
+[data-component='logo-wall']
+  .logo-wall__logo.is-showing-testimonial
+  [data-logo-wall-target] {
+  opacity: 0;
+  visibility: hidden;
+}
+
+/* Keyboard focus ring. */
+[data-component='logo-wall'] .logo-wall__logo:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+/* Reduced motion: no fade. */
+@media (prefers-reduced-motion: reduce) {
+  [data-component='logo-wall'] .logo-wall_testimonial {
+    transition: none;
+  }
+}
