@@ -24,14 +24,14 @@ Setup:
 <link
   rel="preload"
   as="script"
-  href="https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist/main.js"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist/main.js"
   crossorigin
 />
 
 <script>
   ;(function () {
     var dev = localStorage.dev
-    var cdn = 'https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist'
+    var cdn = 'https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist'
     var base = dev ? 'http://127.0.0.1:8080' : cdn
 
     var script = document.createElement('script')
@@ -113,10 +113,10 @@ For page-specific bundles (src/pages/), add this to:
 Replace "bundle-name" with your page bundle name.
 The create-page script outputs the correct snippet automatically.
 
-  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist/bundle-name.js" crossorigin>
+  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist/bundle-name.js" crossorigin>
   <script>
     (function () {
-      var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : 'https://cdn.jsdelivr.net/gh/wonderup-agency/your-repo@main/dist')
+      var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : 'https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist')
       var s = document.createElement('script')
       s.src = base + '/bundle-name.js'
       s.type = 'module'
