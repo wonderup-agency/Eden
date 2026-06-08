@@ -1,8 +1,13 @@
 import components from './components.js'
 
 function getComponentName(selector) {
-  const match = selector.match(/data-component=['"](.*?)['"]/)
-  return match ? match[1] : 'unknown'
+  // Prefer the data-component value; fall back to the data-* attribute name so
+  // components keyed on a custom attribute (e.g. [data-title-animation='True'])
+  // still log a meaningful name instead of "unknown".
+  const named = selector.match(/data-component=['"](.*?)['"]/)
+  if (named) return named[1]
+  const attr = selector.match(/data-([\w-]+)/)
+  return attr ? attr[1] : 'unknown'
 }
 
 // ── Debounce helper ──────────────────────────────────────────────────

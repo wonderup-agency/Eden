@@ -73,10 +73,18 @@ console.log(pc.green(`${pc.bold('✓')} Created ${pc.bold(pagePath)}`))
 console.log()
 console.log(`Add to Webflow → Page Settings → Custom Code → Before </head>:`)
 console.log()
-console.log(pc.cyan(`  <link rel="preload" as="script" href="${cdnDist}/${arg}.js" crossorigin>`))
+console.log(
+  pc.cyan(
+    `  <link rel="preload" as="script" href="${cdnDist}/${arg}.js" crossorigin>`
+  )
+)
 console.log(pc.cyan(`  <script>`))
 console.log(pc.cyan(`    (function () {`))
-console.log(pc.cyan(`      var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : '${cdnDist}')`))
+console.log(
+  pc.cyan(
+    `      var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : '${cdnDist}')`
+  )
+)
 console.log(pc.cyan(`      var s = document.createElement('script')`))
 console.log(pc.cyan(`      s.src = base + '/${arg}.js'`))
 console.log(pc.cyan(`      s.type = 'module'`))

@@ -1,0 +1,98 @@
+/* paradigm — pinned scroll story. Not bundled: paste into Webflow global head. */
+
+/* Root */
+[data-component='paradigm'] {
+  position: relative;
+  overflow: hidden;
+  --paradigm-top-safe: 8rem; /* nav clearance — centres the scene below the fixed nav */
+}
+
+/* Pinned stage — content centres in the area BELOW the nav (top-safe padding),
+   so the final text + image block clears the fixed nav without touching the
+   text↔image gap (the whole block shifts down together). */
+[data-paradigm-track] {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding-top: var(--paradigm-top-safe);
+}
+
+/* Glow blob */
+[data-paradigm-blob] {
+  position: absolute;
+  top: 56%;
+  left: 50%;
+  z-index: 0;
+  width: 42rem;
+  height: 42rem;
+  margin: -21rem 0 0 -21rem;
+  border-radius: 50%;
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    var(--paradigm-glow, #fbd07c) 0%,
+    rgba(251, 208, 124, 0) 70%
+  );
+  opacity: 0.6;
+  filter: blur(3rem);
+  pointer-events: none;
+  will-change: transform;
+}
+
+/* Messages stack */
+[data-paradigm-messages] {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 11rem;
+}
+
+[data-paradigm-message] {
+  width: 100%;
+}
+
+/* Overlap (enhanced mode) */
+[data-paradigm-message].is-overlap {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Split words */
+.paradigm_word-wrap {
+  display: inline-block;
+  overflow: visible;
+}
+.paradigm_word {
+  display: inline-block;
+  will-change: transform, filter, opacity;
+}
+
+/* Product image */
+[data-paradigm-visual] {
+  position: relative;
+  z-index: 1;
+}
+
+/* Responsive blob */
+@media screen and (max-width: 991px) {
+  [data-paradigm-blob] {
+    width: 36rem;
+    height: 36rem;
+    margin: -18rem 0 0 -18rem;
+  }
+}
+@media screen and (max-width: 479px) {
+  [data-paradigm-blob] {
+    width: 28rem;
+    height: 28rem;
+    margin: -14rem 0 0 -14rem;
+  }
+}

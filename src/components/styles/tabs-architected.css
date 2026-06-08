@@ -1,0 +1,42 @@
+/* tabs-architected — autoplay tabs. Not bundled: paste into Webflow global head.
+   Hooks: [data-component="tabs-architected"] root
+        · [tabs-architected="link"] clickable tab (contains the progress underline)
+        · .tabs-architected_tab-link-underline  progress bar (scaleX 0→1 from JS)
+        · .tabs-architected_tabs-content         panel container (stacks panels)
+        · .tabs-architected_tab-item             content panel (image + text)
+
+   Only what the Designer can't express lives here: the panel stacking (so panels
+   crossfade in the same spot with no CLS) and the underline's transform baseline.
+   Everything else (layout, spacing, colors) stays in Webflow. */
+
+/* Stack panels in the same cell so they swap in place. CSS grid keeps the
+   container as tall as the tallest panel → no layout shift when swapping. */
+[data-component='tabs-architected'] .tabs-architected_tabs-content {
+  display: grid;
+}
+[data-component='tabs-architected'] .tabs-architected_tab-item {
+  grid-area: 1 / 1; /* every panel occupies the same grid cell */
+}
+
+/* The image wipes open with a vertical clip-path; the content blocks de-blur. */
+[data-component='tabs-architected'] [tabs-architected='image'] {
+  will-change: clip-path;
+}
+
+/* Progress bar baseline — JS animates scaleX 0→1 (transform-origin left).
+   Start collapsed so there's no flash before JS sets the initial state. */
+[data-component='tabs-architected'] .tabs-architected_tab-link-underline {
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* Reduced motion: panels are toggled instantly from JS (autoAlpha), the progress
+   bar never animates — keep the active tab's underline visibly full. */
+@media (prefers-reduced-motion: reduce) {
+  [data-component='tabs-architected']
+    .tabs-architected_tab-link.is-active
+    .tabs-architected_tab-link-underline {
+    transform: scaleX(1);
+  }
+}

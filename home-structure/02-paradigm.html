@@ -1,0 +1,218 @@
+<!--
+  SECTION 02 — "paradigm" (Eden, Home v4 → Figma node 753:1829)
+  Narrative statement section that builds into a product reveal.
+
+  GSAP hooks (no JS yet — structure only):
+  Animation type: ScrollTrigger PIN + STAGGER reveal.
+
+    [data-component="paradigm"]      → component root (scope all queries here)
+    [data-paradigm-track]            → element to pin while the sequence plays
+    [data-paradigm-glow]             → decorative gold glow (parallax/scale on scroll)
+    [data-paradigm-item]             → each element revealed in sequence
+    [data-paradigm-item-order]       → reveal order within the pinned timeline (1..4)
+
+  Reveal sequence (matches the 4 design states):
+    1 → heading        "Software defined the last era of medicine..."
+    2 → copy step 1    "For years, healthcare technology meant..."
+    3 → copy step 2    "Eden is built for the next paradigm..."
+    4 → product visual (Eden Imaging OS panel)
+
+  No-JS fallback: all items stay visible and readable without JS.
+  IMPORTANT: replace the product image src with the asset exported from Figma.
+-->
+<section class="section_paradigm" data-component="paradigm" data-paradigm-track>
+  <div class="padding-global">
+    <div class="container-large">
+      <div class="padding-section-large">
+        <div class="paradigm_layout">
+          <!-- Decorative gold glow -->
+          <div
+            class="paradigm_glow"
+            data-paradigm-glow
+            aria-hidden="true"
+          ></div>
+
+          <div class="paradigm_content">
+            <h2
+              class="paradigm_heading"
+              data-paradigm-item
+              data-paradigm-item-order="1"
+            >
+              Software defined the last era of medicine. Intelligence defines
+              the next.
+            </h2>
+
+            <div class="paradigm_copy-list">
+              <p
+                class="paradigm_copy"
+                data-paradigm-item
+                data-paradigm-item-order="2"
+              >
+                For years, healthcare technology meant digitizing records and
+                workflows with little or no impact on clinical outcomes.
+              </p>
+              <p
+                class="paradigm_copy"
+                data-paradigm-item
+                data-paradigm-item-order="3"
+              >
+                Eden is built for the next paradigm: frontier AI that delivers
+                precise clinical answers for every patient.
+              </p>
+            </div>
+
+            <div
+              class="paradigm_visual"
+              data-paradigm-item
+              data-paradigm-item-order="4"
+            >
+              <img
+                class="paradigm_image"
+                src="PRODUCT-UI-PLACEHOLDER.png"
+                alt="Eden Imaging OS interface showing AI-analyzed medical scans"
+                width="1152"
+                height="648"
+                loading="lazy"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<style>
+  /* Section tokens (Eden styleguide) — declared on the component root only,
+     so Client-First globals are never redefined. */
+  .section_paradigm {
+    --paradigm-bg: #f4f3f1;
+    --paradigm-glow: #fbd07c;
+    --paradigm-heading-color: #000000;
+    --paradigm-copy-color: #666666;
+    --paradigm-font-heading: 'Euclid Circular B', sans-serif;
+    --paradigm-font-body: 'Inter', sans-serif;
+    position: relative;
+    overflow: hidden;
+    background-color: var(--paradigm-bg);
+  }
+
+  /* Pinned stage — fills the viewport so the sequence can scrub */
+  .paradigm_layout {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    text-align: center;
+  }
+
+  /* Decorative gold glow, bottom-centered */
+  .paradigm_glow {
+    position: absolute;
+    bottom: -12rem;
+    left: 50%;
+    z-index: 0;
+    width: 60rem;
+    height: 36rem;
+    max-width: 120%;
+    transform: translateX(-50%);
+    background: radial-gradient(
+      50% 50% at 50% 50%,
+      var(--paradigm-glow) 0%,
+      rgba(251, 208, 124, 0) 70%
+    );
+    opacity: 0.55;
+    pointer-events: none;
+    filter: blur(0.5rem);
+  }
+
+  .paradigm_content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    width: 100%;
+    max-width: 48rem;
+  }
+
+  .paradigm_heading {
+    margin: 0;
+    max-width: 40rem;
+    color: var(--paradigm-heading-color);
+    font-family: var(--paradigm-font-heading);
+    font-weight: 400;
+    font-size: 2.5rem;
+    line-height: 1.2;
+    letter-spacing: -0.02em;
+  }
+
+  .paradigm_copy-list {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    max-width: 36rem;
+  }
+
+  .paradigm_copy {
+    margin: 0;
+    color: var(--paradigm-copy-color);
+    font-family: var(--paradigm-font-body);
+    font-weight: 400;
+    font-size: 1.125rem;
+    line-height: 1.5;
+  }
+
+  .paradigm_visual {
+    width: 100%;
+    max-width: 72rem;
+    margin-top: 2rem;
+    border-radius: 0.75rem;
+    overflow: hidden;
+    box-shadow: 0 1.5rem 3rem rgba(0, 0, 0, 0.18);
+  }
+
+  .paradigm_image {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  /* Tablet */
+  @media screen and (max-width: 991px) {
+    .paradigm_heading {
+      font-size: 2.25rem;
+    }
+    .paradigm_visual {
+      max-width: 100%;
+    }
+  }
+
+  /* Mobile landscape */
+  @media screen and (max-width: 767px) {
+    .paradigm_content {
+      gap: 1.5rem;
+    }
+    .paradigm_heading {
+      font-size: 1.75rem;
+    }
+    .paradigm_copy {
+      font-size: 1rem;
+    }
+  }
+
+  /* Mobile portrait */
+  @media screen and (max-width: 479px) {
+    .paradigm_heading {
+      font-size: 1.5rem;
+    }
+    .paradigm_glow {
+      width: 28rem;
+      height: 22rem;
+    }
+  }
+</style>

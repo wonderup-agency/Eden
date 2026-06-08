@@ -1,0 +1,79 @@
+/* tabs-stats — point-cloud morph tabs. Not bundled: paste into Webflow global head.
+   Hooks: [data-component="tabs-stats"] root
+        · [tabs-architected="link"]   each stat tab (number + label + underline)
+        · .tabs-architected_tab-link-underline  progress bar (scaleX 0→1 from JS)
+        · [tabs-architected="image"] img  the per-tab chart PNG (sampled to points)
+        · [tabs-architected="stage"] (optional)  the canvas stage; defaults to
+          .tabs-stats_tabs-content if the hook is absent.
+
+   The component injects a <canvas class="tabs-stats_pointcloud"> into the stage
+   and adds .is-canvas to the root once the images are sampled. Before that (and
+   in the static fallback) the source images show via .is-active. */
+
+/* Stage holds the stacked source images + the injected canvas. */
+[data-component='tabs-stats'] .tabs-stats_tabs-content {
+  position: relative;
+  display: grid;
+}
+
+/* Source images stack in one cell; only the active one shows (fallback / no-JS /
+   reduced-motion). They also reserve the stage height so the canvas has a size. */
+[data-component='tabs-stats'] .tabs-stats_tab-item {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+[data-component='tabs-stats'] .tabs-stats_tab-item.is-active {
+  opacity: 1;
+}
+
+/* Canvas mode: the point cloud owns the stage — hide the source images but keep
+   their layout (visibility, not display) so the stage keeps its height. */
+[data-component='tabs-stats'].is-canvas .tabs-stats_tab-item {
+  opacity: 0;
+  visibility: hidden;
+}
+
+[data-component='tabs-stats'] .tabs-stats_pointcloud {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+[data-component='tabs-stats'].is-canvas .tabs-stats_pointcloud {
+  pointer-events: auto; /* hover nebula needs the cursor over the canvas */
+}
+
+/* Optional gold glow behind the cloud (matches the playground). Delete if Webflow
+   already provides one. */
+[data-component='tabs-stats'].is-canvas .tabs-stats_tabs-content::before {
+  content: '';
+  position: absolute;
+  inset: 10% 0 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    ellipse 60% 55% at 50% 78%,
+    rgba(226, 188, 110, 0.42),
+    rgba(226, 188, 110, 0) 70%
+  );
+}
+
+/* Progress-bar underline baseline — JS animates scaleX 0→1 (origin left). */
+[data-component='tabs-stats'] .tabs-architected_tab-link-underline {
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* Reduced motion: no canvas, no autoplay fill — keep the active underline full. */
+@media (prefers-reduced-motion: reduce) {
+  [data-component='tabs-stats']
+    .tabs-stats_tab-link.is-active
+    .tabs-architected_tab-link-underline {
+    transform: scaleX(1);
+  }
+}

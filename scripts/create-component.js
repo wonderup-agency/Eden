@@ -44,9 +44,7 @@ if (registryContent.includes(`data-component='${name}'`)) {
   )
   if (arg !== name) {
     console.log(
-      pc.red(
-        `  Note: nested components use the basename as the selector.`
-      )
+      pc.red(`  Note: nested components use the basename as the selector.`)
     )
     console.log(
       pc.red(
@@ -54,9 +52,7 @@ if (registryContent.includes(`data-component='${name}'`)) {
       )
     )
     console.log(
-      pc.red(
-        `  Use a unique basename (e.g. "${dirname(arg)}/${name}-alt").`
-      )
+      pc.red(`  Use a unique basename (e.g. "${dirname(arg)}/${name}-alt").`)
     )
   }
   console.log()
