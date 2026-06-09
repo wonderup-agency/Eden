@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='scroll-morph']",
+    importFn: () => import('./components/scroll-morph.js'),
+  },
+  {
     selector: "[data-component='logo-wall']",
     importFn: () => import('./components/logo-wall.js'),
   },

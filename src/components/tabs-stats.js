@@ -5,9 +5,12 @@ Webflow attribute: data-component="tabs-stats"
 Stats tabs with a PNG-sampled 2D point-cloud graphic that morphs between states.
 Each stat link is a tab; the matching tab-item image is sampled into ~7k points
 and the cloud lerps (position + alpha) from one state to the next on switch. On
-first scroll into view the points rise from the floor (intro); hovering the stage
-loosens them like a nebula. The active link's underline fills left→right as an
-autoplay progress bar; when full it advances to the next tab.
+first scroll into view the points start as a soft cloud dispersed across the
+stage, float for ~1s, then converge into the first state (intro). A residual
+shimmer keeps the cloud gently drifting even when assembled and idle (Stripe-like,
+never frozen). Hovering the stage loosens nearby points like a nebula — desktop
+only (disabled on tablet/below). The active link's underline fills left→right as
+an autoplay progress bar; when full it advances to the next tab.
 
 Ported from playground/diagnostic-tabs-pointcloud.html. Canvas 2D only — no 3D
 library. GSAP is expected as a global (loaded site-wide in Webflow); the cloud is
@@ -36,23 +39,30 @@ const MORPH_EASE = 'power2.inOut'
 const DOT_COLOR = '125,130,140' // #7d828c
 const FIT = 0.82 // fraction of the available half-stage the cloud fills (1 = touches the edges)
 const DOT_RADIUS = 1.4
-// Hover nebula
+// Hover nebula (desktop only — disabled on tablet/below, where it reads as jitter)
 const HOVER_RADIUS = 0.4
 const HOVER_PUSH = 0.03
 const HOVER_SWIRL = 0.06
 const HOVER_EASE = 0.11
 const HOVER_SCATTER = 0.18
-// Intro (float in → assemble): points appear scattered in a soft floating cloud,
-// drift gently, then converge into the first state (staggered).
-const INTRO_SCATTER = 1.0 // initial spread of the floating cloud (normalized units)
-const INTRO_FLOAT = 0.08 // ambient drift amplitude while dispersed
-const INTRO_FLOAT_SPEED = 0.9 // ambient drift speed
+const HOVER_MIN_WIDTH = 992 // px — hover nebula only at/above this (Webflow desktop base)
+// Ambient drift — a residual shimmer that NEVER fully stops, so the cloud keeps
+// breathing even when assembled and idle (Stripe-like). Same model as scroll-morph.
+const DRIFT = 0.2 // drift amplitude while dispersed (normalized units)
+const DRIFT_SPEED = 0.6 // drift speed
+const SHIMMER_FLOOR = 0.22 // fraction of DRIFT kept once assembled (never frozen)
+// Intro (float in → assemble): points appear as a soft cloud dispersed across the
+// stage, drift gently, then converge into the first state (staggered).
+const INTRO_SCATTER = 1.0 // dispersed coverage (1 = fills the stage, like scroll-morph)
 const INTRO_FADE = 0.5 // fade-in (s)
-const INTRO_HOLD = 0.6 // float in place before converging (s)
+const INTRO_HOLD = 1.0 // float in place ~1s before converging (s)
 const INTRO_DURATION = 1.6 // convergence (s)
 const INTRO_STAGGER = 0.5 // spread of per-point convergence start (organic)
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+// Hover nebula is desktop-only — on tablet/below the cursor-driven scatter reads
+// as random jitter, so it's gated behind this query (reactive, no re-binding).
+const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
 
 // Deterministic RNG so the subsample is stable across reloads.
 function mulberry32(seed) {
@@ -272,6 +282,8 @@ function setupTabs(root) {
   let cssW = 0
   let cssH = 0
   let scale = 0
+  let coverX = 1 // stage half-width in normalized units (for the section-filling scatter)
+  let coverY = 1 // stage half-height in normalized units
   let extX = 1 // largest normalized half-width across states (for auto-fit)
   let extY = 1 // largest normalized half-height across states
   let dpr = 1
@@ -315,6 +327,9 @@ function setupTabs(root) {
     // Auto-fit: scale so the largest state fits the stage on both axes, with the
     // FIT margin. Guarantees the cloud never clips, whatever the stage's ratio is.
     scale = Math.min((cssW * 0.5) / extX, (cssH * 0.5) / extY) * FIT
+    // Stage half-extent in normalized units, so the dispersed intro cloud fills it.
+    coverX = scale ? (cssW * 0.5) / scale : 1
+    coverY = scale ? (cssH * 0.5) / scale : 1
     if (ready) draw()
   }
 
@@ -334,21 +349,26 @@ function setupTabs(root) {
       const span = 1 + INTRO_STAGGER
       const r = DOT_RADIUS
       const now = window.performance.now() * 0.001
+      const covX = coverX * INTRO_SCATTER
+      const covY = coverY * INTRO_SCATTER
       for (let i = 0; i < N; i++) {
         let pp = p * span - introDelay[i]
         pp = pp < 0 ? 0 : pp > 1 ? 1 : pp
         pp = pp * pp * (3 - 2 * pp)
-        const floatAmp = (1 - pp) * INTRO_FLOAT
+        // Drift fades from full (dispersed) to the residual shimmer (assembled),
+        // matching the persistent drift below so the hand-off is seamless.
+        const driftAmp =
+          (SHIMMER_FLOOR + (1 - SHIMMER_FLOOR) * (1 - pp)) * DRIFT
         const fx =
-          Math.cos(now * INTRO_FLOAT_SPEED + driftPhase[i]) *
-          dispX[i] *
-          floatAmp
+          Math.cos(now * DRIFT_SPEED + driftPhase[i]) * dispX[i] * driftAmp
         const fy =
-          Math.sin(now * INTRO_FLOAT_SPEED + driftPhase[i]) *
-          dispY[i] *
-          floatAmp
-        const bx = startX[i] + (s0.x[i] - startX[i]) * pp + fx
-        const by = startY[i] + (s0.y[i] - startY[i]) * pp + fy
+          Math.sin(now * DRIFT_SPEED + driftPhase[i]) * dispY[i] * driftAmp
+        // Dispersed position fills the stage (scatter fraction × stage extent);
+        // converge to state 0 as pp → 1.
+        const dx = startX[i] * covX
+        const dy = startY[i] * covY
+        const bx = dx + (s0.x[i] - dx) * pp + fx
+        const by = dy + (s0.y[i] - dy) * pp + fy
         ctx.globalAlpha = s0.a[i] * introFade.v
         ctx.drawImage(
           sprite,
@@ -359,7 +379,7 @@ function setupTabs(root) {
         )
       }
       ctx.globalAlpha = 1
-      return true
+      return
     }
 
     const t = morph.t
@@ -368,10 +388,15 @@ function setupTabs(root) {
     const ta = toState.a
     const baseR = DOT_RADIUS
     const R2 = HOVER_RADIUS * HOVER_RADIUS
-    let activity = 0
+    const now = window.performance.now() * 0.001
+    const driftAmp = SHIMMER_FLOOR * DRIFT // residual shimmer — the cloud never freezes
     for (let i = 0; i < N; i++) {
-      const bx = fromX[i] + (tx[i] - fromX[i]) * t
-      const by = fromY[i] + (ty[i] - fromY[i]) * t
+      const fx =
+        Math.cos(now * DRIFT_SPEED + driftPhase[i]) * dispX[i] * driftAmp
+      const fy =
+        Math.sin(now * DRIFT_SPEED + driftPhase[i]) * dispY[i] * driftAmp
+      const bx = fromX[i] + (tx[i] - fromX[i]) * t + fx
+      const by = fromY[i] + (ty[i] - fromY[i]) * t + fy
       let txo = 0
       let tyo = 0
       let glow = 0
@@ -394,7 +419,6 @@ function setupTabs(root) {
       }
       offX[i] += (txo - offX[i]) * HOVER_EASE
       offY[i] += (tyo - offY[i]) * HOVER_EASE
-      activity += Math.abs(offX[i]) + Math.abs(offY[i])
       const sx = cx + (bx + offX[i]) * scale
       const sy = cy + (by + offY[i]) * scale
       const r = baseR * (1 + glow * 0.7)
@@ -402,17 +426,17 @@ function setupTabs(root) {
       ctx.drawImage(sprite, sx - r, sy - r, r * 2, r * 2)
     }
     ctx.globalAlpha = 1
-    return activity > N * 0.0008
   }
 
+  // The loop runs continuously while the section is on screen — the residual
+  // shimmer means there's always something to draw. It stops when off-screen.
   function loop() {
-    const active = draw()
-    if (morphing || hovActive || introActive || active)
-      window.requestAnimationFrame(loop)
+    draw()
+    if (inView) window.requestAnimationFrame(loop)
     else looping = false
   }
   function ensureLoop() {
-    if (!looping) {
+    if (!looping && inView) {
       looping = true
       window.requestAnimationFrame(loop)
     }
@@ -520,20 +544,26 @@ function setupTabs(root) {
     resumeProgress()
   })
 
-  // Localized hover nebula over the graphic stage.
+  // Localized hover nebula over the graphic stage — desktop only.
   stage.addEventListener('pointermove', (e) => {
+    if (!desktopHover.matches) return
     const rect = stage.getBoundingClientRect()
     mx = (e.clientX - rect.left - cssW / 2) / scale
     my = (e.clientY - rect.top - cssH * 0.5) / scale
     ensureLoop()
   })
   stage.addEventListener('pointerenter', () => {
+    if (!desktopHover.matches) return
     hovActive = true
     ensureLoop()
   })
   stage.addEventListener('pointerleave', () => {
     hovActive = false
     ensureLoop()
+  })
+  // If the viewport drops below desktop mid-hover, release the nebula.
+  desktopHover.addEventListener('change', (e) => {
+    if (!e.matches) hovActive = false
   })
 
   // Visibility: arm autoplay + fire the intro on first enter; pause when hidden.
@@ -543,6 +573,7 @@ function setupTabs(root) {
       if (inView) {
         if (ready && !started && !introActive) runIntro()
         else resumeProgress()
+        ensureLoop() // resume the shimmer loop on re-entry
       } else {
         stopProgress()
       }
@@ -660,13 +691,13 @@ function setupTabs(root) {
     // Source images are now sampled — hand the stage over to the canvas.
     root.classList.add('is-canvas')
 
-    // Scatter every point into a soft floating cloud (computed once) for the intro.
+    // Scatter every point into a soft cloud dispersed across the whole stage
+    // (computed once) for the intro. Fractions in [-1,1] are scaled by the stage
+    // half-extent (coverX/coverY) at draw time, like scroll-morph.
     const frng = mulberry32(7)
     for (let i = 0; i < N; i++) {
-      const ang = frng() * Math.PI * 2
-      const rad = Math.sqrt(frng()) * INTRO_SCATTER // sqrt → uniform disc fill
-      startX[i] = Math.cos(ang) * rad
-      startY[i] = Math.sin(ang) * rad
+      startX[i] = frng() * 2 - 1
+      startY[i] = frng() * 2 - 1
       introDelay[i] = frng() * INTRO_STAGGER
       driftPhase[i] = frng() * Math.PI * 2
     }

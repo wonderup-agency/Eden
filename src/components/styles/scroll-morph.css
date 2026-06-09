@@ -1,0 +1,81 @@
+/* scroll-morph — pinned point-cloud scroll story.
+   NOT bundled: paste into Webflow → Project Settings → Custom Code → Head.
+
+   This file holds ONLY what the Designer can't express (JS-injected canvas,
+   runtime state classes, the message-stacking trick, pointer-events, anti-FOUC,
+   the static fallback). Everything else is set in the Designer — see the
+   "Designer style settings" table in .claude/rules/components/scroll-morph.md:
+
+     Root   → Position Relative
+     Track  → Position Relative · Width 100% · Min-height 100VH · Overflow Hidden
+     Stage  → Position Absolute · inset 0 · Z-index 0
+     Message→ Max-width 42rem · Margin 0 · Text-align Center
+     (heading/paragraph typography & color are fully free in the Designer)
+*/
+
+[data-component='scroll-morph'] {
+  --scroll-morph-top-safe: 0rem; /* nav clearance — used by the track + messages */
+}
+
+/* Nav clearance: kept here (not the Designer) so the track padding and the
+   messages top offset below stay in sync via the one variable. */
+[data-scroll-morph-track] {
+  padding-top: var(--scroll-morph-top-safe);
+}
+
+/* The canvas is injected by JS into the stage — it doesn't exist in the Designer. */
+.scroll-morph_canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* Once the source image is sampled, hide it — the canvas takes over (runtime class). */
+[data-component='scroll-morph'].is-canvas [data-scroll-morph-source] {
+  display: none;
+}
+
+/* Text layers crossfade in the same centered spot, over the cloud.
+   The grid + grid-area below stack every message in one cell (the overlap trick).
+   pointer-events:none so the hover reaches the cloud stage underneath — Webflow
+   has no pointer-events control in the Designer, so it stays here. */
+[data-scroll-morph-messages] {
+  position: absolute;
+  inset: var(--scroll-morph-top-safe) 0 0;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem; /* breathing room so the text never touches the viewport edges */
+  pointer-events: none;
+}
+
+[data-scroll-morph-message] {
+  grid-area: 1 / 1; /* stack all messages in one cell */
+}
+
+/* Word spans are styled inline from JS (display:inline-block + will-change). */
+
+/* Anti-FOUC: the global gate (see below) hides the root until JS sets the start
+   state and adds .is-ready. Reduced-motion users are never gated. */
+html.js-anim [data-component='scroll-morph'] {
+  opacity: 0;
+}
+html.js-anim [data-component='scroll-morph'].is-ready {
+  opacity: 1;
+}
+
+/* Static / reduced-motion / unsamplable image: readable vertical layout, no pin,
+   no overlap (the .is-canvas class is only added when the cloud is live). */
+[data-component='scroll-morph']:not(.is-canvas) [data-scroll-morph-track] {
+  min-height: 0;
+  overflow: visible;
+}
+[data-component='scroll-morph']:not(.is-canvas) [data-scroll-morph-messages] {
+  position: static;
+  display: block;
+  padding: 4rem 1.5rem;
+}
+[data-component='scroll-morph']:not(.is-canvas) [data-scroll-morph-message] {
+  grid-area: auto;
+  margin: 0 auto 3rem;
+}
