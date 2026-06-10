@@ -49,8 +49,14 @@ const HOVER_MIN_WIDTH = 992 // px — hover nebula only at/above this (Webflow d
 // Ambient drift — a residual shimmer that NEVER fully stops, so the cloud keeps
 // breathing even when assembled and idle (Stripe-like). Same model as scroll-morph.
 const DRIFT = 0.2 // drift amplitude while dispersed (normalized units)
-const DRIFT_SPEED = 0.6 // drift speed
-const SHIMMER_FLOOR = 0.22 // fraction of DRIFT kept once assembled (never frozen)
+const DRIFT_SPEED = 0.85 // drift speed
+const SHIMMER_FLOOR = 0.4 // fraction of DRIFT kept once assembled (never frozen)
+// Coherent breathing of the assembled cloud — a slow radial pulse rippling out
+// from the cloud center, the same "living" quality as scroll-morph's ring. Kept
+// small so the sampled graphic stays legible while it breathes.
+const BREATH_AMP = 0.03 // radial pulse amplitude (fraction of each point's distance from center)
+const BREATH_SPEED = 0.9 // pulse speed (rad/s)
+const BREATH_RIPPLE = 2.2 // spatial frequency — >0 ripples outward instead of pulsing uniformly
 // Intro (float in → assemble): points appear as a soft cloud dispersed across the
 // stage, drift gently, then converge into the first state (staggered).
 const INTRO_SCATTER = 1.0 // dispersed coverage (1 = fills the stage, like scroll-morph)
@@ -395,8 +401,16 @@ function setupTabs(root) {
         Math.cos(now * DRIFT_SPEED + driftPhase[i]) * dispX[i] * driftAmp
       const fy =
         Math.sin(now * DRIFT_SPEED + driftPhase[i]) * dispY[i] * driftAmp
-      const bx = fromX[i] + (tx[i] - fromX[i]) * t + fx
-      const by = fromY[i] + (ty[i] - fromY[i]) * t + fy
+      let bx = fromX[i] + (tx[i] - fromX[i]) * t + fx
+      let by = fromY[i] + (ty[i] - fromY[i]) * t + fy
+      // Coherent radial breathing (morph-section feel): a slow ripple out from
+      // the cloud center (origin in normalized space) keeps the assembled shape
+      // alive, not just shimmering. Scales each point toward/away from center.
+      const dd = Math.sqrt(bx * bx + by * by)
+      const breath =
+        1 + Math.sin(now * BREATH_SPEED - dd * BREATH_RIPPLE) * BREATH_AMP
+      bx *= breath
+      by *= breath
       let txo = 0
       let tyo = 0
       let glow = 0

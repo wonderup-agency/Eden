@@ -3,19 +3,18 @@ Component: scroll-morph
 Webflow attribute: data-component="scroll-morph"
 
 Pinned, scroll-driven section. A PROCEDURAL ring of ~2,500 light-grey dots is
-drawn on a <canvas> behind the text. As the section scrubs the cloud assembles
-PROGRESSIVELY: fully dispersed across the section under the first message, it
-coalesces one step per title change (each message de-blurs out / in), forming
-the ring only by the LAST message — which it then holds, assembled and in view,
-as the pin releases. The assembled ring never freezes: it breathes with a
-radial sine wave + a slight tangential wobble. Hovering the cloud pushes nearby
-points away (eased nebula). Text uses the shared word de-blur
-(src/utils/word-reveal.js), identical to hero / paradigm / title-animation.
+drawn on a <canvas> behind a single line of text. As the section scrubs the
+cloud assembles: fully dispersed across the section at the start, it coalesces
+into the ring across the scroll and then holds, assembled and in view, as the
+sticky track releases. The single text stays revealed and held the whole time —
+ONLY the background (the ring) animates. The assembled ring never freezes: it
+breathes with a radial sine wave + a slight tangential wobble. Hovering the
+cloud pushes nearby points away (eased nebula).
 
 The ring + scatter + breathing + mouse-push are ported from the reference
 prototype (a fixed-overlay native-scroll sketch) and adapted to this section's
-pinned, multi-message, normalized-coordinate engine. No image is sampled — the
-shape is generated in code, so there is no source <img> and no CORS concern.
+sticky, normalized-coordinate engine. No image is sampled — the shape is
+generated in code, so there is no source <img> and no CORS concern.
 
 GSAP + ScrollTrigger are expected as globals (loaded site-wide in Webflow).
 
@@ -26,20 +25,8 @@ The CSS is NOT bundled here — it lives in Webflow's global head custom code.
 The source of truth is ./styles/scroll-morph.css (copy/paste it into Webflow).
 */
 
-import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
-
 const { gsap } = window
 const ScrollTrigger = window.ScrollTrigger
-
-// De-blur OUT (symmetric to the shared REVEAL_TO — words blur back + rise out).
-const REVEAL_OUT = {
-  autoAlpha: 0,
-  filter: 'blur(16px)',
-  yPercent: -16,
-  duration: 0.9,
-  stagger: 0.06,
-  ease: 'sine.in',
-}
 
 // ---- Point cloud (procedural ring, ported from the prototype) ----
 const TARGET_POINTS = 2500 // dot count
@@ -51,7 +38,7 @@ const BIG_R = [1.5, 3.0] // the ~15% bigger dots: min..max radius
 // Ring geometry — normalized so the ring radius is 1; thickness is a soft
 // gaussian band around it (varied per point).
 const RING_THICKNESS = 0.1 // gaussian spread of the band (fraction of radius)
-const FIT = 0.82 // fraction of the half-stage the ring fills (auto-fit)
+const FIT = 1 // fraction of the half-stage the ring fills (auto-fit)
 // Alpha: soft when dispersed/idle, brighter once assembled.
 const ALPHA_MIN = 0.15 // dispersed base alpha (lower bound)
 const ALPHA_MAX = 0.4 // dispersed base alpha (upper bound)
@@ -65,20 +52,13 @@ const RING_WAVE_AMP = 0.024 // radial wobble amplitude (fraction of ring radius)
 const RING_WAVE_SPEED = 1.2 // radial wave speed (rad/s, base)
 const RING_WOBBLE_AMP = 0.02 // tangential angle wobble (rad)
 const RING_WOBBLE_SPEED = 0.6 // tangential wobble speed (rad/s, base)
-// Scroll choreography — the cloud assembles PROGRESSIVELY across the messages:
-// fully dispersed on the first, forming the ring only by the last.
-const PIN_LEN = 3 // sticky scroll length in viewport heights (root height) — longer = each change is gentler
+// Scroll choreography — the cloud starts fully dispersed across the section and
+// assembles into the ring across the scroll, then holds assembled.
+const PIN_LEN = 3 // sticky scroll length in viewport heights (root height) — longer = gentler
 const SCRUB = 0.5 // ScrollTrigger catch-up lag (s) — lower = more dynamic / tracks scroll tighter
-const HOLD = 0.4 // beat per message held (lower = snappier message changes)
-const ASSEMBLE = 1.1 // duration of each per-message assembly step
-const ASSEMBLE_EASE_POW = 1.5 // >1 keeps early messages more dispersed; ring snaps in late
-const END_HOLD = 1.4 // final dwell on the last message (ends assembled, in view)
-// Snap to each message so a fast scroll can't fly past them all — when scrolling
-// settles it eases to the nearest message beat, so every message gets seen.
-const SNAP = true
-const SNAP_DURATION_MIN = 0.25 // fastest snap (close to a message)
-const SNAP_DURATION_MAX = 0.6 // slowest snap (far — after a big flick)
-const SNAP_DELAY = 0.08 // wait after scroll stops before snapping (s)
+const HOLD = 0.4 // beat held fully dispersed before the ring starts forming
+const ASSEMBLE = 1.1 // duration of the dispersed → ring assembly
+const END_HOLD = 1.4 // final dwell with the ring assembled and in view
 // Hover push (pixel feel — converted to normalized units via `scale` at runtime).
 const HOVER_RADIUS_PX = 110 // cursor influence radius
 const HOVER_PUSH_PX = 26 // how far nearby dots are pushed away
@@ -111,9 +91,9 @@ function gaussian(rng) {
   return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v)
 }
 
-// Static fallback: reveal the messages readable. No canvas.
-function setupStatic(root, messages) {
-  gsap && gsap.set(messages, { clearProps: 'all' })
+// Static fallback: reveal the single text readable. No canvas.
+function setupStatic(root, message) {
+  gsap && gsap.set(message, { clearProps: 'all' })
   root.classList.add('is-ready')
 }
 
@@ -121,9 +101,9 @@ function setupStatic(root, messages) {
 function setupRoot(root) {
   const track = root.querySelector('[data-scroll-morph-track]')
   const stage = root.querySelector('[data-scroll-morph-stage]') || track
-  const messages = gsap
-    ? gsap.utils.toArray(root.querySelectorAll('[data-scroll-morph-message]'))
-    : Array.from(root.querySelectorAll('[data-scroll-morph-message]'))
+  const messages = Array.from(
+    root.querySelectorAll('[data-scroll-morph-message]')
+  )
 
   if (!track || !messages.length) {
     console.warn(
@@ -132,12 +112,14 @@ function setupRoot(root) {
     return null
   }
 
-  // Split text up front (shared with hero/paradigm) so the reveal is identical.
-  const wordsByMessage = messages.map((m) => splitElement(m))
+  // Single-text section: only the first message is used. Any extra message
+  // elements left in the markup are hidden so they can't stack on top.
+  const message = messages[0]
+  messages.slice(1).forEach((m) => (m.style.display = 'none'))
 
   // No GSAP / ScrollTrigger / reduced motion → static, readable layout.
   if (!gsap || !ScrollTrigger || reduceMotion.matches) {
-    setupStatic(root, messages)
+    setupStatic(root, message)
     return null
   }
 
@@ -409,7 +391,7 @@ function setupRoot(root) {
     )
   }
 
-  // ---- Scroll timeline: pin + scrub. Assemble progressively, one step per message. ----
+  // ---- Scroll timeline: scrub the ring assembly. Text stays revealed. ----
   let tl = null
   function buildScroll() {
     if (tl) {
@@ -417,46 +399,15 @@ function setupRoot(root) {
       tl.kill()
     }
 
-    const allWords = wordsByMessage.flat()
-    gsap.set(allWords, { clearProps: 'all' })
-    gsap.set(messages, { autoAlpha: 1 })
-    gsap.set(allWords, REVEAL_FROM)
-    // First message pre-revealed so the scene is never blank.
-    gsap.set(wordsByMessage[0], {
-      autoAlpha: 1,
-      filter: 'blur(0px)',
-      yPercent: 0,
-    })
+    // The single text is revealed and held the whole time — only the ring moves.
+    gsap.set(message, { autoAlpha: 1 })
     gsap.set(form, { t: 0 })
 
-    const K = messages.length
     tl = gsap.timeline({ defaults: { ease: 'power2.inOut' } })
-
-    // First message holds while the cloud is fully dispersed across the section.
-    // A label per message marks its settled beat — the snap targets these so a
-    // fast scroll always lands on a message instead of flying past them all.
-    tl.addLabel('msg0')
+    // Hold briefly fully dispersed, assemble the ring across the scroll, then
+    // hold it assembled and in view as the sticky track releases.
     tl.to({}, { duration: HOLD })
-
-    if (K === 1) {
-      // Single message: just assemble the ring under it.
-      tl.to(form, { t: 1, duration: ASSEMBLE })
-    } else {
-      // Each title change advances the assembly one step — fully dispersed on the
-      // first message, forming the ring only by the last (eased so early
-      // messages stay loose and the ring snaps together late).
-      for (let i = 1; i < K; i++) {
-        const assembleTo = Math.pow(i / (K - 1), ASSEMBLE_EASE_POW)
-        tl.to(wordsByMessage[i - 1], REVEAL_OUT)
-        tl.to(form, { t: assembleTo, duration: ASSEMBLE }, '<')
-        tl.to(wordsByMessage[i], REVEAL_TO, '<')
-        tl.addLabel('msg' + i) // settled beat for this message (snap target)
-        tl.to({}, { duration: HOLD })
-      }
-    }
-
-    // End on the last message: the ring stays assembled (no disperse) and the
-    // final text is held in view as the pin releases.
+    tl.to(form, { t: 1, duration: ASSEMBLE })
     tl.to({}, { duration: END_HOLD })
 
     // No GSAP pin: the track is CSS `position: sticky` (set in scroll-morph.css)
@@ -474,17 +425,6 @@ function setupRoot(root) {
         end: 'bottom bottom',
         scrub: SCRUB,
         animation: tl,
-        // Snap to the per-message labels so a fast scroll settles on a message
-        // (directional → it snaps onward in the scroll direction, never backward).
-        snap: SNAP
-          ? {
-              snapTo: 'labels',
-              duration: { min: SNAP_DURATION_MIN, max: SNAP_DURATION_MAX },
-              delay: SNAP_DELAY,
-              ease: 'power1.inOut',
-              directional: true,
-            }
-          : false,
         onUpdate: ensureLoop,
         onEnter: (self) => debugSnap(self, '▶ onEnter (pin start)', '#22c55e'),
         onLeave: (self) => debugSnap(self, '■ onLeave (pin end)', '#f97316'),
@@ -502,11 +442,15 @@ function setupRoot(root) {
 
   // ---- Boot: build the ring, then arm the scene ----
   function boot() {
-    resize()
     buildPointBuffers()
     ready = true
-    resize()
+    // Upgrade the layout BEFORE measuring. `.is-canvas` is what makes the track
+    // `position: sticky; height: 100vh` — measure beforehand and the canvas is
+    // sized against the collapsed (`:not(.is-canvas)`) track, so its backing-store
+    // aspect ratio won't match the painted box and the ring renders as an ellipse
+    // at the wrong scale (only self-correcting on a later resize). Measure after.
     root.classList.add('is-canvas') // CSS clips the track + switches off the static layout
+    resize()
     buildScroll()
     root.classList.add('is-ready') // lift the anti-FOUC gate
     ensureLoop()
