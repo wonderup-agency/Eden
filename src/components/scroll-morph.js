@@ -2,20 +2,25 @@
 Component: scroll-morph
 Webflow attribute: data-component="scroll-morph"
 
-Pinned, scroll-driven section. A source PNG is sampled into a sparse point cloud
-(varied per-point sizes) on a <canvas> behind the text. As the section scrubs the
-cloud assembles PROGRESSIVELY: fully dispersed across the section under the first
-message, it coalesces one step per title change (each message de-blurs out / in),
-forming the shape only by the LAST message — which it then holds, assembled and in
-view, as the pin releases. A residual shimmer keeps it alive throughout. Hovering
-the cloud pushes / swirls / loosens nearby points (nebula). Text uses the shared
-word de-blur (src/utils/word-reveal.js), identical to hero / paradigm / title-animation.
+Pinned, scroll-driven section. A PROCEDURAL ring of ~2,500 light-grey dots is
+drawn on a <canvas> behind the text. As the section scrubs the cloud assembles
+PROGRESSIVELY: fully dispersed across the section under the first message, it
+coalesces one step per title change (each message de-blurs out / in), forming
+the ring only by the LAST message — which it then holds, assembled and in view,
+as the pin releases. The assembled ring never freezes: it breathes with a
+radial sine wave + a slight tangential wobble. Hovering the cloud pushes nearby
+points away (eased nebula). Text uses the shared word de-blur
+(src/utils/word-reveal.js), identical to hero / paradigm / title-animation.
+
+The ring + scatter + breathing + mouse-push are ported from the reference
+prototype (a fixed-overlay native-scroll sketch) and adapted to this section's
+pinned, multi-message, normalized-coordinate engine. No image is sampled — the
+shape is generated in code, so there is no source <img> and no CORS concern.
 
 GSAP + ScrollTrigger are expected as globals (loaded site-wide in Webflow).
 
-Fallbacks: no GSAP/ScrollTrigger, prefers-reduced-motion, or an unsamplable
-(CORS-tainted / missing) source image → no canvas / no pin; the messages show in
-a readable stacked layout and the source image (if any) shows statically.
+Fallbacks: no GSAP/ScrollTrigger or prefers-reduced-motion → no canvas / no pin;
+the messages show in a readable stacked layout.
 
 The CSS is NOT bundled here — it lives in Webflow's global head custom code.
 The source of truth is ./styles/scroll-morph.css (copy/paste it into Webflow).
@@ -36,42 +41,59 @@ const REVEAL_OUT = {
   ease: 'sine.in',
 }
 
-// ---- Point cloud (frozen from the playground tuning) ----
-const TARGET_POINTS = 3500 // fewer points — a lighter, sparser cloud
-const SAMPLE_MAX = 560 // longest edge the source PNG is sampled at
-const ALPHA_MIN = 28 // min source alpha to count a pixel as "ink"
-const LUMA_MAX = 245 // for opaque PNGs: count pixels darker than this
-const DOT_COLOR = '125,130,140' // #7d828c
-// Per-point radius (px): varied sizes, biased toward small so dots are fine and
-// only a few are slightly bigger — never thick.
-const DOT_MIN_R = 0.8
-const DOT_MAX_R = 2.8
-const DOT_SIZE_BIAS = 2.2 // exponent on a 0..1 random — higher = more tiny, fewer big
-const FIT = 1.0 // fraction of the half-stage the shape fills (auto-fit; higher = wider)
+// ---- Point cloud (procedural ring, ported from the prototype) ----
+const TARGET_POINTS = 2500 // dot count
+const DOT_COLOR = '180,185,190' // premium light slate grey (tuned for a light bg)
+// Per-point radius (CSS px): mostly small, ~15% slightly bigger.
+const BIG_DOT_CHANCE = 0.15
+const SMALL_R = [0.5, 1.7] // common small dots: min..max radius
+const BIG_R = [1.5, 3.0] // the ~15% bigger dots: min..max radius
+// Ring geometry — normalized so the ring radius is 1; thickness is a soft
+// gaussian band around it (varied per point).
+const RING_THICKNESS = 0.1 // gaussian spread of the band (fraction of radius)
+const FIT = 0.82 // fraction of the half-stage the ring fills (auto-fit)
+// Alpha: soft when dispersed/idle, brighter once assembled.
+const ALPHA_MIN = 0.15 // dispersed base alpha (lower bound)
+const ALPHA_MAX = 0.4 // dispersed base alpha (upper bound)
+const ALPHA_PEAK = 0.55 // alpha when fully assembled
+// Dispersed scatter — a slow drifting, edge-bouncing wander across the section.
 const SCATTER = 1.0 // dispersed coverage (1 = fills the whole section)
+const SCATTER_DRIFT = 0.0009 // unit-space velocity magnitude (slow wander)
 const STAGGER = 0.45 // spread of per-point assemble timing (organic)
-const DRIFT = 0.25 // ambient drift amplitude while dispersed
-const DRIFT_SPEED = 0.6
-const SHIMMER_FLOOR = 0.24 // residual drift kept even when assembled (never frozen)
-const SCATTER_FADE = 0.45 // alpha multiplier when fully dispersed
+// Continuous breathing of the assembled ring (never freezes).
+const RING_WAVE_AMP = 0.024 // radial wobble amplitude (fraction of ring radius)
+const RING_WAVE_SPEED = 1.2 // radial wave speed (rad/s, base)
+const RING_WOBBLE_AMP = 0.02 // tangential angle wobble (rad)
+const RING_WOBBLE_SPEED = 0.6 // tangential wobble speed (rad/s, base)
 // Scroll choreography — the cloud assembles PROGRESSIVELY across the messages:
-// fully dispersed on the first, forming the shape only by the last.
-const PIN_LEN = 6 // pin length in viewport heights — longer = each change is gentler
-const SCRUB = 1.5 // ScrollTrigger catch-up lag (s) — higher = smoother, less abrupt
-const HOLD = 0.6 // beat per message held
-const ASSEMBLE = 1.4 // duration of each per-message assembly step
-const ASSEMBLE_EASE_POW = 1.5 // >1 keeps early messages more dispersed; circle snaps in late
+// fully dispersed on the first, forming the ring only by the last.
+const PIN_LEN = 3 // sticky scroll length in viewport heights (root height) — longer = each change is gentler
+const SCRUB = 0.5 // ScrollTrigger catch-up lag (s) — lower = more dynamic / tracks scroll tighter
+const HOLD = 0.4 // beat per message held (lower = snappier message changes)
+const ASSEMBLE = 1.1 // duration of each per-message assembly step
+const ASSEMBLE_EASE_POW = 1.5 // >1 keeps early messages more dispersed; ring snaps in late
 const END_HOLD = 1.4 // final dwell on the last message (ends assembled, in view)
-// Hover nebula
-const HOVER_RADIUS = 0.4
-const HOVER_PUSH = 0.03
-const HOVER_SWIRL = 0.06
-const HOVER_EASE = 0.11
-const HOVER_SCATTER = 0.18
+// Snap to each message so a fast scroll can't fly past them all — when scrolling
+// settles it eases to the nearest message beat, so every message gets seen.
+const SNAP = true
+const SNAP_DURATION_MIN = 0.25 // fastest snap (close to a message)
+const SNAP_DURATION_MAX = 0.6 // slowest snap (far — after a big flick)
+const SNAP_DELAY = 0.08 // wait after scroll stops before snapping (s)
+// Hover push (pixel feel — converted to normalized units via `scale` at runtime).
+const HOVER_RADIUS_PX = 110 // cursor influence radius
+const HOVER_PUSH_PX = 26 // how far nearby dots are pushed away
+const HOVER_EASE_IN = 0.15 // easing toward the pushed position
+const HOVER_EASE_OUT = 0.06 // easing back to rest
+
+// DEV diagnostics — set false (or remove the gated blocks) before deploy.
+// Production builds strip console.* via Terser, but this also skips the work.
+const DEBUG = true
+const DEBUG_BOUND = 220 // px window around the pin start/end to log per-frame
+const DEBUG_JUMP = 60 // single-frame scroll delta (px) flagged as a JUMP
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
-// Deterministic RNG so the subsample is stable across reloads.
+// Deterministic RNG so the ring is stable across reloads.
 function mulberry32(seed) {
   return function () {
     seed |= 0
@@ -82,122 +104,14 @@ function mulberry32(seed) {
   }
 }
 
-// Load an image with CORS enabled so its pixels can be read (getImageData).
-function loadImage(src) {
-  return new Promise((resolve) => {
-    const img = new window.Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = () => resolve(null)
-    img.src = src
-  })
+// Standard-normal sample (Box–Muller) for the soft ring-band thickness.
+function gaussian(rng) {
+  const u = Math.max(rng(), 1e-6)
+  const v = rng()
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v)
 }
 
-// Sample an image's "ink" pixels into n points. Returns Float32 x/y/alpha in
-// source-pixel space + bbox. Throws if the canvas is CORS-tainted (caught upstream).
-function sampleImage(img, n, rng) {
-  const scale = SAMPLE_MAX / Math.max(img.width, img.height)
-  const w = Math.max(1, Math.round(img.width * scale))
-  const h = Math.max(1, Math.round(img.height * scale))
-  const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(img, 0, 0, w, h)
-  const data = ctx.getImageData(0, 0, w, h).data // throws if tainted
-
-  const cand = []
-  for (let py = 0; py < h; py++) {
-    for (let px = 0; px < w; px++) {
-      const i = (py * w + px) * 4
-      const alpha = data[i + 3]
-      if (alpha < ALPHA_MIN) continue
-      const luma = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
-      const isInk = alpha > 200 ? luma < LUMA_MAX : true
-      if (!isInk) continue
-      const intensity = Math.min(1, (alpha / 255) * (1 - luma / 255) * 2 + 0.25)
-      cand.push(px, py, intensity)
-    }
-  }
-
-  const x = new Float32Array(n)
-  const y = new Float32Array(n)
-  const a = new Float32Array(n)
-  const m = cand.length / 3
-  if (m === 0) return { x, y, a, bbox: { minX: 0, minY: 0, maxX: w, maxY: h } }
-
-  const order = new Uint32Array(m)
-  for (let i = 0; i < m; i++) order[i] = i
-  for (let i = m - 1; i > 0; i--) {
-    const j = (rng() * (i + 1)) | 0
-    const t = order[i]
-    order[i] = order[j]
-    order[j] = t
-  }
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  const JIT = 1.2
-  for (let k = 0; k < n; k++) {
-    const ci = order[k % m] * 3
-    let sx = cand[ci]
-    let sy = cand[ci + 1]
-    if (k >= m) {
-      sx += (rng() - 0.5) * 2 * JIT
-      sy += (rng() - 0.5) * 2 * JIT
-    }
-    x[k] = sx
-    y[k] = sy
-    a[k] = cand[ci + 2]
-    if (sx < minX) minX = sx
-    if (sx > maxX) maxX = sx
-    if (sy < minY) minY = sy
-    if (sy > maxY) maxY = sy
-  }
-  return { x, y, a, bbox: { minX, minY, maxX, maxY } }
-}
-
-// Normalize a raw sample to centered, unit-ish coordinates + max half-extent.
-function normalize(raw, n) {
-  const cxp = (raw.bbox.minX + raw.bbox.maxX) / 2
-  const cyp = (raw.bbox.minY + raw.bbox.maxY) / 2
-  const half =
-    Math.max(
-      (raw.bbox.maxX - raw.bbox.minX) / 2,
-      (raw.bbox.maxY - raw.bbox.minY) / 2
-    ) || 1
-  const norm = 1 / half
-  const x = new Float32Array(n)
-  const y = new Float32Array(n)
-  let extX = 0
-  let extY = 0
-  for (let k = 0; k < n; k++) {
-    x[k] = (raw.x[k] - cxp) * norm
-    y[k] = (raw.y[k] - cyp) * norm
-    if (Math.abs(x[k]) > extX) extX = Math.abs(x[k])
-    if (Math.abs(y[k]) > extY) extY = Math.abs(y[k])
-  }
-  return { x, y, a: raw.a, extX: extX || 1, extY: extY || 1 }
-}
-
-// A soft round sprite the cloud is drawn with.
-function makeSprite() {
-  const s = document.createElement('canvas')
-  s.width = s.height = 16
-  const c = s.getContext('2d')
-  const g = c.createRadialGradient(8, 8, 0, 8, 8, 8)
-  g.addColorStop(0, `rgba(${DOT_COLOR},1)`)
-  g.addColorStop(0.5, `rgba(${DOT_COLOR},0.8)`)
-  g.addColorStop(1, `rgba(${DOT_COLOR},0)`)
-  c.fillStyle = g
-  c.beginPath()
-  c.arc(8, 8, 8, 0, Math.PI * 2)
-  c.fill()
-  return s
-}
-
-// Static fallback: reveal the messages readable, show the source image. No canvas.
+// Static fallback: reveal the messages readable. No canvas.
 function setupStatic(root, messages) {
   gsap && gsap.set(messages, { clearProps: 'all' })
   root.classList.add('is-ready')
@@ -207,7 +121,6 @@ function setupStatic(root, messages) {
 function setupRoot(root) {
   const track = root.querySelector('[data-scroll-morph-track]')
   const stage = root.querySelector('[data-scroll-morph-stage]') || track
-  const source = root.querySelector('[data-scroll-morph-source]')
   const messages = gsap
     ? gsap.utils.toArray(root.querySelectorAll('[data-scroll-morph-message]'))
     : Array.from(root.querySelectorAll('[data-scroll-morph-message]'))
@@ -228,18 +141,28 @@ function setupRoot(root) {
     return null
   }
 
-  // ---- Canvas + point-cloud engine ----
+  // ---- Canvas + procedural-ring engine ----
   const canvas = document.createElement('canvas')
   canvas.className = 'scroll-morph_canvas'
   canvas.setAttribute('aria-hidden', 'true')
   stage.appendChild(canvas)
   const ctx = canvas.getContext('2d')
-  const sprite = makeSprite()
 
-  let N = 0
-  let shape = null
-  let scatterX, scatterY, pointR, assembleDelay
-  let driftPhase, driftX, driftY, offX, offY
+  const N = TARGET_POINTS
+  // Per-point buffers.
+  const angle = new Float32Array(N) // base angle on the ring
+  const baseR = new Float32Array(N) // ring radius incl. gaussian thickness
+  const speedMod = new Float32Array(N) // per-point breathing speed multiplier
+  const pointR = new Float32Array(N) // dot radius (CSS px)
+  const baseAlpha = new Float32Array(N) // dispersed/idle alpha
+  const scatterX = new Float32Array(N) // dispersed position, unit space [-1,1]
+  const scatterY = new Float32Array(N)
+  const velX = new Float32Array(N) // dispersed drift velocity (unit/frame)
+  const velY = new Float32Array(N)
+  const offX = new Float32Array(N) // eased hover push offset (normalized)
+  const offY = new Float32Array(N)
+  const assembleDelay = new Float32Array(N)
+  let ringExt = 1 // max |coord| of the static ring (for auto-fit)
 
   let cssW = 0
   let cssH = 0
@@ -247,7 +170,7 @@ function setupRoot(root) {
   let coverX = 1
   let coverY = 1
   let dpr = 1
-  const form = { t: 0 } // 0 = dispersed across the section, 1 = assembled
+  const form = { t: 0 } // 0 = dispersed across the section, 1 = assembled ring
   let inView = false
   let looping = false
   let ready = false
@@ -256,31 +179,34 @@ function setupRoot(root) {
   let my = 0
 
   function buildPointBuffers() {
-    scatterX = new Float32Array(N)
-    scatterY = new Float32Array(N)
-    pointR = new Float32Array(N)
-    assembleDelay = new Float32Array(N)
-    driftPhase = new Float32Array(N)
-    driftX = new Float32Array(N)
-    driftY = new Float32Array(N)
-    offX = new Float32Array(N)
-    offY = new Float32Array(N)
     const rng = mulberry32(7)
+    ringExt = 0
     for (let i = 0; i < N; i++) {
-      // Uniform fractions in [-1,1] — scaled by the stage half-extent at draw
-      // time so the dispersed cloud fills the WHOLE section, edge to edge.
+      const a = rng() * Math.PI * 2
+      const r = 1 + gaussian(rng) * RING_THICKNESS
+      angle[i] = a
+      baseR[i] = r
+      speedMod[i] = 0.5 + rng() * 0.5
+      // Varied dot size: ~15% slightly bigger, the rest fine.
+      pointR[i] =
+        rng() < BIG_DOT_CHANCE
+          ? BIG_R[0] + rng() * (BIG_R[1] - BIG_R[0])
+          : SMALL_R[0] + rng() * (SMALL_R[1] - SMALL_R[0])
+      baseAlpha[i] = ALPHA_MIN + rng() * (ALPHA_MAX - ALPHA_MIN)
+      // Dispersed start: random across the section, slow drifting velocity.
       scatterX[i] = rng() * 2 - 1
       scatterY[i] = rng() * 2 - 1
-      // Varied radius, biased toward small via the exponent (fine dots, few big).
-      pointR[i] =
-        DOT_MIN_R + (DOT_MAX_R - DOT_MIN_R) * Math.pow(rng(), DOT_SIZE_BIAS)
-      assembleDelay[i] = rng() * STAGGER
-      driftPhase[i] = rng() * Math.PI * 2
       const da = rng() * Math.PI * 2
-      const dm = rng()
-      driftX[i] = Math.cos(da) * dm
-      driftY[i] = Math.sin(da) * dm
+      velX[i] = Math.cos(da) * SCATTER_DRIFT
+      velY[i] = Math.sin(da) * SCATTER_DRIFT
+      assembleDelay[i] = rng() * STAGGER
+      const ax = Math.abs(Math.cos(a) * r)
+      const ay = Math.abs(Math.sin(a) * r)
+      if (ax > ringExt) ringExt = ax
+      if (ay > ringExt) ringExt = ay
     }
+    // Leave headroom for the radial breathing so it never clips at the edge.
+    ringExt += RING_WAVE_AMP
   }
 
   function resize() {
@@ -290,9 +216,8 @@ function setupRoot(root) {
     canvas.width = cssW * dpr
     canvas.height = cssH * dpr
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    if (shape)
-      scale =
-        Math.min((cssW * 0.5) / shape.extX, (cssH * 0.5) / shape.extY) * FIT
+    // Auto-fit the ring to the smaller half-extent so it never clips.
+    scale = (Math.min(cssW * 0.5, cssH * 0.5) / ringExt) * FIT
     coverX = scale ? (cssW * 0.5) / scale : 1
     coverY = scale ? (cssH * 0.5) / scale : 1
     if (ready) draw()
@@ -306,67 +231,87 @@ function setupRoot(root) {
     const f = form.t
     const span = 1 + STAGGER
     const now = window.performance.now() * 0.001
-    const sx = shape.x
-    const sy = shape.y
-    const sa = shape.a
-    const R2 = HOVER_RADIUS * HOVER_RADIUS
     const covX = coverX * SCATTER
     const covY = coverY * SCATTER
+    // Hover influence expressed in normalized units (keeps the px feel at any scale).
+    const hr = scale ? HOVER_RADIUS_PX / scale : 0
+    const hr2 = hr * hr
+    const hpush = scale ? HOVER_PUSH_PX / scale : 0
+    ctx.fillStyle = `rgb(${DOT_COLOR})`
     for (let i = 0; i < N; i++) {
+      // Slow drifting scatter that bounces off the section edges.
+      let sxu = scatterX[i] + velX[i]
+      let syu = scatterY[i] + velY[i]
+      if (sxu < -1 || sxu > 1) {
+        velX[i] = -velX[i]
+        sxu = sxu < -1 ? -1 : 1
+      }
+      if (syu < -1 || syu > 1) {
+        velY[i] = -velY[i]
+        syu = syu < -1 ? -1 : 1
+      }
+      scatterX[i] = sxu
+      scatterY[i] = syu
+
+      // Per-point assembly progress (staggered, smoothstepped).
       let pp = f * span - assembleDelay[i]
       pp = pp < 0 ? 0 : pp > 1 ? 1 : pp
-      pp = pp * pp * (3 - 2 * pp) // smoothstep
-      // Residual shimmer kept even when assembled so the cloud never freezes.
-      const driftAmp = (SHIMMER_FLOOR + (1 - SHIMMER_FLOOR) * (1 - pp)) * DRIFT
-      const fx =
-        Math.cos(now * DRIFT_SPEED + driftPhase[i]) * driftX[i] * driftAmp
-      const fy =
-        Math.sin(now * DRIFT_SPEED + driftPhase[i]) * driftY[i] * driftAmp
-      // Dispersed position fills the section (scatter fraction × stage extent);
-      // converge to the shape as pp → 1.
-      const dispX = scatterX[i] * covX
-      const dispY = scatterY[i] * covY
-      const bx = dispX + (sx[i] - dispX) * pp + fx
-      const by = dispY + (sy[i] - dispY) * pp + fy
-      // Hover nebula: dots near the cursor drift away, swirl and loosen, easing back.
+      pp = pp * pp * (3 - 2 * pp)
+
+      // Dynamic ring position — breathes radially + wobbles tangentially so the
+      // assembled ring never freezes (matches the prototype's living ring).
+      const wave =
+        Math.sin(now * RING_WAVE_SPEED * speedMod[i] + angle[i] * 5) *
+        RING_WAVE_AMP
+      const aa =
+        angle[i] +
+        Math.cos(now * RING_WOBBLE_SPEED * speedMod[i]) * RING_WOBBLE_AMP
+      const rr = baseR[i] + wave
+      const ringX = Math.cos(aa) * rr
+      const ringY = Math.sin(aa) * rr
+
+      // Dispersed position fills the section; converge to the ring as pp → 1.
+      const dispX = sxu * covX
+      const dispY = syu * covY
+      const bx = dispX + (ringX - dispX) * pp
+      const by = dispY + (ringY - dispY) * pp
+
+      // Hover push: dots within the cursor radius are pushed away, eased back.
       let txo = 0
       let tyo = 0
-      let glow = 0
       if (hovActive) {
         const ddx = bx - mx
         const ddy = by - my
         const d2 = ddx * ddx + ddy * ddy
-        if (d2 < R2) {
+        if (d2 < hr2) {
           const d = Math.sqrt(d2) || 1e-4
-          let q = 1 - d / HOVER_RADIUS
-          q = q * q * (3 - 2 * q)
-          const nx = ddx / d
-          const ny = ddy / d
-          txo =
-            (nx * HOVER_PUSH - ny * HOVER_SWIRL + driftX[i] * HOVER_SCATTER) * q
-          tyo =
-            (ny * HOVER_PUSH + nx * HOVER_SWIRL + driftY[i] * HOVER_SCATTER) * q
-          glow = q
+          const force = (hr - d) / hr
+          txo = (ddx / d) * force * hpush
+          tyo = (ddy / d) * force * hpush
         }
       }
-      offX[i] += (txo - offX[i]) * HOVER_EASE
-      offY[i] += (tyo - offY[i]) * HOVER_EASE
-      const rr = pointR[i] * (1 + glow * 0.7)
-      const alpha = sa[i] * (SCATTER_FADE + (1 - SCATTER_FADE) * pp)
+      const ease = txo || tyo ? HOVER_EASE_IN : HOVER_EASE_OUT
+      offX[i] += (txo - offX[i]) * ease
+      offY[i] += (tyo - offY[i]) * ease
+
+      const alpha = baseAlpha[i] + (ALPHA_PEAK - baseAlpha[i]) * pp
       ctx.globalAlpha = alpha
-      ctx.drawImage(
-        sprite,
-        cx + (bx + offX[i]) * scale - rr,
-        cy + (by + offY[i]) * scale - rr,
-        rr * 2,
-        rr * 2
+      ctx.beginPath()
+      ctx.arc(
+        cx + (bx + offX[i]) * scale,
+        cy + (by + offY[i]) * scale,
+        pointR[i],
+        0,
+        Math.PI * 2
       )
+      ctx.fill()
     }
     ctx.globalAlpha = 1
   }
 
   function loop() {
     draw()
+    debugFrame()
     if (inView) window.requestAnimationFrame(loop)
     else looping = false
   }
@@ -375,6 +320,93 @@ function setupRoot(root) {
       looping = true
       window.requestAnimationFrame(loop)
     }
+  }
+
+  // ---- DEV diagnostics: snapshot the pin + Lenis state to chase the "jump" ----
+  let stRef = null
+  let lastDebugY = window.scrollY
+
+  // A full snapshot at key pin transitions: scroll positions (native + Lenis
+  // smoothed/target/actual), Lenis velocity, pin progress, and the pinned
+  // track's live geometry (top, position, transform).
+  function debugSnap(self, tag, color) {
+    if (!DEBUG) return
+    const l = window.lenis
+    const r = track.getBoundingClientRect()
+    const cs = window.getComputedStyle(track)
+    console.log(`%c[scroll-morph] ${tag}`, `color:${color};font-weight:bold`, {
+      progress: +self.progress.toFixed(4),
+      isActive: self.isActive,
+      stStart: Math.round(self.start),
+      stEnd: Math.round(self.end),
+      'scrollY (native)': Math.round(window.scrollY),
+      'lenis.scroll': l ? Math.round(l.scroll) : 'no-lenis',
+      'lenis.targetScroll': l ? Math.round(l.targetScroll) : '—',
+      'lenis.actualScroll': l ? Math.round(l.actualScroll) : '—',
+      'lenis.velocity': l ? +l.velocity.toFixed(2) : '—',
+      'track.top': Math.round(r.top),
+      'track.position': cs.position,
+      'track.transform': cs.transform,
+    })
+  }
+
+  // One-time layout audit on refresh: the #1 cause of pin jumps in Webflow is a
+  // flex/grid wrapper around the pinned section (the pin-spacer can't size), so
+  // log the spacer height and the display of the spacer's parent + track parent.
+  function debugLayout(self) {
+    if (!DEBUG) return
+    const sp = self.spacer
+    const trackParent = track.parentElement
+    const spacerParent = sp && sp.parentElement
+    console.log(
+      '%c[scroll-morph] layout audit',
+      'color:#0ea5e9;font-weight:bold',
+      {
+        pinSpacerHeight: sp ? Math.round(sp.offsetHeight) : 'none',
+        'track.parent': trackParent ? trackParent.tagName : null,
+        'track.parent.display': trackParent
+          ? window.getComputedStyle(trackParent).display
+          : null,
+        'spacer.parent': spacerParent ? spacerParent.tagName : null,
+        'spacer.parent.display': spacerParent
+          ? window.getComputedStyle(spacerParent).display
+          : null,
+        'spacer.parent.flex/grid?':
+          spacerParent &&
+          /flex|grid/.test(window.getComputedStyle(spacerParent).display)
+            ? '⚠️ YES — likely the jump'
+            : 'no',
+      }
+    )
+  }
+
+  // Per-frame logger, active only within DEBUG_BOUND px of either pin boundary.
+  // Flags any single-frame scroll skip (> DEBUG_JUMP px) in red — that's the jump.
+  function debugFrame() {
+    if (!DEBUG || !stRef) return
+    const y = window.scrollY
+    const dy = y - lastDebugY
+    lastDebugY = y
+    if (dy === 0) return
+    const nearStart = Math.abs(y - stRef.start) < DEBUG_BOUND
+    const nearEnd = Math.abs(y - stRef.end) < DEBUG_BOUND
+    if (!nearStart && !nearEnd) return
+    // Only surface actual single-frame scroll skips (the "jump") — don't flood
+    // the console with every smooth frame near the boundary.
+    if (Math.abs(dy) <= DEBUG_JUMP) return
+    const l = window.lenis
+    console.log(
+      `%c[scroll-morph] ⚠️ JUMP @${nearStart ? 'START' : 'END'}`,
+      'color:#ef4444;font-weight:bold',
+      {
+        dy: Math.round(dy),
+        scrollY: Math.round(y),
+        progress: +stRef.progress.toFixed(4),
+        'lenis.vel': l ? +l.velocity.toFixed(2) : '—',
+        'track.top': Math.round(track.getBoundingClientRect().top),
+        'track.position': window.getComputedStyle(track).position,
+      }
+    )
   }
 
   // ---- Scroll timeline: pin + scrub. Assemble progressively, one step per message. ----
@@ -401,84 +433,105 @@ function setupRoot(root) {
     tl = gsap.timeline({ defaults: { ease: 'power2.inOut' } })
 
     // First message holds while the cloud is fully dispersed across the section.
+    // A label per message marks its settled beat — the snap targets these so a
+    // fast scroll always lands on a message instead of flying past them all.
+    tl.addLabel('msg0')
     tl.to({}, { duration: HOLD })
 
     if (K === 1) {
-      // Single message: just assemble the shape under it.
+      // Single message: just assemble the ring under it.
       tl.to(form, { t: 1, duration: ASSEMBLE })
     } else {
       // Each title change advances the assembly one step — fully dispersed on the
-      // first message, forming the shape only by the last (eased so early
-      // messages stay loose and the circle snaps together late).
+      // first message, forming the ring only by the last (eased so early
+      // messages stay loose and the ring snaps together late).
       for (let i = 1; i < K; i++) {
         const assembleTo = Math.pow(i / (K - 1), ASSEMBLE_EASE_POW)
         tl.to(wordsByMessage[i - 1], REVEAL_OUT)
         tl.to(form, { t: assembleTo, duration: ASSEMBLE }, '<')
         tl.to(wordsByMessage[i], REVEAL_TO, '<')
+        tl.addLabel('msg' + i) // settled beat for this message (snap target)
         tl.to({}, { duration: HOLD })
       }
     }
 
-    // End on the last message: the cloud stays assembled (no disperse) and the
+    // End on the last message: the ring stays assembled (no disperse) and the
     // final text is held in view as the pin releases.
     tl.to({}, { duration: END_HOLD })
 
+    // No GSAP pin: the track is CSS `position: sticky` (set in scroll-morph.css)
+    // and the root is made tall (--scroll-morph-len = PIN_LEN×100vh) to give the
+    // scroll distance. ScrollTrigger here only READS progress (scrub) to drive
+    // the timeline — it never manipulates layout, so there's no pin-spacer, no
+    // refresh-order dependency, and the sticky track can't overlap other
+    // sections (it's clipped to the root). Range: root top→top until bottom→
+    // bottom, which is exactly the span the sticky track stays in view.
+    root.style.setProperty('--scroll-morph-len', PIN_LEN * 100 + 'vh')
     tl.scrollTrigger ||
-      ScrollTrigger.create({
-        trigger: track,
+      (stRef = ScrollTrigger.create({
+        trigger: root,
         start: 'top top',
-        end: '+=' + PIN_LEN * 100 + '%',
-        pin: true,
+        end: 'bottom bottom',
         scrub: SCRUB,
         animation: tl,
+        // Snap to the per-message labels so a fast scroll settles on a message
+        // (directional → it snaps onward in the scroll direction, never backward).
+        snap: SNAP
+          ? {
+              snapTo: 'labels',
+              duration: { min: SNAP_DURATION_MIN, max: SNAP_DURATION_MAX },
+              delay: SNAP_DELAY,
+              ease: 'power1.inOut',
+              directional: true,
+            }
+          : false,
         onUpdate: ensureLoop,
-      })
+        onEnter: (self) => debugSnap(self, '▶ onEnter (pin start)', '#22c55e'),
+        onLeave: (self) => debugSnap(self, '■ onLeave (pin end)', '#f97316'),
+        onEnterBack: (self) =>
+          debugSnap(self, '◀ onEnterBack (re-pin from below)', '#22c55e'),
+        onLeaveBack: (self) =>
+          debugSnap(self, '□ onLeaveBack (unpin to top)', '#f97316'),
+        onRefresh: (self) => {
+          debugSnap(self, '↻ onRefresh', '#a78bfa')
+          debugLayout(self)
+        },
+      }))
     ScrollTrigger.refresh()
   }
 
-  // ---- Boot: sample the source image, normalize, then arm the scene ----
-  async function boot() {
+  // ---- Boot: build the ring, then arm the scene ----
+  function boot() {
     resize()
-    const src = source && (source.currentSrc || source.getAttribute('src'))
-    const img = src ? await loadImage(src) : null
-    let raw = null
-    if (img) {
-      try {
-        raw = sampleImage(img, TARGET_POINTS, mulberry32(1000))
-      } catch (err) {
-        console.warn('[scroll-morph] could not sample source (CORS?)', err)
-      }
-    }
-    if (!raw) {
-      // No usable shape — degrade to a readable static layout.
-      canvas.remove()
-      io.disconnect()
-      setupStatic(root, messages)
-      return
-    }
-
-    N = TARGET_POINTS
-    shape = normalize(raw, N)
     buildPointBuffers()
     ready = true
     resize()
-    root.classList.add('is-canvas') // CSS hides the source <img> once sampled
+    root.classList.add('is-canvas') // CSS clips the track + switches off the static layout
     buildScroll()
     root.classList.add('is-ready') // lift the anti-FOUC gate
     ensureLoop()
   }
 
-  // Visibility: only render while the section is on screen.
+  // Visibility: only render while the section is on screen. When it leaves the
+  // viewport the rAF loop stops — but the canvas keeps its last painted frame
+  // and the messages stay revealed (autoAlpha:1), which would otherwise bleed
+  // into the background of other sections. So on exit we clear the canvas and
+  // flag the root .is-offscreen (CSS hides the messages); on re-entry we redraw.
   const io = new window.IntersectionObserver(
     (entries) => {
       inView = entries[0].isIntersecting
-      if (inView) ensureLoop()
+      root.classList.toggle('is-offscreen', !inView)
+      if (inView) {
+        ensureLoop()
+      } else if (ready) {
+        ctx.clearRect(0, 0, cssW, cssH)
+      }
     },
     { threshold: 0 }
   )
   io.observe(root)
 
-  // Localized hover nebula over the cloud stage.
+  // Localized hover push over the cloud stage.
   stage.addEventListener('pointermove', (e) => {
     const rect = stage.getBoundingClientRect()
     mx = (e.clientX - rect.left - cssW / 2) / scale

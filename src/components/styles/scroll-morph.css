@@ -17,10 +17,29 @@
   --scroll-morph-top-safe: 0rem; /* nav clearance — used by the track + messages */
 }
 
-/* Nav clearance: kept here (not the Designer) so the track padding and the
-   messages top offset below stay in sync via the one variable. */
-[data-scroll-morph-track] {
-  padding-top: var(--scroll-morph-top-safe);
+/* Scroll engine = CSS sticky (NOT a GSAP pin). JS sets --scroll-morph-len to
+   PIN_LEN×100vh; this tall root gives the scroll distance the sticky track
+   travels through. No pin-spacer, no refresh-order dependency, and the sticky
+   track is clipped to this box so it can never overlap other sections. */
+[data-component='scroll-morph'].is-canvas {
+  height: var(--scroll-morph-len, 300vh);
+}
+
+/* The track sticks to the top for the whole length of the tall root, then
+   releases naturally. overflow:hidden so the canvas + absolutely-positioned
+   messages are clipped to the viewport-height track and never bleed out. */
+[data-component='scroll-morph'].is-canvas [data-scroll-morph-track] {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Off-screen: when the section leaves the viewport the render loop stops and
+   the canvas is cleared in JS; hide the (still-revealed) messages too so none
+   of the section's content shows behind whatever section you're actually in. */
+[data-component='scroll-morph'].is-offscreen [data-scroll-morph-messages] {
+  visibility: hidden;
 }
 
 /* The canvas is injected by JS into the stage — it doesn't exist in the Designer. */
@@ -28,11 +47,6 @@
   display: block;
   width: 100%;
   height: 100%;
-}
-
-/* Once the source image is sampled, hide it — the canvas takes over (runtime class). */
-[data-component='scroll-morph'].is-canvas [data-scroll-morph-source] {
-  display: none;
 }
 
 /* Text layers crossfade in the same centered spot, over the cloud.

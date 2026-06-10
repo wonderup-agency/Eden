@@ -119,6 +119,16 @@ function init() {
       )
     }
     await Promise.all(components.map(loadComponent))
+
+    // Components load in parallel, so any ScrollTriggers they create (e.g. the
+    // pinned paradigm + scroll-morph sections) are registered in a non-
+    // deterministic order. Each component refreshes on its own init, but those
+    // intermediate refreshes run before every pin exists, so pin-spacing can be
+    // miscalculated (a section pins at the wrong offset → jump / overlap). One
+    // authoritative refresh here, after every component is initialised, lets
+    // ScrollTrigger recompute all pins together in page order. Pinned sections
+    // also set `refreshPriority` so the higher one is calculated first.
+    if (window.ScrollTrigger) window.ScrollTrigger.refresh()
   })()
 }
 

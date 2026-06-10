@@ -8,7 +8,8 @@ fades via CSS opacity and the logo shrinks via transform — the bar's size and
 padding stay constant so Flip only ever translates (no flush-left, no jump).
 
 GSAP + the Flip plugin are expected as globals (loaded site-wide in Webflow).
-Desktop-only (>= 992px); below that, Webflow's native nav is left untouched.
+Runs on all breakpoints: desktop hugs content edge-left and slides to centre;
+mobile keeps the bar full width and contracts it to a centred glass pill.
 
 The CSS is NOT bundled here — it lives in Webflow's global head custom code.
 The source of truth is ./styles/nav.css (copy/paste it into Webflow). Keep
@@ -154,12 +155,17 @@ export default function (elements) {
     gsap.from(elements, { ...ENTRANCE, clearProps: 'transform' })
   }
 
-  // Desktop only — the morph targets the full inline nav. On tablet/mobile the
-  // native Webflow nav (hamburger + overlay) is left as-is. matchMedia handles
-  // enabling above 992px and cleaning up when crossing back down.
-  const mm = gsap.matchMedia()
-  mm.add('(min-width: 992px)', () => {
+  // All breakpoints — the morph targets the inline nav bar (logo + links on
+  // desktop, logo + hamburger on mobile). Two matchMedia branches run the SAME
+  // enable/disable, split at 992px only so crossing the boundary re-runs enable()
+  // and re-measures --nav-rest-top per breakpoint (rest padding can differ).
+  // Geometry differs purely in CSS: desktop edge-left → centre; mobile full width
+  // → centred pill.
+  const activate = () => {
     navs.forEach((n) => n.enable())
     return () => navs.forEach((n) => n.disable())
-  })
+  }
+  const mm = gsap.matchMedia()
+  mm.add('(min-width: 992px)', activate)
+  mm.add('(max-width: 991px)', activate)
 }

@@ -1,5 +1,6 @@
-/* nav — glass-on-scroll morph. Not bundled: paste into Webflow global head.
+/* nav — glass-on-scroll morph (all breakpoints). Not bundled: paste into Webflow global head.
    Hooks: [data-component="nav"] root · [data-nav-inner] bar · [data-nav-logo] logo.
+   Desktop hugs content edge-left → centres; mobile stays full width → contracts to a centred pill.
 
    Set these IN WEBFLOW (Designer) — kept out of custom code on purpose:
      • nav_component → Width 100%  (fixed + full-viewport so the pill centres)
@@ -16,56 +17,100 @@
   --nav-ease: cubic-bezier(0.45, 0, 0.55, 1);
   --nav-rest-top: 0px; /* auto-set by nav.js from nav_component's real padding-top */
   --nav-float-top: 1rem; /* gap from the top when floating */
+  --nav-float-pad-x: 1.25rem; /* inner side padding of the mobile pill so logo/menu aren't flush to the edge */
   --nav-glass: rgba(255, 255, 255, 0.5); /* glass tint — raise/lower to taste */
+  --nav-menu-glass: rgba(
+    255,
+    255,
+    255,
+    0.72
+  ); /* open mobile-menu tint — a touch more opaque so links stay legible */
 }
 
+/* --- Glass + stacking + logo shrink — shared by the desktop AND mobile pills.
+   The bar morphs into a frosted pill on every breakpoint now; only the rest→float
+   geometry differs (desktop hugs content edge-left → centre; mobile stays full
+   width → contracts to a centred pill). These pieces are identical for both. --- */
+
+/* Glass layer (pseudo-element — impossible in the Designer) */
+[data-component='nav'] [data-nav-inner]::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 1rem;
+  background: var(--nav-glass);
+  -webkit-backdrop-filter: blur(16px) saturate(135%);
+  backdrop-filter: blur(16px) saturate(135%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 6px 24px rgba(0, 0, 0, 0.05);
+  opacity: 0;
+  transition: opacity var(--nav-morph) var(--nav-ease);
+  pointer-events: none;
+}
+[data-component='nav'] [data-nav-inner].is-floating::before {
+  opacity: 1;
+}
+
+/* Content above the glass */
+[data-component='nav'] [data-nav-inner] > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Logo shrink (transform-only) */
+[data-component='nav'] [data-nav-logo] {
+  transform-origin: left center;
+  transition: transform var(--nav-morph) var(--nav-ease);
+}
+[data-component='nav'] [data-nav-inner].is-floating [data-nav-logo] {
+  transform: scale(0.833);
+}
+
+/* --- Desktop (>= 992px): hugs content, edge-aligned at rest → centred when floating.
+   The fit-content + (-1rem margin / 1rem padding) pair can't be a Webflow state. --- */
 @media (min-width: 992px) {
-  /* Morph geometry — hugs content, edge-aligned at rest; toggled by .is-floating.
-     The fit-content + (-1rem margin / 1rem padding) pair can't be a Webflow state. */
   [data-component='nav'] [data-nav-inner] {
     width: fit-content;
     margin: 0 auto 0 -1rem;
-    padding: 0.875rem 1rem;
+    padding: 1.5rem 1rem;
   }
   [data-component='nav'] [data-nav-inner].is-floating {
     margin: calc(var(--nav-float-top) - var(--nav-rest-top)) auto 0;
   }
+}
 
-  /* Glass layer (pseudo-element — impossible in the Designer) */
-  [data-component='nav'] [data-nav-inner]::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    z-index: 0;
+/* --- Mobile / tablet (<= 991px): the bar keeps its normal full width (it already
+   sits inside the page's side padding) and just floats DOWN by the top gap when
+   floating — the glass + rounded corners turn it into a pill in place, no side
+   contraction (that side→centre slide is desktop-only). margin-top floats it down;
+   the inner side padding keeps the logo + menu button off the glass edge. --- */
+@media (max-width: 991px) {
+  [data-component='nav'] [data-nav-inner].is-floating {
+    margin-top: calc(var(--nav-float-top) - var(--nav-rest-top));
+    padding-left: var(--nav-float-pad-x);
+    padding-right: var(--nav-float-pad-x);
+  }
+
+  /* Open mobile menu — same frosted-glass language as the floating pill. The native
+     Webflow navbar (data-collapse="medium") moves .nav_menu into .w-nav-overlay when
+     the hamburger opens; we glass that panel. Targets the stable Webflow system class
+     (.w-nav-menu) scoped under the component, so it never touches the inline desktop
+     menu (>= 992px). The overlay lives inside [data-component='nav'], so the selector
+     still matches once Webflow relocates the menu into it. */
+  [data-component='nav'] .w-nav-menu {
+    margin: 0.5rem var(--nav-float-pad-x);
+    padding: 1rem 1.25rem;
     border-radius: 1rem;
-    background: var(--nav-glass);
+    background: var(--nav-menu-glass);
     -webkit-backdrop-filter: blur(16px) saturate(135%);
     backdrop-filter: blur(16px) saturate(135%);
     border: 1px solid rgba(255, 255, 255, 0.5);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.4),
-      0 6px 24px rgba(0, 0, 0, 0.05);
-    opacity: 0;
-    transition: opacity var(--nav-morph) var(--nav-ease);
-    pointer-events: none;
-  }
-  [data-component='nav'] [data-nav-inner].is-floating::before {
-    opacity: 1;
-  }
-
-  /* Content above the glass */
-  [data-component='nav'] [data-nav-inner] > * {
-    position: relative;
-    z-index: 1;
-  }
-
-  /* Logo shrink (transform-only) */
-  [data-component='nav'] [data-nav-logo] {
-    transform-origin: left center;
-    transition: transform var(--nav-morph) var(--nav-ease);
-  }
-  [data-component='nav'] [data-nav-inner].is-floating [data-nav-logo] {
-    transform: scale(0.833);
+      0 6px 24px rgba(0, 0, 0, 0.08);
   }
 }
 

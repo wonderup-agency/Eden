@@ -138,7 +138,10 @@ function setupRoot(root) {
         end,
         pin: true,
         scrub: 1,
-        markers: true, // DEV — remove before deploy
+        // Higher priority than sections below it (scroll-morph) so its pin-spacing
+        // is calculated FIRST — otherwise a lower pin can compute its start before
+        // this spacer exists and pin at the wrong offset.
+        refreshPriority: 1,
       },
     })
 

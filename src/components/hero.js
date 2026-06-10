@@ -2,8 +2,9 @@
 Component: hero
 Webflow attribute: data-component="hero"
 
-Orchestrates the hero entrance in one master timeline on load: the video fades +
-scales in, the heading de-blurs per word, the divider draws, the paragraph
+Orchestrates the hero entrance in one master timeline on load: the visual block
+(background + video, animated as one unit) fades + scales in, the heading de-blurs
+per word, the divider draws, the paragraph
 de-blurs, and the buttons rise — each overlapping for a smooth, subtle reveal.
 
 Reuses the word de-blur from ../utils/word-reveal.js (same effect as paradigm /
@@ -26,6 +27,11 @@ const { gsap } = window
 function setupHero(root) {
   const q = (sel) => root.querySelector(sel)
   const visual = q('[data-hero-visual]')
+  // The background lives on the visual's wrapper column (e.g. .hero_visual), not
+  // on the video atom itself. Animate the whole block (background + video) as one
+  // unit so the background reveals together with the video instead of popping in
+  // behind it. Falls back to the visual itself if there's no wrapper.
+  const visualBlock = (visual && visual.parentElement) || visual
   const heading = q('[data-hero-heading]')
   const divider = q('[data-hero-divider]')
   const text = q('[data-hero-text]')
@@ -36,8 +42,8 @@ function setupHero(root) {
   const textWords = text ? splitElement(text) : []
 
   // Start states — small movements, gentle: subtle but smooth.
-  if (visual)
-    gsap.set(visual, {
+  if (visualBlock)
+    gsap.set(visualBlock, {
       autoAlpha: 0,
       scale: 1.06,
       transformOrigin: 'center center',
@@ -54,7 +60,8 @@ function setupHero(root) {
   // Master timeline — absolute positions overlap each step for a continuous flow:
   // video settles → heading sharpens → divider draws → paragraph → buttons rise.
   const tl = gsap.timeline({ defaults: { ease: 'power2.out' } })
-  if (visual) tl.to(visual, { autoAlpha: 1, scale: 1, duration: 1.4 }, 0)
+  if (visualBlock)
+    tl.to(visualBlock, { autoAlpha: 1, scale: 1, duration: 1.4 }, 0)
   if (headingWords.length) tl.to(headingWords, { ...REVEAL_TO }, 0.15)
   if (divider) tl.to(divider, { scaleX: 1, duration: 0.6 }, 0.55)
   if (textWords.length) tl.to(textWords, { ...REVEAL_TO, duration: 0.9 }, 0.65)

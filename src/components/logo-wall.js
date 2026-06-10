@@ -113,6 +113,12 @@ function setupLogoWall(root) {
     if (on) {
       console.log('[logo-wall] hover → pause + show testimonial')
       loopTl && loopTl.pause()
+      // Finish any in-flight swap instantly so the whole wall is settled before
+      // the testimonial shows. Swap tweens run outside loopTl, so pausing the
+      // loop alone wouldn't stop a roll already in progress — without this the
+      // rolling logo (inline autoAlpha) bleeds through under the testimonial,
+      // and slot.current still points at the outgoing entry.
+      cycling.forEach((s) => s.finishSwap && s.finishSwap())
       showTestimonial(slot)
     } else {
       console.log('[logo-wall] unhover → resume')
@@ -186,32 +192,49 @@ function setupLogoWall(root) {
     gsap.set(incoming.target, { yPercent: SWAP_TRAVEL, autoAlpha: 0 })
     slot.parent.appendChild(incoming.target)
 
-    gsap.to(incoming.target, {
-      yPercent: 0,
-      autoAlpha: 1,
-      duration: SWAP_DURATION,
-      ease: SWAP_EASE,
-      // Clear GSAP's inline opacity/visibility so the CSS hover-hide can win.
-      onComplete: () => gsap.set(incoming.target, { clearProps: 'all' }),
-    })
+    // Settle the swap to its final DOM state. Idempotent (guards on slot.busy) so
+    // it's safe whether the timeline completes naturally or a hover forces it via
+    // slot.finishSwap(). clearProps wipes GSAP's inline opacity/visibility so the
+    // CSS hover-hide can win once incoming becomes the slot's current logo.
+    const finish = () => {
+      if (!slot.busy) return
+      // Promote incoming to the in-flow sizer, then drop outgoing — same tick,
+      // so the slot never loses its height.
+      incoming.target.classList.remove('is-incoming')
+      outgoing.target.remove()
+      if (outgoing.testimonial) outgoing.testimonial.remove()
+      gsap.set(outgoing.target, { clearProps: 'all' })
+      gsap.set(incoming.target, { clearProps: 'all' })
+      pool.push(outgoing)
+      slot.current = incoming
+      slot.busy = false
+      if (slot.swapTl) {
+        slot.swapTl.kill()
+        slot.swapTl = null
+      }
+      slot.finishSwap = null
+    }
+    slot.finishSwap = finish
 
-    gsap.to(outgoing.target, {
-      yPercent: -SWAP_TRAVEL,
-      autoAlpha: 0,
-      duration: SWAP_DURATION,
-      ease: SWAP_EASE,
-      onComplete() {
-        // Promote incoming to the in-flow sizer, then drop outgoing — same tick,
-        // so the slot never loses its height.
-        incoming.target.classList.remove('is-incoming')
-        outgoing.target.remove()
-        if (outgoing.testimonial) outgoing.testimonial.remove()
-        gsap.set(outgoing.target, { clearProps: 'all' })
-        pool.push(outgoing)
-        slot.current = incoming
-        slot.busy = false
-      },
-    })
+    // One timeline owns both rolls so a hover can snap the swap to its end
+    // (slot.finishSwap) and leave the wall fully settled before the testimonial.
+    slot.swapTl = gsap
+      .timeline({ onComplete: finish })
+      .to(
+        incoming.target,
+        { yPercent: 0, autoAlpha: 1, duration: SWAP_DURATION, ease: SWAP_EASE },
+        0
+      )
+      .to(
+        outgoing.target,
+        {
+          yPercent: -SWAP_TRAVEL,
+          autoAlpha: 0,
+          duration: SWAP_DURATION,
+          ease: SWAP_EASE,
+        },
+        0
+      )
   }
 
   // One slot rotates per tick, in shuffled order.
