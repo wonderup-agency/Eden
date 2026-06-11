@@ -136,6 +136,10 @@ function setupTabs(root) {
     inLink.setAttribute('aria-selected', 'true')
     inLink.setAttribute('tabindex', '0')
 
+    // Start the underline fill immediately (in parallel with the reveal) so the
+    // progress bar doesn't sit empty for the length of the switch animation.
+    if (started && !paused) startProgress(index)
+
     const inParts = parts[index]
 
     // Incoming reveals on top of the outgoing; z-index guarantees it overlays
@@ -149,7 +153,6 @@ function setupTabs(root) {
         activeIndex = index
         isAnimating = false
         gsap.set(panels, { clearProps: 'zIndex' })
-        if (started && !paused) startProgress(index)
       },
     })
 

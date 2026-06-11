@@ -4,7 +4,8 @@
    Don't add layout rules here; they fight Webflow's and collapse the slot. */
 
 [data-component='logo-wall'] {
-  --logo-wall-fade: 0.4s; /* testimonial show/hide fade */
+  --logo-wall-fade: 0.5s; /* testimonial show/hide transition — keep ~ LOGO_FADE (JS) */
+  --logo-wall-blur: 12px; /* testimonial de-blur start amount */
 }
 
 /* Positioning context for the testimonial overlay. */
@@ -25,14 +26,18 @@
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
+  /* De-blur reveal: starts blurred + slightly faded, sharpens on hover. */
+  filter: blur(var(--logo-wall-blur));
   transition:
     opacity var(--logo-wall-fade) ease,
+    filter var(--logo-wall-fade) ease,
     visibility var(--logo-wall-fade) ease;
 }
 
 [data-component='logo-wall'] .logo-wall_testimonial.is-visible {
   opacity: 1;
   visibility: visible;
+  filter: blur(0);
 }
 
 /* Keep the large testimonial image inside its slot. */
@@ -41,13 +46,10 @@
   height: auto;
 }
 
-/* Hide the logo while its testimonial shows. */
-[data-component='logo-wall']
-  .logo-wall__logo.is-showing-testimonial
-  [data-logo-wall-target] {
-  opacity: 0;
-  visibility: hidden;
-}
+/* Hide the logo while its testimonial shows.
+   Normal path: GSAP crossfades the logo out (logo-wall.js, LOGO_FADE) — a CSS
+   transition here would fight GSAP's per-frame autoAlpha during the roll, so the
+   instant hide lives in the reduced-motion block below instead. */
 
 /* Keyboard focus ring. */
 [data-component='logo-wall'] .logo-wall__logo:focus-visible {
@@ -55,9 +57,18 @@
   outline-offset: 4px;
 }
 
-/* Reduced motion: no fade. */
+/* Reduced motion: no fade, no de-blur, and the logo hides instantly (GSAP is
+   skipped on this path, so CSS owns the hide here). */
 @media (prefers-reduced-motion: reduce) {
   [data-component='logo-wall'] .logo-wall_testimonial {
+    filter: none;
     transition: none;
+  }
+
+  [data-component='logo-wall']
+    .logo-wall__logo.is-showing-testimonial
+    [data-logo-wall-target] {
+    opacity: 0;
+    visibility: hidden;
   }
 }

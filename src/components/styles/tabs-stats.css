@@ -62,11 +62,35 @@
   );
 }
 
-/* Progress-bar underline baseline — JS animates scaleX 0→1 (origin left). */
+/* Progress-bar underline baseline — JS animates scaleX 0→1 (origin left).
+   Used in the fallback path (no GSAP / reduced motion), where the underline
+   itself is the bar. */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
+}
+
+/* Enhanced path: JS turns each underline into a static grey track shown on every
+   tab (so the autoplay fill is visible filling over a grey baseline) and injects
+   a `.tabs-architected_tab-link-fill` child that scales. The track keeps Webflow's
+   own geometry (position/height/radius) — we only neutralise the transform and
+   recolour it grey. */
+[data-component='tabs-stats'] .tabs-architected_tab-link-underline.is-track {
+  transform: none;
+  background-color: var(--base--grey-line);
+}
+/* The fill carries the progress (its colour is set inline from the underline's
+   original colour; the grey here is just a fallback). Sized to the track via
+   width/height so it doesn't depend on the track's position type. */
+[data-component='tabs-stats'] .tabs-architected_tab-link-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+  background-color: var(--base--grey-line);
 }
 
 /* Reduced motion: no canvas, no autoplay fill — keep the active underline full. */

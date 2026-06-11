@@ -14,10 +14,19 @@ Webflow's head. Keep --logo-wall-fade ~ SWAP_DURATION.
 const { gsap } = window
 
 const LOOP_DELAY = 1.5 // seconds between swaps
-const SWAP_DURATION = 0.9 // logo roll duration
+const SWAP_DURATION = 1.1 // logo roll duration — longer = gentler
 const SWAP_TRAVEL = 100 // % of slot height — full roll so the two logos never crowd the centre
-const SWAP_EASE = 'expo.inOut'
+// power2.inOut spreads the motion evenly across the roll; expo.inOut barely moved
+// at the ends then zipped through the middle, so the two logos crossed too fast
+// and read as an overlap. A softer curve makes the hand-off smooth.
+const SWAP_EASE = 'power2.inOut'
 const DEFAULT_POOL_FACTOR = 2 // how many times the logo set is duplicated into the pool
+
+// Logo ⇄ testimonial crossfade on hover. GSAP owns the logo's fade (the testimonial
+// de-blurs via CSS over the same window) so the swap is a soft crossfade instead of
+// an instant snap. Keep LOGO_FADE ~ --logo-wall-fade (CSS) so both sides cross evenly.
+const LOGO_FADE = 0.5 // logo fade-out/in duration on hover
+const LOGO_EASE = 'power2.inOut'
 
 // Data hook preferred; falls back to the current Webflow class.
 const TESTIMONIAL_SELECTOR =
@@ -68,6 +77,16 @@ function showTestimonial(slot) {
   slot.parent.classList.add('is-showing-testimonial')
   slot.current.testimonial.classList.add('is-visible')
   slot.current.testimonial.setAttribute('aria-hidden', 'false')
+  // Soft-fade the logo out as the testimonial de-blurs in (crossfade). fromTo
+  // forces the start at full so GSAP doesn't read the CSS-hidden state as 0 and
+  // skip the tween. Reduced motion keeps the instant CSS hide (no animation).
+  if (!reduceMotion.matches) {
+    gsap.fromTo(
+      slot.current.target,
+      { autoAlpha: 1 },
+      { autoAlpha: 0, duration: LOGO_FADE, ease: LOGO_EASE }
+    )
+  }
 }
 
 function hideTestimonial(slot) {
@@ -76,6 +95,14 @@ function hideTestimonial(slot) {
     slot.current.testimonial.classList.remove('is-visible')
     slot.current.testimonial.setAttribute('aria-hidden', 'true')
   }
+  // Fade the logo back in as the testimonial fades out.
+  if (slot.current && slot.current.target && !reduceMotion.matches) {
+    gsap.to(slot.current.target, {
+      autoAlpha: 1,
+      duration: LOGO_FADE,
+      ease: LOGO_EASE,
+    })
+  }
 }
 
 function setupLogoWall(root) {
@@ -83,8 +110,11 @@ function setupLogoWall(root) {
   if (!slots) return
 
   const cycling = slots.filter((s) => !s.isFixed)
-  // Each cycling slot starts with whatever is already in the DOM.
-  cycling.forEach((slot, i) => {
+  // Every slot — cycling AND the fixed (.is-last) one — starts with whatever is
+  // in the DOM and can reveal its own testimonial on hover. Only the cycling
+  // slots join the loop/pool; the fixed slot just sits there showing its
+  // testimonial on hover (it never swaps).
+  slots.forEach((slot, i) => {
     slot.current = { target: slot.target, testimonial: slot.testimonial }
     slot.busy = false
     slot.hovered = false
@@ -103,7 +133,8 @@ function setupLogoWall(root) {
 
   const maybeResume = () => {
     if (!loopTl) return
-    const anyHovered = cycling.some((s) => s.hovered)
+    // Hovering ANY slot (including the fixed one) keeps the wall paused.
+    const anyHovered = slots.some((s) => s.hovered)
     if (onScreen && !document.hidden && !anyHovered) loopTl.play()
   }
 
@@ -127,8 +158,11 @@ function setupLogoWall(root) {
     }
   }
 
-  cycling.forEach((slot) => {
-    if (slot.testimonial) slot.parent.setAttribute('tabindex', '0')
+  // Wire hover/focus on every slot that has a testimonial — including the fixed
+  // one — so its back text reveals on hover just like the cycling logos.
+  slots.forEach((slot) => {
+    if (!slot.testimonial) return
+    slot.parent.setAttribute('tabindex', '0')
     slot.parent.addEventListener('mouseenter', () => setActive(slot, true))
     slot.parent.addEventListener('mouseleave', () => setActive(slot, false))
     slot.parent.addEventListener('focusin', () => setActive(slot, true))

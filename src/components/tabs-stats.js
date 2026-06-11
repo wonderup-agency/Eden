@@ -48,14 +48,15 @@ const HOVER_SCATTER = 0.18
 const HOVER_MIN_WIDTH = 992 // px — hover nebula only at/above this (Webflow desktop base)
 // Ambient drift — a residual shimmer that NEVER fully stops, so the cloud keeps
 // breathing even when assembled and idle (Stripe-like). Same model as scroll-morph.
-const DRIFT = 0.2 // drift amplitude while dispersed (normalized units)
+// Amped up for a more alive, looser cloud (the assembled shimmer = DRIFT×SHIMMER_FLOOR).
+const DRIFT = 0.26 // drift amplitude while dispersed (normalized units)
 const DRIFT_SPEED = 0.85 // drift speed
-const SHIMMER_FLOOR = 0.4 // fraction of DRIFT kept once assembled (never frozen)
+const SHIMMER_FLOOR = 0.6 // fraction of DRIFT kept once assembled (never frozen)
 // Coherent breathing of the assembled cloud — a slow radial pulse rippling out
-// from the cloud center, the same "living" quality as scroll-morph's ring. Kept
-// small so the sampled graphic stays legible while it breathes.
-const BREATH_AMP = 0.03 // radial pulse amplitude (fraction of each point's distance from center)
-const BREATH_SPEED = 0.9 // pulse speed (rad/s)
+// from the cloud center, the same "living" quality as scroll-morph's ring. Bigger
+// now for more motion; if the sampled graphic starts to smear, pull BREATH_AMP back.
+const BREATH_AMP = 0.05 // radial pulse amplitude (fraction of each point's distance from center)
+const BREATH_SPEED = 1.1 // pulse speed (rad/s)
 const BREATH_RIPPLE = 2.2 // spatial frequency — >0 ripples outward instead of pulsing uniformly
 // Intro (float in → assemble): points appear as a soft cloud dispersed across the
 // stage, drift gently, then converge into the first state (staggered).
@@ -207,9 +208,6 @@ function setupTabs(root) {
   }
 
   const count = Math.min(links.length, imgs.length || links.length)
-  const bars = links.map((link) =>
-    link.querySelector('.tabs-architected_tab-link-underline')
-  )
   const tabItems = imgs.map(
     (img) => img.closest('.tabs-stats_tab-item') || img.parentElement
   )
@@ -233,6 +231,28 @@ function setupTabs(root) {
     setupFallback(root, links, tabItems, count)
     return null
   }
+
+  // Turn each underline into a static grey track (shown on every tab) and inject
+  // a fill child that scales 0→1 — so the autoplay progress visibly fills over a
+  // grey baseline instead of appearing from nothing. The fill keeps the
+  // underline's original (brand) colour, captured before we recolour the track
+  // grey via `.is-track`. `bars` now points at the fill children (what JS scales).
+  const bars = links.map((link) => {
+    const track = link.querySelector('.tabs-architected_tab-link-underline')
+    if (!track) return null
+    const fillColor = window.getComputedStyle(track).backgroundColor
+    const fill = document.createElement('span')
+    fill.className = 'tabs-architected_tab-link-fill'
+    if (
+      fillColor &&
+      fillColor !== 'rgba(0, 0, 0, 0)' &&
+      fillColor !== 'transparent'
+    )
+      fill.style.backgroundColor = fillColor
+    track.appendChild(fill)
+    track.classList.add('is-track')
+    return fill
+  })
 
   // ---- Canvas + point-cloud engine ----
   const canvas = document.createElement('canvas')
@@ -294,8 +314,6 @@ function setupTabs(root) {
   let extY = 1 // largest normalized half-height across states
   let dpr = 1
   let inView = false
-  let hovered = false
-  let focused = false
   let progressTween = null
 
   function makeSprite() {
@@ -477,15 +495,18 @@ function setupTabs(root) {
       ease: MORPH_EASE,
       onComplete: () => {
         morphing = false
-        if (started && !paused()) startProgress(cur)
       },
     })
+    // Start the underline fill immediately (in parallel with the morph) so the
+    // progress bar doesn't sit empty for MORPH_DURATION before it begins.
+    if (started && !paused()) startProgress(cur)
     ensureLoop()
   }
 
   // Autoplay = the active link's underline fills over AUTOPLAY_DURATION, then
-  // advances. Paused while hovered / focused / off-screen / mid-morph.
-  const paused = () => hovered || focused || !inView
+  // advances. It never pauses on hover/focus — only when the section is
+  // off-screen (perf) or mid-morph. So the progress bar fills continuously.
+  const paused = () => !inView
   function startProgress(index) {
     if (progressTween) progressTween.kill()
     const bar = bars[index]
@@ -519,13 +540,11 @@ function setupTabs(root) {
   }
 
   // ---- Events ----
-  // Switch on click AND on hover (desktop) — hovering a tab morphs to its state.
+  // Switch on click only — hovering a tab no longer morphs to its state.
   links.forEach((link, i) => {
-    const go = () => {
+    link.addEventListener('click', () => {
       if (i !== cur) select(i)
-    }
-    link.addEventListener('click', go)
-    link.addEventListener('mouseenter', go)
+    })
   })
   tablist.addEventListener('keydown', (e) => {
     let next = null
@@ -539,23 +558,6 @@ function setupTabs(root) {
     e.preventDefault()
     links[next].focus()
     select(next)
-  })
-
-  root.addEventListener('pointerenter', () => {
-    hovered = true
-    stopProgress()
-  })
-  root.addEventListener('pointerleave', () => {
-    hovered = false
-    resumeProgress()
-  })
-  root.addEventListener('focusin', () => {
-    focused = true
-    stopProgress()
-  })
-  root.addEventListener('focusout', () => {
-    focused = false
-    resumeProgress()
   })
 
   // Localized hover nebula over the graphic stage — desktop only.

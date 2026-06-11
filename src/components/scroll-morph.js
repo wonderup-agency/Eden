@@ -45,20 +45,22 @@ const ALPHA_MAX = 0.4 // dispersed base alpha (upper bound)
 const ALPHA_PEAK = 0.55 // alpha when fully assembled
 // Dispersed scatter — a slow drifting, edge-bouncing wander across the section.
 const SCATTER = 1.0 // dispersed coverage (1 = fills the whole section)
-const SCATTER_DRIFT = 0.0009 // unit-space velocity magnitude (slow wander)
+const SCATTER_DRIFT = 0.0015 // unit-space velocity magnitude (slow wander)
 const STAGGER = 0.45 // spread of per-point assemble timing (organic)
-// Continuous breathing of the assembled ring (never freezes).
-const RING_WAVE_AMP = 0.024 // radial wobble amplitude (fraction of ring radius)
-const RING_WAVE_SPEED = 1.2 // radial wave speed (rad/s, base)
-const RING_WOBBLE_AMP = 0.02 // tangential angle wobble (rad)
-const RING_WOBBLE_SPEED = 0.6 // tangential wobble speed (rad/s, base)
+// Continuous breathing of the assembled ring (never freezes). Amped up for a more
+// alive, looser ring — raise the AMPs further for even more motion (the ring keeps
+// its shape up to ~0.08 radial), the SPEEDs for a faster pulse.
+const RING_WAVE_AMP = 0.05 // radial wobble amplitude (fraction of ring radius)
+const RING_WAVE_SPEED = 1.5 // radial wave speed (rad/s, base)
+const RING_WOBBLE_AMP = 0.05 // tangential angle wobble (rad)
+const RING_WOBBLE_SPEED = 0.95 // tangential wobble speed (rad/s, base)
 // Scroll choreography — the cloud starts fully dispersed across the section and
 // assembles into the ring across the scroll, then holds assembled.
 const PIN_LEN = 3 // sticky scroll length in viewport heights (root height) — longer = gentler
 const SCRUB = 0.5 // ScrollTrigger catch-up lag (s) — lower = more dynamic / tracks scroll tighter
-const HOLD = 0.4 // beat held fully dispersed before the ring starts forming
-const ASSEMBLE = 1.1 // duration of the dispersed → ring assembly
-const END_HOLD = 1.4 // final dwell with the ring assembled and in view
+const HOLD = 0.3 // beat held fully dispersed before the ring starts forming
+const ASSEMBLE = 1.9 // duration of the dispersed → ring assembly (the forming moment — the bulk of the scroll)
+const END_HOLD = 0.3 // short tail: once the ring is formed the animation is done and the section moves on
 // Hover push (pixel feel — converted to normalized units via `scale` at runtime).
 const HOVER_RADIUS_PX = 110 // cursor influence radius
 const HOVER_PUSH_PX = 26 // how far nearby dots are pushed away
