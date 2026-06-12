@@ -16,9 +16,16 @@
   --nav-morph: 1s;
   --nav-ease: cubic-bezier(0.45, 0, 0.55, 1);
   --nav-rest-top: 0px; /* auto-set by nav.js from nav_component's real padding-top */
-  --nav-float-top: 1rem; /* gap from the top when floating */
+  --nav-float-top: 0.5rem; /* gap from the top when floating */
   --nav-float-pad-x: 1.25rem; /* inner side padding of the mobile pill so logo/menu aren't flush to the edge */
-  --nav-glass: rgba(255, 255, 255, 0.5); /* glass tint — raise/lower to taste */
+  --nav-glass: rgba(255, 255, 255, 0.5); /* glass tint (desktop, with blur) */
+  --nav-glass-mobile: rgba(
+    255,
+    255,
+    255,
+    0.6
+  ); /* mobile tint — slightly more opaque so a lighter blur still reads as glass */
+  --nav-blur-mobile: 10px; /* mobile blur radius — smaller than desktop's 16px (cheaper per frame, smoother fast scroll). Lower it more if it still stutters, raise toward 16px if you want it frostier. */
   --nav-menu-glass: rgba(
     255,
     255,
@@ -75,7 +82,7 @@
   [data-component='nav'] [data-nav-inner] {
     width: fit-content;
     margin: 0 auto 0 -1rem;
-    padding: 1.5rem 1rem;
+    padding: 0.5rem 1rem;
   }
   [data-component='nav'] [data-nav-inner].is-floating {
     margin: calc(var(--nav-float-top) - var(--nav-rest-top)) auto 0;
@@ -88,10 +95,29 @@
    contraction (that side→centre slide is desktop-only). margin-top floats it down;
    the inner side padding keeps the logo + menu button off the glass edge. --- */
 @media (max-width: 991px) {
+  /* Mobile morph is glass-only — the bar NEVER moves vertically. Earlier it floated
+     down a few px (margin, then transform), but any vertical move near the top
+     coincides with the browser address bar resizing the viewport, which always read
+     as a jump. So on mobile the bar stays put: only the frosted glass fades in, the
+     corners round, the side padding eases in (logo/menu off the glass edge) and the
+     logo shrinks — none of which can shift the bar vertically. (Desktop keeps the
+     Flip float-to-centre, where there's no browser chrome to fight.) */
+  [data-component='nav'] [data-nav-inner] {
+    transition: padding var(--nav-morph) var(--nav-ease);
+  }
   [data-component='nav'] [data-nav-inner].is-floating {
-    margin-top: calc(var(--nav-float-top) - var(--nav-rest-top));
     padding-left: var(--nav-float-pad-x);
     padding-right: var(--nav-float-pad-x);
+  }
+
+  /* Mobile keeps the blur but at a SMALLER radius (and drops saturate) — blur cost
+     scales with radius, and the big desktop blur recomputing behind a fixed bar
+     every frame was what stuttered on fast scroll. A lighter blur + slightly more
+     opaque tint reads almost identically and stays smooth. Tune via --nav-blur-mobile. */
+  [data-component='nav'] [data-nav-inner]::before {
+    background: var(--nav-glass-mobile);
+    -webkit-backdrop-filter: blur(var(--nav-blur-mobile));
+    backdrop-filter: blur(var(--nav-blur-mobile));
   }
 
   /* Open mobile menu — same frosted-glass language as the floating pill. The native

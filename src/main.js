@@ -75,9 +75,19 @@ async function loadComponent({ selector, importFn }) {
 }
 
 // ── Lifecycle hooks ──────────────────────────────────────────────────
+// Mobile browsers fire 'resize' whenever the address bar shows/hides — the
+// viewport HEIGHT changes but the WIDTH doesn't. Those must NOT run the resize
+// hooks: components like scroll-morph call the expensive ScrollTrigger.refresh()
+// there, which stalled scroll (100ms+) on every address-bar tick. So we only react
+// to real, width-changing resizes (orientation flip, desktop window resize).
+// Layout/canvas sizing keys off width; a height-only change is safe to ignore.
+let lastWidth = window.innerWidth
 window.addEventListener(
   'resize',
   debounce(() => {
+    if (window.innerWidth === lastWidth) return // height-only (mobile address bar) — skip
+    lastWidth = window.innerWidth
+
     activeComponents.forEach(({ hooks }) => {
       if (typeof hooks.resize === 'function') hooks.resize()
     })

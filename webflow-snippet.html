@@ -10,6 +10,9 @@ Toggle dev mode:
   Shortcut: press Shift+D to toggle on/off (reloads the page)
             — only works on Webflow staging (*.webflow.io), not the live domain
   Console:  localStorage.dev = '1' to enable, delete localStorage.dev to disable
+  URL:      ?dev=1 (localhost) · ?dev=0 / ?nodev (off) · ?dev=<https-url> to load
+            from a tunnel — the only way to dev-test on a real phone, since
+            localhost isn't reachable from the device (run `npm run tunnel`)
 
 Setup:
   Assets are always served from the latest @main branch via jsDelivr.
@@ -27,12 +30,38 @@ Setup:
   href="https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist/main.js"
   crossorigin
 />
+<link
+  rel="preload"
+  as="style"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@63b31ae/dist/styles.css"
+/>
 
 <script>
   ;(function () {
+    // URL override for device testing — open the page with a query param:
+    //   ?dev=https://xxxx.trycloudflare.com  → dev mode from a tunnel (real phones)
+    //   ?dev=1                                → dev mode from localhost (same machine)
+    //   ?dev=0  (or ?nodev)                   → exit dev mode
+    // The choice persists in localStorage so a normal reload keeps it.
+    var qs = new URLSearchParams(location.search)
+    if (qs.has('dev') || qs.has('nodev')) {
+      var v = qs.has('nodev') ? '0' : qs.get('dev')
+      if (v === '0' || v === 'false') {
+        delete localStorage.dev
+        delete localStorage.devUrl
+      } else if (v === '' || v === '1' || v === 'true') {
+        localStorage.dev = '1'
+        delete localStorage.devUrl
+      } else {
+        localStorage.dev = '1'
+        localStorage.devUrl = v.replace(/\/+$/, '') // strip trailing slash
+      }
+    }
+
     var dev = localStorage.dev
     var cdn = 'https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist'
-    var base = dev ? 'http://127.0.0.1:8080' : cdn
+    // In dev: a tunnel URL (localStorage.devUrl) wins, else localhost.
+    var base = dev ? localStorage.devUrl || 'http://127.0.0.1:8080' : cdn
 
     var script = document.createElement('script')
     script.src = base + '/main.js'
@@ -116,7 +145,7 @@ The create-page script outputs the correct snippet automatically.
   <link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist/bundle-name.js" crossorigin>
   <script>
     (function () {
-      var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : 'https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist')
+      var base = window.__devBase || (localStorage.dev ? (localStorage.devUrl || 'http://127.0.0.1:8080') : 'https://cdn.jsdelivr.net/gh/wonderup-agency/Eden@main/dist')
       var s = document.createElement('script')
       s.src = base + '/bundle-name.js'
       s.type = 'module'

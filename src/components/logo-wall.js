@@ -118,6 +118,12 @@ function setupLogoWall(root) {
     slot.current = { target: slot.target, testimonial: slot.testimonial }
     slot.busy = false
     slot.hovered = false
+    // Force every original logo visible on init. Only the pool clones that roll
+    // in get an explicit autoAlpha:1 (in swapSlot) — the originals were left at
+    // whatever Webflow set them to. On some breakpoints (e.g. tablet) Webflow
+    // starts the logos at opacity:0, so without this they stayed blank until
+    // their first swap revealed a clone. Logos must always be visible.
+    if (!reduceMotion.matches) gsap.set(slot.target, { autoAlpha: 1 })
     if (slot.testimonial) slot.testimonial.setAttribute('aria-hidden', 'true')
     else console.warn(`[logo-wall] slot ${i} has no testimonial`)
   })

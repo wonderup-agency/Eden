@@ -16,8 +16,57 @@ init now lives here so it can be gated by breakpoint and version-controlled.
 // Below this width (tablet and down) Lenis stays off — native scroll.
 const SMOOTH_MIN_WIDTH = '(min-width: 992px)'
 
+// PERF — temporary diagnostic. Logs ONLY janky frames (a frame slower than
+// LONG_FRAME ms) with the scroll position and which [data-component] section was
+// centered in the viewport, plus a rolling FPS once a second. Used to pinpoint
+// which section drops frames on mobile. The loop does almost nothing per frame, so
+// (unlike per-frame console.logs) it doesn't skew the measurement. Set false to remove.
+const PERF = false
+const LONG_FRAME = 50 // ms — a frame slower than this (~<20fps) is logged as a stall
+
 export default function () {
   initSmoothScroll()
+  initPerfMonitor()
+}
+
+function initPerfMonitor() {
+  if (!PERF) return
+  let last = window.performance.now()
+  let secStart = last
+  let frames = 0
+  let acc = 0
+
+  // The [data-component] section whose box straddles the vertical viewport center.
+  const centeredSection = () => {
+    const cy = window.innerHeight / 2
+    for (const el of document.querySelectorAll('[data-component]')) {
+      const r = el.getBoundingClientRect()
+      if (r.top <= cy && r.bottom >= cy)
+        return el.getAttribute('data-component')
+    }
+    return '(none)'
+  }
+
+  const loop = (now) => {
+    const dt = now - last
+    last = now
+    frames++
+    acc += dt
+    if (dt > LONG_FRAME)
+      console.log(
+        `%c[perf] ⚠ stall ${Math.round(dt)}ms — section "${centeredSection()}" scrollY=${Math.round(window.scrollY)}`,
+        'color:#e53e3e;font-weight:bold'
+      )
+    if (now - secStart >= 1000) {
+      console.log(`[perf] ~${Math.round((frames * 1000) / acc)} fps`)
+      frames = 0
+      acc = 0
+      secStart = now
+    }
+    window.requestAnimationFrame(loop)
+  }
+  window.requestAnimationFrame(loop)
+  console.log('%c[perf] monitor on', 'color:#22c55e;font-weight:bold')
 }
 
 function initSmoothScroll() {

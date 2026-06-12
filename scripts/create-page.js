@@ -52,7 +52,7 @@ Add to Webflow → Page Settings → Custom Code → Before </head>:
 <link rel="preload" as="script" href="${cdnDist}/${arg}.js" crossorigin>
 <script>
   (function () {
-    var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : '${cdnDist}')
+    var base = window.__devBase || (localStorage.dev ? (localStorage.devUrl || 'http://127.0.0.1:8080') : '${cdnDist}')
     var s = document.createElement('script')
     s.src = base + '/${arg}.js'
     s.type = 'module'
@@ -82,7 +82,7 @@ console.log(pc.cyan(`  <script>`))
 console.log(pc.cyan(`    (function () {`))
 console.log(
   pc.cyan(
-    `      var base = window.__devBase || (localStorage.dev ? 'http://127.0.0.1:8080' : '${cdnDist}')`
+    `      var base = window.__devBase || (localStorage.dev ? (localStorage.devUrl || 'http://127.0.0.1:8080') : '${cdnDist}')`
   )
 )
 console.log(pc.cyan(`      var s = document.createElement('script')`))

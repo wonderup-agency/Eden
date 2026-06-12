@@ -68,8 +68,9 @@ const HOVER_EASE_IN = 0.15 // easing toward the pushed position
 const HOVER_EASE_OUT = 0.06 // easing back to rest
 
 // DEV diagnostics — set false (or remove the gated blocks) before deploy.
-// Production builds strip console.* via Terser, but this also skips the work.
-const DEBUG = true
+// Production builds strip console.* via Terser, but this also skips the work
+// (the per-frame boundary logger + refresh snapshots were costing scroll perf).
+const DEBUG = false
 const DEBUG_BOUND = 220 // px window around the pin start/end to log per-frame
 const DEBUG_JUMP = 60 // single-frame scroll delta (px) flagged as a JUMP
 
