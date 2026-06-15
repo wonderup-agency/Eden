@@ -1,4 +1,4 @@
-/* ===== SCROLL-MORPH · pinned point-cloud scroll story — paste into Webflow head ===== */
+/* ===== SCROLL-MORPH · in-view point-cloud reveal — paste into Webflow head ===== */
 /* Holds only what the Designer can't express. Designer settings → scroll-morph.md. */
 
 /* — Tokens — */
@@ -6,16 +6,11 @@
   --scroll-morph-top-safe: 0rem; /* nav clearance — used by the track + messages */
 }
 
-/* — Sticky scroll geometry (CSS sticky, not a GSAP pin) — */
-/* JS sets --scroll-morph-len = PIN_LEN×100vh; the tall root gives the scroll distance. */
-[data-component='scroll-morph'].is-canvas {
-  height: var(--scroll-morph-len, 300vh);
-}
-
-/* Sticky track; overflow:hidden clips the canvas + messages to the viewport box. */
+/* — Stage geometry (in-flow, no pin/sticky) — */
+/* The track is a normal full-viewport box that holds the canvas + centred text;
+   overflow:hidden clips the canvas + messages to the section. */
 [data-component='scroll-morph'].is-canvas [data-scroll-morph-track] {
-  position: sticky;
-  top: 0;
+  position: relative;
   height: 100vh;
   overflow: hidden;
 }

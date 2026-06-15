@@ -208,20 +208,14 @@ function setupTabs(root) {
     return null
   }
 
-  // Turn each underline into a grey track + inject a fill child that scales 0→1 (fill
-  // keeps the underline's original colour, captured first). `bars` = the fill children.
+  // Turn each underline into a grey track + inject a black fill child that scales 0→1.
+  // The fill is cumulative across tabs (see setStaticFills) so the row reads as total
+  // autoplay progress. `bars` = the fill children.
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-architected_tab-link-underline')
     if (!track) return null
-    const fillColor = window.getComputedStyle(track).backgroundColor
     const fill = document.createElement('span')
     fill.className = 'tabs-architected_tab-link-fill'
-    if (
-      fillColor &&
-      fillColor !== 'rgba(0, 0, 0, 0)' &&
-      fillColor !== 'transparent'
-    )
-      fill.style.backgroundColor = fillColor
     track.appendChild(fill)
     track.classList.add('is-track')
     return fill
@@ -472,8 +466,20 @@ function setupTabs(root) {
 
   // Autoplay: the active underline fills, then advances. Pauses only off-screen or mid-morph.
   const paused = () => !inView
+  // Cumulative fills: tabs before the active one stay full, the ones after stay empty
+  // (the active one is animated separately). The row = total autoplay progress.
+  const setStaticFills = (index) => {
+    bars.forEach((bar, k) => {
+      if (!bar || k === index) return
+      gsap.set(bar, {
+        scaleX: k < index ? 1 : 0,
+        transformOrigin: 'left center',
+      })
+    })
+  }
   function startProgress(index) {
     if (progressTween) progressTween.kill()
+    setStaticFills(index)
     const bar = bars[index]
     if (!bar) return
     gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
@@ -499,8 +505,7 @@ function setupTabs(root) {
   function select(i) {
     if (i === cur || !ready || introActive) return
     setActiveTab(i)
-    if (bars[cur]) gsap.set(bars[cur], { scaleX: 0 }) // reset the outgoing bar
-    if (progressTween) progressTween.kill()
+    if (progressTween) progressTween.kill() // cumulative fills are reset in startProgress
     morphTo(i)
   }
 

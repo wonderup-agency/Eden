@@ -1,96 +1,110 @@
-/* ===== PARADIGM · pinned scroll story — paste into Webflow head ===== */
+/* ===== PARADIGM · autoplay tabs (ring + underline progress) — paste into Webflow head ===== */
 
 /* — Root — */
 [data-component='paradigm'] {
   position: relative;
   overflow: hidden;
-  --paradigm-top-safe: 8rem; /* nav clearance — centres the scene below the fixed nav */
 }
 
-/* — Pinned stage (centres the scene below the nav via top-safe padding) — */
-[data-paradigm-track] {
+/* — Progress ring (circular) — */
+.tabs-paradigm_progress-ring {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding-top: var(--paradigm-top-safe);
+  display: grid;
+  place-items: center;
 }
 
-/* — Glow blob — */
-[data-paradigm-blob] {
-  position: absolute;
-  top: 56%;
-  left: 50%;
-  z-index: 0;
-  width: 42rem;
-  height: 42rem;
-  margin: -21rem 0 0 -21rem;
-  border-radius: 50%;
-  background: radial-gradient(
-    50% 50% at 50% 50%,
-    var(--paradigm-glow, #fbd07c) 0%,
-    rgba(251, 208, 124, 0) 70%
-  );
-  opacity: 0.6;
-  filter: blur(3rem);
-  pointer-events: none;
-  will-change: transform;
+/* The injected SVG replaces the original CSS fill div */
+[data-component='paradigm'].is-enhanced .tabs-paradigm_progress-inner {
+  display: none;
 }
 
-/* — Messages stack — */
-[data-paradigm-messages] {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 11rem;
-}
-
-[data-paradigm-message] {
-  width: 100%;
-}
-
-/* Overlap (enhanced mode) */
-[data-paradigm-message].is-overlap {
+.tabs-paradigm_progress-svg {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: visible; /* let the arc glow spill past the svg box */
+  pointer-events: none;
 }
 
-/* — Split words — */
-.paradigm_word-wrap {
-  display: inline-block;
-  overflow: visible;
+.tabs-paradigm_progress-track {
+  stroke: var(--base--grey-line, #e2e2e2);
 }
-.paradigm_word {
+
+.tabs-paradigm_progress-arc {
+  stroke: var(--base--gold, #f7c661);
+  stroke-linecap: round;
+  transform: rotate(-90deg); /* start the fill from 12 o'clock */
+  transform-box: fill-box;
+  transform-origin: center;
+  /* Gold glow → injected SVG <filter> (explicit region, no clip). See paradigm.js. */
+}
+
+/* Numbers stack centred in the ring; only the active one shows */
+.tabs-paradigm_progress-number {
+  grid-area: 1 / 1;
+  z-index: 1;
+  opacity: 0;
+}
+.tabs-paradigm_progress-number:first-child,
+.tabs-paradigm_progress-number.is-active {
+  opacity: 1;
+}
+
+/* Clickable progress controls (enhanced only): ring advances, numbers jump */
+[data-component='paradigm'].is-enhanced [data-paradigm='progress-ring'],
+[data-component='paradigm'].is-enhanced [data-paradigm='tab-link'] {
+  cursor: pointer;
+}
+
+/* — Text messages (stacked, one shown at a time) — */
+[data-paradigm-messages] {
+  display: grid;
+}
+[data-paradigm='tab-title'] {
+  grid-area: 1 / 1;
+}
+
+/* Split words */
+.title-anim_word {
   display: inline-block;
   will-change: transform, filter, opacity;
 }
 
-/* — Product image — */
-[data-paradigm-visual] {
-  position: relative;
-  z-index: 1;
+/* — Underline progress (grey baseline styled in Webflow; only the fill is ours) — */
+.tabs-paradigm_underline {
+  overflow: hidden;
+}
+.tabs-paradigm_underline-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--base--black, #000);
+  transform: scaleX(0);
+  transform-origin: left center;
 }
 
-/* — Responsive blob — */
-@media screen and (max-width: 991px) {
-  [data-paradigm-blob] {
-    width: 36rem;
-    height: 36rem;
-    margin: -18rem 0 0 -18rem;
-  }
+/* — Visuals (stacked, crossfaded) — */
+.tabs-paradigm_visual-wrapper {
+  display: grid;
 }
-@media screen and (max-width: 479px) {
-  [data-paradigm-blob] {
-    width: 28rem;
-    height: 28rem;
-    margin: -14rem 0 0 -14rem;
-  }
+[data-paradigm-visual] {
+  grid-area: 1 / 1;
+}
+
+/* — Fallback (no JS / reduced motion): show only the first / active tab — */
+[data-component='paradigm']:not(.is-enhanced) [data-paradigm='tab-title'],
+[data-component='paradigm']:not(.is-enhanced) [data-paradigm-visual] {
+  opacity: 0;
+}
+[data-component='paradigm']:not(.is-enhanced)
+  [data-paradigm='tab-title']:first-child,
+[data-component='paradigm']:not(.is-enhanced)
+  [data-paradigm='tab-title'].is-active,
+[data-component='paradigm']:not(.is-enhanced)
+  [data-paradigm-visual]:first-child,
+[data-component='paradigm']:not(.is-enhanced) [data-paradigm-visual].is-active {
+  opacity: 1;
+}
+[data-component='paradigm'].is-static .tabs-paradigm_underline-fill {
+  transform: scaleX(1);
 }

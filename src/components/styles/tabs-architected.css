@@ -14,7 +14,11 @@
   will-change: clip-path;
 }
 
-/* — Progress underline / track / fill — */
+/* — Progress underline / track / fill (three states) — */
+[data-component='tabs-architected'] {
+  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
+}
+
 /* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
 [data-component='tabs-architected'] .tabs-architected_tab-link-underline {
   transform: scaleX(0);
@@ -22,15 +26,20 @@
   will-change: transform;
 }
 
-/* Enhanced path: JS recolours the underline into a grey track + injects a fill child.
-   Track keeps Webflow's geometry; hex fallback keeps it visible without --base--grey-line. */
+/* State 1 — grey track on every tab (full width; JS adds .is-track). */
 [data-component='tabs-architected']
   .tabs-architected_tab-link-underline.is-track {
   transform: none;
   background-color: var(--base--grey-line, #e4e2dd);
+  transition: background-color 0.4s ease; /* ease the state-1 ↔ state-2 colour change */
 }
-/* Fill colour is set inline from the underline's original; the accent fallback is
-   used only if that capture is transparent — never grey, so it can't blend in. */
+/* State 2 — the active tab's track is a bit darker, still 100% wide. */
+[data-component='tabs-architected']
+  .tabs-architected_tab-link.is-active
+  .tabs-architected_tab-link-underline.is-track {
+  background-color: var(--tabs-track-active, #b3aea2);
+}
+/* State 3 — black progress fill (cumulative across tabs; JS scales scaleX 0→1). */
 [data-component='tabs-architected'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;
@@ -38,7 +47,7 @@
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
-  background-color: var(--base--gold, #fbd07c);
+  background-color: var(--base--black, #000);
 }
 
 /* — Reduced motion (no track/fill; keep the active underline full) — */

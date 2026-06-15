@@ -124,98 +124,106 @@
   }
 }
 
-/* ============================================================
-   PARADIGM — pinned scroll story
-   ============================================================ */
+/* ===== PARADIGM · autoplay tabs (ring + underline progress) — paste into Webflow head ===== */
 
 /* Root */
 [data-component='paradigm'] {
   position: relative;
   overflow: hidden;
-  --paradigm-top-safe: 8rem; /* nav clearance */
 }
 
-/* Pinned stage — centres content below the nav */
-[data-paradigm-track] {
+/* Progress ring (circular) */
+.tabs-paradigm_progress-ring {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding-top: var(--paradigm-top-safe);
+  display: grid;
+  place-items: center;
 }
-
-/* Glow blob */
-[data-paradigm-blob] {
-  position: absolute;
-  top: 56%;
-  left: 50%;
-  z-index: 0;
-  width: 42rem;
-  height: 42rem;
-  margin: -21rem 0 0 -21rem;
-  border-radius: 50%;
-  background: radial-gradient(
-    50% 50% at 50% 50%,
-    var(--paradigm-glow, #fbd07c) 0%,
-    rgba(251, 208, 124, 0) 70%
-  );
-  opacity: 0.6;
-  filter: blur(3rem);
-  pointer-events: none;
-  will-change: transform;
+[data-component='paradigm'].is-enhanced .tabs-paradigm_progress-inner {
+  display: none;
 }
-
-/* Messages stack */
-[data-paradigm-messages] {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 11rem;
-}
-[data-paradigm-message] {
-  width: 100%;
-}
-[data-paradigm-message].is-overlap {
+.tabs-paradigm_progress-svg {
   position: absolute;
   inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: visible; /* let the arc glow spill past the svg box */
+  pointer-events: none;
+}
+.tabs-paradigm_progress-track {
+  stroke: var(--base--grey-line, #e2e2e2);
+}
+.tabs-paradigm_progress-arc {
+  stroke: var(--base--gold, #f7c661);
+  stroke-linecap: round;
+  transform: rotate(-90deg); /* start the fill from 12 o'clock */
+  transform-box: fill-box;
+  transform-origin: center;
+  /* Gold glow → injected SVG <filter> (explicit region, no clip). See paradigm.js. */
+}
+.tabs-paradigm_progress-number {
+  grid-area: 1 / 1;
+  z-index: 1;
+  opacity: 0;
+}
+.tabs-paradigm_progress-number:first-child,
+.tabs-paradigm_progress-number.is-active {
+  opacity: 1;
 }
 
-/* Split words */
-.paradigm_word-wrap {
-  display: inline-block;
-  overflow: visible;
+/* Clickable progress controls (enhanced only): ring advances, numbers jump */
+[data-component='paradigm'].is-enhanced [data-paradigm='progress-ring'],
+[data-component='paradigm'].is-enhanced [data-paradigm='tab-link'] {
+  cursor: pointer;
 }
-.paradigm_word {
+
+/* Text messages (stacked, one shown at a time) */
+[data-paradigm-messages] {
+  display: grid;
+}
+[data-paradigm='tab-title'] {
+  grid-area: 1 / 1;
+}
+.title-anim_word {
   display: inline-block;
   will-change: transform, filter, opacity;
 }
 
-/* Product image */
-[data-paradigm-visual] {
-  position: relative;
-  z-index: 1;
+/* Underline progress (grey baseline styled in Webflow; only the fill is ours) */
+.tabs-paradigm_underline {
+  overflow: hidden;
+}
+.tabs-paradigm_underline-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--base--black, #000);
+  transform: scaleX(0);
+  transform-origin: left center;
 }
 
-/* Responsive blob */
-@media screen and (max-width: 991px) {
-  [data-paradigm-blob] {
-    width: 36rem;
-    height: 36rem;
-    margin: -18rem 0 0 -18rem;
-  }
+/* Visuals (stacked, crossfaded) */
+.tabs-paradigm_visual-wrapper {
+  display: grid;
 }
-@media screen and (max-width: 479px) {
-  [data-paradigm-blob] {
-    width: 28rem;
-  }
+[data-paradigm-visual] {
+  grid-area: 1 / 1;
+}
+
+/* Fallback (no JS / reduced motion): show only the first / active tab */
+[data-component='paradigm']:not(.is-enhanced) [data-paradigm='tab-title'],
+[data-component='paradigm']:not(.is-enhanced) [data-paradigm-visual] {
+  opacity: 0;
+}
+[data-component='paradigm']:not(.is-enhanced)
+  [data-paradigm='tab-title']:first-child,
+[data-component='paradigm']:not(.is-enhanced)
+  [data-paradigm='tab-title'].is-active,
+[data-component='paradigm']:not(.is-enhanced)
+  [data-paradigm-visual]:first-child,
+[data-component='paradigm']:not(.is-enhanced) [data-paradigm-visual].is-active {
+  opacity: 1;
+}
+[data-component='paradigm'].is-static .tabs-paradigm_underline-fill {
+  transform: scaleX(1);
 }
 
 /* ===== TABS-ARCHITECTED · autoplay tabs — paste into Webflow head ===== */
@@ -234,7 +242,11 @@
   will-change: clip-path;
 }
 
-/* — Progress underline / track / fill — */
+/* — Progress underline / track / fill (three states) — */
+[data-component='tabs-architected'] {
+  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
+}
+
 /* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
 [data-component='tabs-architected'] .tabs-architected_tab-link-underline {
   transform: scaleX(0);
@@ -242,15 +254,20 @@
   will-change: transform;
 }
 
-/* Enhanced path: JS recolours the underline into a grey track + injects a fill child.
-   Track keeps Webflow's geometry; hex fallback keeps it visible without --base--grey-line. */
+/* State 1 — grey track on every tab (full width; JS adds .is-track). */
 [data-component='tabs-architected']
   .tabs-architected_tab-link-underline.is-track {
   transform: none;
   background-color: var(--base--grey-line, #e4e2dd);
+  transition: background-color 0.4s ease; /* ease the state-1 ↔ state-2 colour change */
 }
-/* Fill colour is set inline from the underline's original; the accent fallback is
-   used only if that capture is transparent — never grey, so it can't blend in. */
+/* State 2 — the active tab's track is a bit darker, still 100% wide. */
+[data-component='tabs-architected']
+  .tabs-architected_tab-link.is-active
+  .tabs-architected_tab-link-underline.is-track {
+  background-color: var(--tabs-track-active, #b3aea2);
+}
+/* State 3 — black progress fill (cumulative across tabs; JS scales scaleX 0→1). */
 [data-component='tabs-architected'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;
@@ -258,7 +275,7 @@
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
-  background-color: var(--base--gold, #fbd07c);
+  background-color: var(--base--black, #000);
 }
 
 /* — Reduced motion (no track/fill; keep the active underline full) — */
@@ -322,7 +339,11 @@
   );
 }
 
-/* — Progress underline / track / fill (shared model with tabs-architected) — */
+/* — Progress underline / track / fill (three states; shared model with tabs-architected) — */
+[data-component='tabs-stats'] {
+  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
+}
+
 /* Baseline: collapsed. Also the reduced-motion bar (underline itself). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline {
   transform: scaleX(0);
@@ -330,13 +351,19 @@
   will-change: transform;
 }
 
-/* Enhanced path: JS recolours the underline into a grey track + injects a fill child;
-   the track keeps Webflow's geometry. */
+/* State 1 — grey track on every tab (full width; JS adds .is-track). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline.is-track {
   transform: none;
   background-color: var(--base--grey-line, #e4e2dd);
+  transition: background-color 0.4s ease; /* ease the state-1 ↔ state-2 colour change */
 }
-/* Fill colour set inline from the underline's original; accent fallback only if transparent. */
+/* State 2 — the active tab's track is a bit darker, still 100% wide. */
+[data-component='tabs-stats']
+  [tabs-architected='link'].is-active
+  .tabs-architected_tab-link-underline.is-track {
+  background-color: var(--tabs-track-active, #b3aea2);
+}
+/* State 3 — black progress fill (cumulative across tabs; JS scales scaleX 0→1). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;
@@ -344,7 +371,7 @@
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
-  background-color: var(--base--gold, #fbd07c);
+  background-color: var(--base--black, #000);
 }
 
 /* — Reduced motion (no canvas/fill; keep the active underline full) — */
@@ -436,7 +463,7 @@
 }
 
 /* ============================================================
-   SCROLL MORPH — pinned point-cloud scroll story
+   SCROLL MORPH — in-view point-cloud reveal
    ============================================================ */
 /* NOT bundled: paste into Webflow → Project Settings → Custom Code → Head.
    Holds only what the Designer can't express. Designer settings → scroll-morph.md. */
@@ -445,17 +472,10 @@
   --scroll-morph-top-safe: 0rem; /* nav clearance — used by the track + messages */
 }
 
-/* Scroll engine = CSS sticky (NOT a GSAP pin). JS sets --scroll-morph-len to
-   PIN_LEN×100vh; this tall root gives the scroll distance the sticky track
-   travels through. */
-[data-component='scroll-morph'].is-canvas {
-  height: var(--scroll-morph-len, 300vh);
-}
-
-/* Sticky track; overflow:hidden clips the canvas + messages to the viewport box. */
+/* Stage geometry (in-flow, no pin/sticky). The track is a normal full-viewport box
+   holding the canvas + centred text; overflow:hidden clips them to the section. */
 [data-component='scroll-morph'].is-canvas [data-scroll-morph-track] {
-  position: sticky;
-  top: 0;
+  position: relative;
   height: 100vh;
   overflow: hidden;
 }

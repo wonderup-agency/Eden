@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='number-counter']",
+    importFn: () => import('./components/number-counter.js'),
+  },
+  {
     selector: "[data-component='scroll-morph']",
     importFn: () => import('./components/scroll-morph.js'),
   },

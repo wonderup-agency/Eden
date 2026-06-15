@@ -27,21 +27,15 @@ const RING_WAVE_AMP = 0.05 // radial wobble amplitude
 const RING_WAVE_SPEED = 1.5 // radial wave speed (rad/s)
 const RING_WOBBLE_AMP = 0.05 // tangential angle wobble (rad)
 const RING_WOBBLE_SPEED = 0.95 // tangential wobble speed (rad/s)
-// Scroll choreography (dispersed → ring → hold assembled).
-const PIN_LEN = 3 // sticky scroll length in viewport heights — longer = gentler
-const SCRUB = 0.5 // ScrollTrigger catch-up lag (s) — lower = tracks tighter
-const HOLD = 0.3 // beat held dispersed before forming
-const ASSEMBLE = 1.9 // dispersed → ring duration (bulk of scroll)
-const END_HOLD = 0.3 // tail held assembled
+// Reveal choreography (timed — fires once on scroll into view, NOT tied to scroll).
+const REVEAL_START = 'top 70%' // ScrollTrigger start — when the section enters view
+const HOLD = 0.3 // beat held dispersed before forming (s)
+const ASSEMBLE = 2.5 // dispersed → ring duration (s)
 // Hover push (px feel — converted to normalized units via `scale`).
 const HOVER_RADIUS_PX = 110 // cursor influence radius
 const HOVER_PUSH_PX = 26 // push distance
 const HOVER_EASE_IN = 0.15 // ease toward pushed position
 const HOVER_EASE_OUT = 0.06 // ease back to rest
-
-const DEBUG = false // DEV: set false before deploy (gates the pin/scroll diagnostics below)
-const DEBUG_BOUND = 220 // px window around the pin start/end to log per-frame
-const DEBUG_JUMP = 60 // single-frame scroll delta (px) flagged as a JUMP
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
@@ -264,7 +258,6 @@ function setupRoot(root) {
 
   function loop() {
     draw()
-    debugFrame()
     if (inView) window.requestAnimationFrame(loop)
     else looping = false
   }
@@ -275,140 +268,38 @@ function setupRoot(root) {
     }
   }
 
-  // ---- DEV diagnostics (DEBUG): snapshot pin + Lenis state to chase scroll jumps ----
-  let stRef = null
-  let lastDebugY = window.scrollY
-
-  // Snapshot at pin transitions: scroll positions, Lenis velocity, pin progress, track geometry.
-  function debugSnap(self, tag, color) {
-    if (!DEBUG) return
-    const l = window.lenis
-    const r = track.getBoundingClientRect()
-    const cs = window.getComputedStyle(track)
-    console.log(`%c[scroll-morph] ${tag}`, `color:${color};font-weight:bold`, {
-      progress: +self.progress.toFixed(4),
-      isActive: self.isActive,
-      stStart: Math.round(self.start),
-      stEnd: Math.round(self.end),
-      'scrollY (native)': Math.round(window.scrollY),
-      'lenis.scroll': l ? Math.round(l.scroll) : 'no-lenis',
-      'lenis.targetScroll': l ? Math.round(l.targetScroll) : '—',
-      'lenis.actualScroll': l ? Math.round(l.actualScroll) : '—',
-      'lenis.velocity': l ? +l.velocity.toFixed(2) : '—',
-      'track.top': Math.round(r.top),
-      'track.position': cs.position,
-      'track.transform': cs.transform,
-    })
-  }
-
-  // One-time layout audit: flags a flex/grid wrapper around the pin (the #1 jump cause).
-  function debugLayout(self) {
-    if (!DEBUG) return
-    const sp = self.spacer
-    const trackParent = track.parentElement
-    const spacerParent = sp && sp.parentElement
-    console.log(
-      '%c[scroll-morph] layout audit',
-      'color:#0ea5e9;font-weight:bold',
-      {
-        pinSpacerHeight: sp ? Math.round(sp.offsetHeight) : 'none',
-        'track.parent': trackParent ? trackParent.tagName : null,
-        'track.parent.display': trackParent
-          ? window.getComputedStyle(trackParent).display
-          : null,
-        'spacer.parent': spacerParent ? spacerParent.tagName : null,
-        'spacer.parent.display': spacerParent
-          ? window.getComputedStyle(spacerParent).display
-          : null,
-        'spacer.parent.flex/grid?':
-          spacerParent &&
-          /flex|grid/.test(window.getComputedStyle(spacerParent).display)
-            ? '⚠️ YES — likely the jump'
-            : 'no',
-      }
-    )
-  }
-
-  // Per-frame logger near the pin boundaries; flags single-frame scroll skips (the jump).
-  function debugFrame() {
-    if (!DEBUG || !stRef) return
-    const y = window.scrollY
-    const dy = y - lastDebugY
-    lastDebugY = y
-    if (dy === 0) return
-    const nearStart = Math.abs(y - stRef.start) < DEBUG_BOUND
-    const nearEnd = Math.abs(y - stRef.end) < DEBUG_BOUND
-    if (!nearStart && !nearEnd) return
-    if (Math.abs(dy) <= DEBUG_JUMP) return // only surface real skips, not every smooth frame
-    const l = window.lenis
-    console.log(
-      `%c[scroll-morph] ⚠️ JUMP @${nearStart ? 'START' : 'END'}`,
-      'color:#ef4444;font-weight:bold',
-      {
-        dy: Math.round(dy),
-        scrollY: Math.round(y),
-        progress: +stRef.progress.toFixed(4),
-        'lenis.vel': l ? +l.velocity.toFixed(2) : '—',
-        'track.top': Math.round(track.getBoundingClientRect().top),
-        'track.position': window.getComputedStyle(track).position,
-      }
-    )
-  }
-
-  // ---- Scroll timeline: scrub the ring assembly. Text stays revealed. ----
+  // ---- Reveal: assemble the ring ONCE when the section scrolls into view. ----
+  // Timed, NOT scrubbed — the animation isn't tied to scroll position. The text
+  // stays revealed and held; only the ring animates.
   let tl = null
-  function buildScroll() {
-    if (tl) {
-      if (tl.scrollTrigger) tl.scrollTrigger.kill(true)
-      tl.kill()
-    }
-
-    // The single text is revealed and held the whole time — only the ring moves.
+  function buildReveal() {
     gsap.set(message, { autoAlpha: 1 })
-    gsap.set(form, { t: 0 })
+    gsap.set(form, { t: 0 }) // dispersed start
 
-    tl = gsap.timeline({ defaults: { ease: 'power2.inOut' } })
-    // Hold briefly fully dispersed, assemble the ring across the scroll, then
-    // hold it assembled and in view as the sticky track releases.
-    tl.to({}, { duration: HOLD })
-    tl.to(form, { t: 1, duration: ASSEMBLE })
-    tl.to({}, { duration: END_HOLD })
+    tl = gsap.timeline({ paused: true, defaults: { ease: 'power2.inOut' } })
+    tl.to({}, { duration: HOLD }) // brief dispersed beat
+    tl.to(form, { t: 1, duration: ASSEMBLE }) // assemble the ring, then hold (breathing)
 
-    // No GSAP pin — the track is CSS sticky and the root is made tall
-    // (--scroll-morph-len). ScrollTrigger only READS progress (scrub) to drive the
-    // timeline; no pin-spacer, no refresh-order dependency, no sibling overlap.
-    root.style.setProperty('--scroll-morph-len', PIN_LEN * 100 + 'vh')
-    tl.scrollTrigger ||
-      (stRef = ScrollTrigger.create({
-        trigger: root,
-        start: 'top top',
-        end: 'bottom bottom',
-        scrub: SCRUB,
-        animation: tl,
-        onUpdate: ensureLoop,
-        onEnter: (self) => debugSnap(self, '▶ onEnter (pin start)', '#22c55e'),
-        onLeave: (self) => debugSnap(self, '■ onLeave (pin end)', '#f97316'),
-        onEnterBack: (self) =>
-          debugSnap(self, '◀ onEnterBack (re-pin from below)', '#22c55e'),
-        onLeaveBack: (self) =>
-          debugSnap(self, '□ onLeaveBack (unpin to top)', '#f97316'),
-        onRefresh: (self) => {
-          debugSnap(self, '↻ onRefresh', '#a78bfa')
-          debugLayout(self)
-        },
-      }))
-    ScrollTrigger.refresh()
+    ScrollTrigger.create({
+      trigger: root,
+      start: REVEAL_START,
+      once: true,
+      onEnter: () => {
+        tl.play()
+        ensureLoop()
+      },
+    })
   }
 
   // ---- Boot: build the ring, then arm the scene ----
   function boot() {
     buildPointBuffers()
     ready = true
-    // Add .is-canvas (makes the track sticky/100vh) BEFORE measuring — measure
+    // Add .is-canvas (sizes the stage to the viewport) BEFORE measuring — measure
     // first and the canvas sizes against the collapsed track → ring renders as an ellipse.
     root.classList.add('is-canvas')
     resize()
-    buildScroll()
+    buildReveal()
     root.classList.add('is-ready') // lift the anti-FOUC gate
     ensureLoop()
   }

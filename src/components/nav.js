@@ -17,6 +17,12 @@ const FLOAT_OFF_MOBILE = 8 // px — a touch higher to absorb top overscroll
 const FLIP_DURATION = 1
 const FLIP_EASE = 'power2.inOut'
 
+// Hide-on-scroll-down / show-on-scroll-up (all breakpoints). Stays visible near the top.
+const HIDE_AFTER = 150 // px scrolled before the nav may hide (clears the mobile address-bar zone)
+const SCROLL_DELTA = 6 // px of movement needed to register a direction change
+const HIDE_DURATION = 0.5
+const HIDE_EASE = 'power2.out'
+
 // DEBUG — on-screen HUD + logs to chase the mobile scroll "jump". Off (the HUD loop
 // is itself overhead, and the HUD is real DOM so Terser can't strip it).
 const DEBUG = false
@@ -76,6 +82,9 @@ function setupNav(root) {
   let floatOn = FLOAT_ON_DESKTOP // set per breakpoint in enable()
   let floatOff = FLOAT_OFF_DESKTOP
   let useFlip = true // desktop morphs with Flip; mobile uses CSS-only glass
+  let isHidden = false // hidden on scroll-down, shown on scroll-up
+  let lastY = Math.max(0, window.scrollY) // direction tracking
+  let pendingHide = false // defer the hide until the float morph settles (centred)
 
   // DEBUG — fixed on-screen readout + per-frame jump detector (flags the bar moving
   // more than the scroll delta — i.e. shoved by the address bar / Flip).
@@ -162,9 +171,35 @@ function setupNav(root) {
       duration: FLIP_DURATION,
       ease: FLIP_EASE,
       absolute: true,
-      onComplete: () =>
-        logCss(floating ? 'settled → FLOATING' : 'settled → REST'),
+      onComplete: () => {
+        logCss(floating ? 'settled → FLOATING' : 'settled → REST')
+        // Bar has settled into its centred spot — now honor a deferred hide.
+        if (pendingHide) setHidden(true)
+      },
     })
+  }
+
+  // Slide the whole fixed nav out on the Y axis (down → hidden, up → shown).
+  const setHidden = (hidden) => {
+    if (reduceMotion.matches) return
+    if (!hidden) pendingHide = false
+    // Wait for the float morph to settle (desktop centring) before hiding.
+    if (hidden && flip && flip.isActive()) {
+      pendingHide = true
+      return
+    }
+    if (hidden === isHidden) return
+    pendingHide = false
+    isHidden = hidden
+    const vars = {
+      yPercent: hidden ? -120 : 0,
+      duration: HIDE_DURATION,
+      ease: HIDE_EASE,
+      overwrite: true,
+    }
+    // Once fully shown, drop the transform so it can't break the floating glass backdrop-filter.
+    if (!hidden) vars.clearProps = 'transform'
+    gsap.to(root, vars)
   }
 
   // rAF-throttled scroll read — hysteresis flips state only when leaving the deadzone.
@@ -173,11 +208,19 @@ function setupNav(root) {
     if (ticking) return
     ticking = true
     window.requestAnimationFrame(() => {
-      const y = window.scrollY
+      const y = Math.max(0, window.scrollY)
       let next = isFloating
       if (!isFloating && y > floatOn) next = true
       else if (isFloating && y < floatOff) next = false
       setFloating(next, true)
+
+      // Hide on scroll down, show on scroll up; always shown near the top.
+      const dy = y - lastY
+      if (y <= HIDE_AFTER) setHidden(false)
+      else if (dy > SCROLL_DELTA) setHidden(true)
+      else if (dy < -SCROLL_DELTA) setHidden(false)
+      lastY = y
+
       ticking = false
     })
   }
@@ -193,6 +236,9 @@ function setupNav(root) {
         '--nav-rest-top',
         window.getComputedStyle(root).paddingTop
       )
+      isHidden = false
+      pendingHide = false
+      lastY = Math.max(0, window.scrollY)
       window.addEventListener('scroll', onScroll, { passive: true })
       setFloating(window.scrollY > floatOff, false) // sync without animating (handles reload mid-page)
       logCss(isFloating ? 'init → FLOATING' : 'init → REST')
@@ -203,6 +249,9 @@ function setupNav(root) {
       flip && flip.kill()
       inner.classList.remove('is-floating')
       isFloating = null
+      isHidden = false
+      pendingHide = false
+      gsap.set(root, { clearProps: 'transform' }) // show the nav when switching breakpoints
       stopDebug() // DEBUG
     },
   }

@@ -50,21 +50,14 @@ function setupTabs(root) {
 
   const count = Math.min(links.length, panels.length)
 
-  // Turn each underline into a grey TRACK + inject a brand-coloured FILL child that
-  // scales 0→1 (the fill keeps the underline's original colour, captured first).
-  // Reduced motion skips track/fill. `bars` points at the fill children (what JS scales).
+  // Turn each underline into a grey TRACK + inject a black FILL child that scales 0→1.
+  // The fill is cumulative across tabs (see setStaticFills) so the row reads as total
+  // autoplay progress. Reduced motion skips track/fill; `bars` = the fill children.
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-architected_tab-link-underline')
     if (!track || reduceMotion.matches) return null
-    const fillColor = window.getComputedStyle(track).backgroundColor
     const fill = document.createElement('span')
     fill.className = 'tabs-architected_tab-link-fill'
-    if (
-      fillColor &&
-      fillColor !== 'rgba(0, 0, 0, 0)' &&
-      fillColor !== 'transparent'
-    )
-      fill.style.backgroundColor = fillColor
     track.appendChild(fill)
     track.classList.add('is-track')
     return fill
@@ -104,9 +97,22 @@ function setupTabs(root) {
     panel.setAttribute('aria-labelledby', linkId)
   })
 
+  // Cumulative fills: tabs before the active one stay full, the ones after stay empty
+  // (the active one is animated separately). The row = total autoplay progress.
+  const setStaticFills = (index) => {
+    bars.forEach((bar, k) => {
+      if (!bar || k === index) return
+      gsap.set(bar, {
+        scaleX: k < index ? 1 : 0,
+        transformOrigin: 'left center',
+      })
+    })
+  }
+
   // Fill the active tab's underline over AUTOPLAY_DURATION, then advance.
   function startProgress(index) {
     if (progressTween) progressTween.kill()
+    setStaticFills(index)
     const bar = bars[index]
     if (!bar || reduceMotion.matches) return
 
@@ -128,7 +134,6 @@ function setupTabs(root) {
 
     const outLink = links[activeIndex]
     const outPanel = panels[activeIndex]
-    const outBar = bars[activeIndex]
     const inLink = links[index]
     const inPanel = panels[index]
 
@@ -142,8 +147,13 @@ function setupTabs(root) {
     inLink.setAttribute('aria-selected', 'true')
     inLink.setAttribute('tabindex', '0')
 
-    // Start the fill immediately (in parallel with the reveal) so the bar isn't empty.
-    if (started && !paused) startProgress(index)
+    // Start the fill immediately (in parallel with the reveal). Always create the tween
+    // — even when hovered — so a click while the cursor is over the section still leaves
+    // a live tween to resume on mouseleave; pause it right away if currently hovered.
+    if (started) {
+      startProgress(index)
+      if (paused && progressTween) progressTween.pause()
+    }
 
     const inParts = parts[index]
 
@@ -160,11 +170,7 @@ function setupTabs(root) {
       },
     })
 
-    if (outPanel) {
-      tl.to(outPanel, OUT_FADE, 0)
-      if (outBar)
-        tl.set(outBar, { scaleX: 0, transformOrigin: 'left center' }, 0)
-    }
+    if (outPanel) tl.to(outPanel, OUT_FADE, 0)
 
     // Image wipes open vertically; content blocks de-blur in, slightly after.
     const at = outPanel ? 0.15 : 0
@@ -272,7 +278,8 @@ function setupTabs(root) {
       once: true,
       onEnter: () => {
         started = true
-        if (!paused) startProgress(activeIndex)
+        startProgress(activeIndex)
+        if (paused && progressTween) progressTween.pause()
       },
     })
   }
