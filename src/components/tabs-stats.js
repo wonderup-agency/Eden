@@ -1,74 +1,51 @@
 /*
-Component: tabs-stats
-Webflow attribute: data-component="tabs-stats"
-
-Stats tabs with a PNG-sampled 2D point-cloud graphic that morphs between states.
-Each stat link is a tab; the matching tab-item image is sampled into ~7k points
-and the cloud lerps (position + alpha) from one state to the next on switch. On
-first scroll into view the points start as a soft cloud dispersed across the
-stage, float for ~1s, then converge into the first state (intro). A residual
-shimmer keeps the cloud gently drifting even when assembled and idle (Stripe-like,
-never frozen). Hovering the stage loosens nearby points like a nebula — desktop
-only (disabled on tablet/below). The active link's underline fills left→right as
-an autoplay progress bar; when full it advances to the next tab.
-
-Ported from playground/diagnostic-tabs-pointcloud.html. Canvas 2D only — no 3D
-library. GSAP is expected as a global (loaded site-wide in Webflow); the cloud is
-static between morphs so rAF only runs while something is moving.
-
-Fallbacks: if GSAP is missing, prefers-reduced-motion is set, or the source
-images can't be sampled (CORS-tainted canvas), the component shows the active
-tab-item image statically and just toggles tabs on click/keyboard.
-
-The CSS is NOT bundled here — it lives in Webflow's global head custom code.
-The source of truth is ./styles/tabs-stats.css (copy/paste it into Webflow).
+  Component: tabs-stats · data-component="tabs-stats"
+  Stats tabs with a PNG-sampled 2D point cloud (~7k points) that morphs between states
+  on switch. Intro: dispersed cloud floats in → converges. Residual shimmer keeps it
+  alive when idle; hover loosens it (desktop only). Autoplay underline advances tabs.
+  Canvas 2D, no 3D lib. Fallback (no GSAP / reduced motion / CORS-tainted): static image.
+  CSS → ./styles/tabs-stats.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-stats.md
 */
 
 const { gsap } = window
 
 const ACTIVE_CLASS = 'is-active'
-const AUTOPLAY_DURATION = 5 // seconds the underline takes to fill before advancing
+const AUTOPLAY_DURATION = 5 // seconds the underline fills before advancing
 
-// ---- Point cloud (tuned defaults from the playground) ----
+// ---- Point cloud ----
 const TARGET_POINTS = 7000 // points per state — same for all, for a 1:1 morph
 const SAMPLE_MAX = 560 // longest edge the source PNG is sampled at
 const ALPHA_MIN = 28 // min source alpha to count a pixel as "ink"
-const LUMA_MAX = 245 // for opaque PNGs: count pixels darker than this
+const LUMA_MAX = 245 // opaque PNGs: count pixels darker than this
 const MORPH_DURATION = 1.25
 const MORPH_EASE = 'power2.inOut'
 const DOT_COLOR = '125,130,140' // #7d828c
-const FIT = 0.82 // fraction of the available half-stage the cloud fills (1 = touches the edges)
+const FIT = 0.82 // half-stage fraction the cloud fills (1 = touches the edges)
 const DOT_RADIUS = 1.4
-// Hover nebula (desktop only — disabled on tablet/below, where it reads as jitter)
+// Hover nebula (desktop only — reads as jitter on tablet/below)
 const HOVER_RADIUS = 0.4
 const HOVER_PUSH = 0.03
 const HOVER_SWIRL = 0.06
 const HOVER_EASE = 0.11
 const HOVER_SCATTER = 0.18
-const HOVER_MIN_WIDTH = 992 // px — hover nebula only at/above this (Webflow desktop base)
-// Ambient drift — a residual shimmer that NEVER fully stops, so the cloud keeps
-// breathing even when assembled and idle (Stripe-like). Same model as scroll-morph.
-// Amped up for a more alive, looser cloud (the assembled shimmer = DRIFT×SHIMMER_FLOOR).
-const DRIFT = 0.26 // drift amplitude while dispersed (normalized units)
-const DRIFT_SPEED = 0.85 // drift speed
+const HOVER_MIN_WIDTH = 992 // px — hover only at/above this (Webflow desktop base)
+// Ambient drift — residual shimmer that never fully stops (assembled = DRIFT×SHIMMER_FLOOR).
+const DRIFT = 0.26 // drift amplitude while dispersed
+const DRIFT_SPEED = 0.85
 const SHIMMER_FLOOR = 0.6 // fraction of DRIFT kept once assembled (never frozen)
-// Coherent breathing of the assembled cloud — a slow radial pulse rippling out
-// from the cloud center, the same "living" quality as scroll-morph's ring. Bigger
-// now for more motion; if the sampled graphic starts to smear, pull BREATH_AMP back.
-const BREATH_AMP = 0.05 // radial pulse amplitude (fraction of each point's distance from center)
+// Coherent breathing — a slow radial pulse rippling out from center. Pull BREATH_AMP back if it smears.
+const BREATH_AMP = 0.05 // radial pulse amplitude
 const BREATH_SPEED = 1.1 // pulse speed (rad/s)
-const BREATH_RIPPLE = 2.2 // spatial frequency — >0 ripples outward instead of pulsing uniformly
-// Intro (float in → assemble): points appear as a soft cloud dispersed across the
-// stage, drift gently, then converge into the first state (staggered).
-const INTRO_SCATTER = 1.0 // dispersed coverage (1 = fills the stage, like scroll-morph)
+const BREATH_RIPPLE = 2.2 // spatial frequency — 0 = uniform pulse, >0 = outward ripple
+// Intro (float in → assemble).
+const INTRO_SCATTER = 1.0 // dispersed coverage (1 = fills the stage)
 const INTRO_FADE = 0.5 // fade-in (s)
-const INTRO_HOLD = 1.0 // float in place ~1s before converging (s)
+const INTRO_HOLD = 1.0 // float ~1s before converging (s)
 const INTRO_DURATION = 1.6 // convergence (s)
-const INTRO_STAGGER = 0.5 // spread of per-point convergence start (organic)
+const INTRO_STAGGER = 0.5 // per-point convergence-start spread
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-// Hover nebula is desktop-only — on tablet/below the cursor-driven scatter reads
-// as random jitter, so it's gated behind this query (reactive, no re-binding).
+// Hover nebula is desktop-only (reactive gate, no re-binding).
 const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
 
 // Deterministic RNG so the subsample is stable across reloads.
@@ -93,8 +70,7 @@ function loadImage(src) {
   })
 }
 
-// Sample an image's "ink" pixels into n points. Returns Float32 x/y/alpha in
-// source-pixel space + bbox. Throws if the canvas is CORS-tainted (caught upstream).
+// Sample an image's "ink" pixels into n points (x/y/alpha + bbox). Throws if CORS-tainted.
 function sampleImage(img, n, rng) {
   const scale = SAMPLE_MAX / Math.max(img.width, img.height)
   const w = Math.max(1, Math.round(img.width * scale))
@@ -160,8 +136,8 @@ function sampleImage(img, n, rng) {
   return { x, y, a, bbox: { minX, minY, maxX, maxY } }
 }
 
-// Static fallback (no GSAP / reduced motion / tainted assets): just toggle which
-// tab-item image shows on click + keyboard. Underline state is handled by CSS.
+// Static fallback (no GSAP / reduced motion / tainted assets): toggle the active
+// tab-item image on click + keyboard (underline state is CSS).
 function setupFallback(root, links, tabItems, count) {
   let active = -1
   const setActive = (i) => {
@@ -232,11 +208,8 @@ function setupTabs(root) {
     return null
   }
 
-  // Turn each underline into a static grey track (shown on every tab) and inject
-  // a fill child that scales 0→1 — so the autoplay progress visibly fills over a
-  // grey baseline instead of appearing from nothing. The fill keeps the
-  // underline's original (brand) colour, captured before we recolour the track
-  // grey via `.is-track`. `bars` now points at the fill children (what JS scales).
+  // Turn each underline into a grey track + inject a fill child that scales 0→1 (fill
+  // keeps the underline's original colour, captured first). `bars` = the fill children.
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-architected_tab-link-underline')
     if (!track) return null
@@ -365,8 +338,7 @@ function setupTabs(root) {
     const cx = cssW / 2
     const cy = cssH * 0.5
 
-    // Intro: points appear scattered in a floating cloud, drift gently, then
-    // converge into state 0 (staggered). The drift fades as each point locks in.
+    // Intro: scattered floating cloud drifts, then converges into state 0 (staggered).
     if (introActive) {
       const s0 = states[0]
       const p = introProg.v
@@ -379,16 +351,14 @@ function setupTabs(root) {
         let pp = p * span - introDelay[i]
         pp = pp < 0 ? 0 : pp > 1 ? 1 : pp
         pp = pp * pp * (3 - 2 * pp)
-        // Drift fades from full (dispersed) to the residual shimmer (assembled),
-        // matching the persistent drift below so the hand-off is seamless.
+        // Drift fades from full (dispersed) to the residual shimmer (assembled).
         const driftAmp =
           (SHIMMER_FLOOR + (1 - SHIMMER_FLOOR) * (1 - pp)) * DRIFT
         const fx =
           Math.cos(now * DRIFT_SPEED + driftPhase[i]) * dispX[i] * driftAmp
         const fy =
           Math.sin(now * DRIFT_SPEED + driftPhase[i]) * dispY[i] * driftAmp
-        // Dispersed position fills the stage (scatter fraction × stage extent);
-        // converge to state 0 as pp → 1.
+        // Dispersed fills the stage; converge to state 0 as pp → 1.
         const dx = startX[i] * covX
         const dy = startY[i] * covY
         const bx = dx + (s0.x[i] - dx) * pp + fx
@@ -421,9 +391,8 @@ function setupTabs(root) {
         Math.sin(now * DRIFT_SPEED + driftPhase[i]) * dispY[i] * driftAmp
       let bx = fromX[i] + (tx[i] - fromX[i]) * t + fx
       let by = fromY[i] + (ty[i] - fromY[i]) * t + fy
-      // Coherent radial breathing (morph-section feel): a slow ripple out from
-      // the cloud center (origin in normalized space) keeps the assembled shape
-      // alive, not just shimmering. Scales each point toward/away from center.
+      // Coherent radial breathing — a slow ripple out from center scales each point
+      // toward/away, keeping the assembled shape alive (not just shimmering).
       const dd = Math.sqrt(bx * bx + by * by)
       const breath =
         1 + Math.sin(now * BREATH_SPEED - dd * BREATH_RIPPLE) * BREATH_AMP
@@ -460,8 +429,7 @@ function setupTabs(root) {
     ctx.globalAlpha = 1
   }
 
-  // The loop runs continuously while the section is on screen — the residual
-  // shimmer means there's always something to draw. It stops when off-screen.
+  // Runs continuously while on screen (the shimmer always has something to draw).
   function loop() {
     draw()
     if (inView) window.requestAnimationFrame(loop)
@@ -497,15 +465,12 @@ function setupTabs(root) {
         morphing = false
       },
     })
-    // Start the underline fill immediately (in parallel with the morph) so the
-    // progress bar doesn't sit empty for MORPH_DURATION before it begins.
+    // Start the fill immediately (in parallel with the morph) so the bar isn't empty.
     if (started && !paused()) startProgress(cur)
     ensureLoop()
   }
 
-  // Autoplay = the active link's underline fills over AUTOPLAY_DURATION, then
-  // advances. It never pauses on hover/focus — only when the section is
-  // off-screen (perf) or mid-morph. So the progress bar fills continuously.
+  // Autoplay: the active underline fills, then advances. Pauses only off-screen or mid-morph.
   const paused = () => !inView
   function startProgress(index) {
     if (progressTween) progressTween.kill()
@@ -628,7 +593,7 @@ function setupTabs(root) {
     draw()
   }
 
-  // ---- Boot: sample the source images, normalize to a common centered scale ----
+  // ---- Boot: sample source images, normalize to a common centered scale ----
   async function boot() {
     setActiveTab(0)
     resize()
@@ -707,9 +672,8 @@ function setupTabs(root) {
     // Source images are now sampled — hand the stage over to the canvas.
     root.classList.add('is-canvas')
 
-    // Scatter every point into a soft cloud dispersed across the whole stage
-    // (computed once) for the intro. Fractions in [-1,1] are scaled by the stage
-    // half-extent (coverX/coverY) at draw time, like scroll-morph.
+    // Scatter every point across the stage for the intro (fractions in [-1,1] scaled
+    // by coverX/coverY at draw time).
     const frng = mulberry32(7)
     for (let i = 0; i < N; i++) {
       startX[i] = frng() * 2 - 1
@@ -717,8 +681,7 @@ function setupTabs(root) {
       introDelay[i] = frng() * INTRO_STAGGER
       driftPhase[i] = frng() * Math.PI * 2
     }
-    // The intro (fired by the IntersectionObserver on first view) renders the
-    // rise-in; if already in view it runs now. Nothing is drawn before then.
+    // Intro fires on first view (IntersectionObserver); run now if already in view.
     if (inView) runIntro()
   }
 

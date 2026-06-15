@@ -1,23 +1,13 @@
-/* tabs-stats — point-cloud morph tabs. Not bundled: paste into Webflow global head.
-   Hooks: [data-component="tabs-stats"] root
-        · [tabs-architected="link"]   each stat tab (number + label + underline)
-        · .tabs-architected_tab-link-underline  progress bar (scaleX 0→1 from JS)
-        · [tabs-architected="image"] img  the per-tab chart PNG (sampled to points)
-        · [tabs-architected="stage"] (optional)  the canvas stage; defaults to
-          .tabs-stats_tabs-content if the hook is absent.
+/* ===== TABS-STATS · point-cloud morph tabs — paste into Webflow head ===== */
+/* JS injects <canvas .tabs-stats_pointcloud> + adds .is-canvas once sampled. Hooks → tabs-stats.md. */
 
-   The component injects a <canvas class="tabs-stats_pointcloud"> into the stage
-   and adds .is-canvas to the root once the images are sampled. Before that (and
-   in the static fallback) the source images show via .is-active. */
-
-/* Stage holds the stacked source images + the injected canvas. */
+/* — Stage (stacked source images + injected canvas) — */
 [data-component='tabs-stats'] .tabs-stats_tabs-content {
   position: relative;
   display: grid;
 }
 
-/* Source images stack in one cell; only the active one shows (fallback / no-JS /
-   reduced-motion). They also reserve the stage height so the canvas has a size. */
+/* Source images stack in one cell; the active one shows (fallback) + reserves stage height. */
 [data-component='tabs-stats'] .tabs-stats_tab-item {
   grid-area: 1 / 1;
   opacity: 0;
@@ -27,8 +17,7 @@
   opacity: 1;
 }
 
-/* Canvas mode: the point cloud owns the stage — hide the source images but keep
-   their layout (visibility, not display) so the stage keeps its height. */
+/* — Canvas mode (cloud owns the stage; images hidden but keep their layout height) — */
 [data-component='tabs-stats'].is-canvas .tabs-stats_tab-item {
   opacity: 0;
   visibility: hidden;
@@ -47,8 +36,7 @@
   pointer-events: auto; /* hover nebula needs the cursor over the canvas */
 }
 
-/* Optional gold glow behind the cloud (matches the playground). Delete if Webflow
-   already provides one. */
+/* — Gold glow behind the cloud (optional; delete if Webflow provides one) — */
 [data-component='tabs-stats'].is-canvas .tabs-stats_tabs-content::before {
   content: '';
   position: absolute;
@@ -62,27 +50,21 @@
   );
 }
 
-/* Progress-bar underline baseline — JS animates scaleX 0→1 (origin left).
-   Used in the fallback path (no GSAP / reduced motion), where the underline
-   itself is the bar. */
+/* — Progress underline / track / fill (shared model with tabs-architected) — */
+/* Baseline: collapsed. Also the reduced-motion bar (underline itself). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
 }
 
-/* Enhanced path: JS turns each underline into a static grey track shown on every
-   tab (so the autoplay fill is visible filling over a grey baseline) and injects
-   a `.tabs-architected_tab-link-fill` child that scales. The track keeps Webflow's
-   own geometry (position/height/radius) — we only neutralise the transform and
-   recolour it grey. */
+/* Enhanced path: JS recolours the underline into a grey track + injects a fill child;
+   the track keeps Webflow's geometry. */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline.is-track {
   transform: none;
-  background-color: var(--base--grey-line);
+  background-color: var(--base--grey-line, #e4e2dd);
 }
-/* The fill carries the progress (its colour is set inline from the underline's
-   original colour; the grey here is just a fallback). Sized to the track via
-   width/height so it doesn't depend on the track's position type. */
+/* Fill colour set inline from the underline's original; accent fallback only if transparent. */
 [data-component='tabs-stats'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;
@@ -90,10 +72,10 @@
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
-  background-color: var(--base--grey-line);
+  background-color: var(--base--gold, #fbd07c);
 }
 
-/* Reduced motion: no canvas, no autoplay fill — keep the active underline full. */
+/* — Reduced motion (no canvas/fill; keep the active underline full) — */
 @media (prefers-reduced-motion: reduce) {
   [data-component='tabs-stats']
     .tabs-stats_tab-link.is-active

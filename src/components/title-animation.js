@@ -1,27 +1,15 @@
 /*
-Component: title-animation
-Webflow attribute: data-title-animation="True"
-
-Per-word de-blur reveal for any heading/text, matching the paradigm text effect.
-Add data-title-animation="True" to the element (or its rich-text wrapper); the
-component finds the heading(s)/paragraph(s) inside, splits them into words, and
-reveals them with a blur→sharp, rise + fade stagger.
-
-Fires once via ScrollTrigger: if the element is already in view on load (e.g. a
-hero title) it plays on load; otherwise it plays when scrolled into view — so a
-single setup covers both scenarios.
-
-GSAP + ScrollTrigger are expected as globals (loaded site-wide in Webflow). The
-word spans are styled inline from JS (see ../utils/word-reveal.js), so no CSS
-needs to live in Webflow.
+  Component: title-animation · data-title-animation="True"
+  Per-word de-blur reveal for any heading/text (same effect as paradigm). Fires once
+  via ScrollTrigger — on load if already in view, else on scroll-in.
+  No CSS file (styled inline). Docs → .claude/rules/components/title-animation.md
 */
 
 import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
 
 const { gsap, ScrollTrigger } = window
 
-// Extra delay per marked element that shares a <section>, so multiple titles in
-// the same section cascade instead of firing at once.
+// Extra delay per marked element sharing a <section> (cascade within a section).
 const STAGGER_BETWEEN = 0.15
 
 /**
@@ -36,25 +24,20 @@ export default function (elements) {
   }
   gsap.registerPlugin(ScrollTrigger)
 
-  // Reduced motion: leave the text untouched (no split, no animation). The
-  // anti-FOUC gate is never added in this case, so titles stay visible.
+  // Reduced motion: leave the text untouched (gate is never added, titles stay visible).
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
-  // 1) Split every target and set the hidden/blurred start state up front.
+  // 1) Split every target and set the hidden/blurred start state.
   const prepared = elements
     .map((el) => ({ el, words: splitElement(el) }))
     .filter((p) => p.words.length)
   prepared.forEach(({ words }) => gsap.set(words, REVEAL_FROM))
 
-  // 2) Lift the anti-FOUC gate locally (per element, not the global class) so
-  //    other gated components stay hidden until they're ready. Parents become
-  //    visible but show nothing — their words are still hidden — so no flash.
+  // 2) Lift the anti-FOUC gate per element (words still hidden → no flash).
   prepared.forEach(({ el }) => gsap.set(el, { opacity: 1 }))
 
-  // 3) Build the reveals. once: an already-in-view title (hero) fires on load;
-  //    one below the fold fires when scrolled into view. Multiple marked
-  //    elements in the SAME <section> cascade — each subsequent one gets an
-  //    extra delay so they stagger in sequence (no effect when far apart).
+  // 3) Build the reveals (once). Marked elements in the same <section> cascade
+  //    via an extra per-index delay.
   const countPerSection = new Map()
   prepared.forEach(({ el, words }) => {
     const section = el.closest('section')

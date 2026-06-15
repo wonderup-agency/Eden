@@ -1,17 +1,7 @@
-/* nav — glass-on-scroll morph (all breakpoints). Not bundled: paste into Webflow global head.
-   Hooks: [data-component="nav"] root · [data-nav-inner] bar · [data-nav-logo] logo.
-   Desktop hugs content edge-left → centres; mobile stays full width → contracts to a centred pill.
+/* ===== NAV · glass-on-scroll morph (all breakpoints) — paste into Webflow head ===== */
+/* Designer settings + hooks → nav.md. Keep --nav-morph in sync with FLIP_DURATION (nav.js). */
 
-   Set these IN WEBFLOW (Designer) — kept out of custom code on purpose:
-     • nav_component → Width 100%  (fixed + full-viewport so the pill centres)
-     • nav_inner     → Display Flex · Position Relative · Align Y Center
-     • nav_logo      → Don't shrink
-
-   Keep --nav-morph in sync with FLIP_DURATION (nav.js). --nav-rest-top is set
-   automatically by nav.js (it measures nav_component's real padding-top), so the
-   floating bar always lands at --nav-float-top no matter the Webflow padding. */
-
-/* Tokens */
+/* — Tokens — */
 [data-component='nav'] {
   --nav-morph: 1s;
   --nav-ease: cubic-bezier(0.45, 0, 0.55, 1);
@@ -25,7 +15,7 @@
     255,
     0.6
   ); /* mobile tint — slightly more opaque so a lighter blur still reads as glass */
-  --nav-blur-mobile: 10px; /* mobile blur radius — smaller than desktop's 16px (cheaper per frame, smoother fast scroll). Lower it more if it still stutters, raise toward 16px if you want it frostier. */
+  --nav-blur-mobile: 10px; /* mobile blur radius — smaller than desktop's 16px (cheaper/smoother). Lower if it stutters, raise toward 16px for frostier. */
   --nav-menu-glass: rgba(
     255,
     255,
@@ -34,10 +24,7 @@
   ); /* open mobile-menu tint — a touch more opaque so links stay legible */
 }
 
-/* --- Glass + stacking + logo shrink — shared by the desktop AND mobile pills.
-   The bar morphs into a frosted pill on every breakpoint now; only the rest→float
-   geometry differs (desktop hugs content edge-left → centre; mobile stays full
-   width → contracts to a centred pill). These pieces are identical for both. --- */
+/* — Glass + logo shrink (shared by desktop AND mobile pills) — */
 
 /* Glass layer (pseudo-element — impossible in the Designer) */
 [data-component='nav'] [data-nav-inner]::before {
@@ -76,8 +63,7 @@
   transform: scale(0.833);
 }
 
-/* --- Desktop (>= 992px): hugs content, edge-aligned at rest → centred when floating.
-   The fit-content + (-1rem margin / 1rem padding) pair can't be a Webflow state. --- */
+/* — Desktop (≥ 992px): hugs content edge-left at rest → centred when floating — */
 @media (min-width: 992px) {
   [data-component='nav'] [data-nav-inner] {
     width: fit-content;
@@ -89,19 +75,11 @@
   }
 }
 
-/* --- Mobile / tablet (<= 991px): the bar keeps its normal full width (it already
-   sits inside the page's side padding) and just floats DOWN by the top gap when
-   floating — the glass + rounded corners turn it into a pill in place, no side
-   contraction (that side→centre slide is desktop-only). margin-top floats it down;
-   the inner side padding keeps the logo + menu button off the glass edge. --- */
+/* — Mobile / tablet (≤ 991px): full width, glass-only morph (NEVER moves vertically) — */
+/* Any vertical move near the top fights the address-bar viewport resize → reads as a
+   jump. So only glass/corners/padding/logo animate. (Desktop keeps the Flip float.) */
 @media (max-width: 991px) {
-  /* Mobile morph is glass-only — the bar NEVER moves vertically. Earlier it floated
-     down a few px (margin, then transform), but any vertical move near the top
-     coincides with the browser address bar resizing the viewport, which always read
-     as a jump. So on mobile the bar stays put: only the frosted glass fades in, the
-     corners round, the side padding eases in (logo/menu off the glass edge) and the
-     logo shrinks — none of which can shift the bar vertically. (Desktop keeps the
-     Flip float-to-centre, where there's no browser chrome to fight.) */
+  /* Side padding eases in so logo/menu sit off the glass edge. */
   [data-component='nav'] [data-nav-inner] {
     transition: padding var(--nav-morph) var(--nav-ease);
   }
@@ -110,22 +88,15 @@
     padding-right: var(--nav-float-pad-x);
   }
 
-  /* Mobile keeps the blur but at a SMALLER radius (and drops saturate) — blur cost
-     scales with radius, and the big desktop blur recomputing behind a fixed bar
-     every frame was what stuttered on fast scroll. A lighter blur + slightly more
-     opaque tint reads almost identically and stays smooth. Tune via --nav-blur-mobile. */
+  /* Smaller blur radius than desktop (cheaper per frame on fast scroll). */
   [data-component='nav'] [data-nav-inner]::before {
     background: var(--nav-glass-mobile);
     -webkit-backdrop-filter: blur(var(--nav-blur-mobile));
     backdrop-filter: blur(var(--nav-blur-mobile));
   }
 
-  /* Open mobile menu — same frosted-glass language as the floating pill. The native
-     Webflow navbar (data-collapse="medium") moves .nav_menu into .w-nav-overlay when
-     the hamburger opens; we glass that panel. Targets the stable Webflow system class
-     (.w-nav-menu) scoped under the component, so it never touches the inline desktop
-     menu (>= 992px). The overlay lives inside [data-component='nav'], so the selector
-     still matches once Webflow relocates the menu into it. */
+  /* Open mobile menu — same glass as the pill. Webflow relocates .w-nav-menu into
+     .w-nav-overlay (inside the component) on open; scoped so it never hits desktop. */
   [data-component='nav'] .w-nav-menu {
     margin: 0.5rem var(--nav-float-pad-x);
     padding: 1rem 1.25rem;
@@ -140,7 +111,7 @@
   }
 }
 
-/* Reduced motion */
+/* — Reduced motion — */
 @media (prefers-reduced-motion: reduce) {
   [data-component='nav'] [data-nav-inner],
   [data-component='nav'] [data-nav-logo] {

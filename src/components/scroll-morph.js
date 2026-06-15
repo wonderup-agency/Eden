@@ -1,76 +1,45 @@
 /*
-Component: scroll-morph
-Webflow attribute: data-component="scroll-morph"
-
-Pinned, scroll-driven section. A PROCEDURAL ring of ~2,500 light-grey dots is
-drawn on a <canvas> behind a single line of text. As the section scrubs the
-cloud assembles: fully dispersed across the section at the start, it coalesces
-into the ring across the scroll and then holds, assembled and in view, as the
-sticky track releases. The single text stays revealed and held the whole time —
-ONLY the background (the ring) animates. The assembled ring never freezes: it
-breathes with a radial sine wave + a slight tangential wobble. Hovering the
-cloud pushes nearby points away (eased nebula).
-
-The ring + scatter + breathing + mouse-push are ported from the reference
-prototype (a fixed-overlay native-scroll sketch) and adapted to this section's
-sticky, normalized-coordinate engine. No image is sampled — the shape is
-generated in code, so there is no source <img> and no CORS concern.
-
-GSAP + ScrollTrigger are expected as globals (loaded site-wide in Webflow).
-
-Fallbacks: no GSAP/ScrollTrigger or prefers-reduced-motion → no canvas / no pin;
-the messages show in a readable stacked layout.
-
-The CSS is NOT bundled here — it lives in Webflow's global head custom code.
-The source of truth is ./styles/scroll-morph.css (copy/paste it into Webflow).
+  Component: scroll-morph · data-component="scroll-morph"
+  Procedural dot-ring that assembles on scroll behind a single held line of text.
+  Canvas 2D, no image sampled. Fallback (no GSAP / reduced motion): static stacked text.
+  CSS → ./styles/scroll-morph.css (paste into Webflow head) · Docs → .claude/rules/components/scroll-morph.md
 */
 
 const { gsap } = window
 const ScrollTrigger = window.ScrollTrigger
 
-// ---- Point cloud (procedural ring, ported from the prototype) ----
+// ---- Point cloud (procedural ring) ----
 const TARGET_POINTS = 2500 // dot count
-const DOT_COLOR = '180,185,190' // premium light slate grey (tuned for a light bg)
-// Per-point radius (CSS px): mostly small, ~15% slightly bigger.
-const BIG_DOT_CHANCE = 0.15
-const SMALL_R = [0.5, 1.7] // common small dots: min..max radius
-const BIG_R = [1.5, 3.0] // the ~15% bigger dots: min..max radius
-// Ring geometry — normalized so the ring radius is 1; thickness is a soft
-// gaussian band around it (varied per point).
-const RING_THICKNESS = 0.1 // gaussian spread of the band (fraction of radius)
-const FIT = 1 // fraction of the half-stage the ring fills (auto-fit)
-// Alpha: soft when dispersed/idle, brighter once assembled.
-const ALPHA_MIN = 0.15 // dispersed base alpha (lower bound)
-const ALPHA_MAX = 0.4 // dispersed base alpha (upper bound)
-const ALPHA_PEAK = 0.55 // alpha when fully assembled
-// Dispersed scatter — a slow drifting, edge-bouncing wander across the section.
-const SCATTER = 1.0 // dispersed coverage (1 = fills the whole section)
-const SCATTER_DRIFT = 0.0015 // unit-space velocity magnitude (slow wander)
-const STAGGER = 0.45 // spread of per-point assemble timing (organic)
-// Continuous breathing of the assembled ring (never freezes). Amped up for a more
-// alive, looser ring — raise the AMPs further for even more motion (the ring keeps
-// its shape up to ~0.08 radial), the SPEEDs for a faster pulse.
-const RING_WAVE_AMP = 0.05 // radial wobble amplitude (fraction of ring radius)
-const RING_WAVE_SPEED = 1.5 // radial wave speed (rad/s, base)
+const DOT_COLOR = '180,185,190' // light slate grey (tuned for a light bg)
+const BIG_DOT_CHANCE = 0.15 // fraction of dots that are slightly bigger
+const SMALL_R = [0.5, 1.7] // small-dot radius range (CSS px)
+const BIG_R = [1.5, 3.0] // big-dot radius range (CSS px)
+const RING_THICKNESS = 0.1 // gaussian band width (fraction of radius)
+const FIT = 1 // half-stage fraction the ring fills (auto-fit)
+const ALPHA_MIN = 0.15 // dispersed/idle alpha range
+const ALPHA_MAX = 0.4
+const ALPHA_PEAK = 0.55 // alpha when assembled
+const SCATTER = 1.0 // dispersed coverage (1 = fills the section)
+const SCATTER_DRIFT = 0.0015 // slow edge-bouncing drift speed
+const STAGGER = 0.45 // per-point assemble timing spread
+// Breathing of the assembled ring (never freezes) — raise AMPs for more motion.
+const RING_WAVE_AMP = 0.05 // radial wobble amplitude
+const RING_WAVE_SPEED = 1.5 // radial wave speed (rad/s)
 const RING_WOBBLE_AMP = 0.05 // tangential angle wobble (rad)
-const RING_WOBBLE_SPEED = 0.95 // tangential wobble speed (rad/s, base)
-// Scroll choreography — the cloud starts fully dispersed across the section and
-// assembles into the ring across the scroll, then holds assembled.
-const PIN_LEN = 3 // sticky scroll length in viewport heights (root height) — longer = gentler
-const SCRUB = 0.5 // ScrollTrigger catch-up lag (s) — lower = more dynamic / tracks scroll tighter
-const HOLD = 0.3 // beat held fully dispersed before the ring starts forming
-const ASSEMBLE = 1.9 // duration of the dispersed → ring assembly (the forming moment — the bulk of the scroll)
-const END_HOLD = 0.3 // short tail: once the ring is formed the animation is done and the section moves on
-// Hover push (pixel feel — converted to normalized units via `scale` at runtime).
+const RING_WOBBLE_SPEED = 0.95 // tangential wobble speed (rad/s)
+// Scroll choreography (dispersed → ring → hold assembled).
+const PIN_LEN = 3 // sticky scroll length in viewport heights — longer = gentler
+const SCRUB = 0.5 // ScrollTrigger catch-up lag (s) — lower = tracks tighter
+const HOLD = 0.3 // beat held dispersed before forming
+const ASSEMBLE = 1.9 // dispersed → ring duration (bulk of scroll)
+const END_HOLD = 0.3 // tail held assembled
+// Hover push (px feel — converted to normalized units via `scale`).
 const HOVER_RADIUS_PX = 110 // cursor influence radius
-const HOVER_PUSH_PX = 26 // how far nearby dots are pushed away
-const HOVER_EASE_IN = 0.15 // easing toward the pushed position
-const HOVER_EASE_OUT = 0.06 // easing back to rest
+const HOVER_PUSH_PX = 26 // push distance
+const HOVER_EASE_IN = 0.15 // ease toward pushed position
+const HOVER_EASE_OUT = 0.06 // ease back to rest
 
-// DEV diagnostics — set false (or remove the gated blocks) before deploy.
-// Production builds strip console.* via Terser, but this also skips the work
-// (the per-frame boundary logger + refresh snapshots were costing scroll perf).
-const DEBUG = false
+const DEBUG = false // DEV: set false before deploy (gates the pin/scroll diagnostics below)
 const DEBUG_BOUND = 220 // px window around the pin start/end to log per-frame
 const DEBUG_JUMP = 60 // single-frame scroll delta (px) flagged as a JUMP
 
@@ -243,8 +212,7 @@ function setupRoot(root) {
       pp = pp < 0 ? 0 : pp > 1 ? 1 : pp
       pp = pp * pp * (3 - 2 * pp)
 
-      // Dynamic ring position — breathes radially + wobbles tangentially so the
-      // assembled ring never freezes (matches the prototype's living ring).
+      // Ring position breathes radially + wobbles tangentially (never freezes).
       const wave =
         Math.sin(now * RING_WAVE_SPEED * speedMod[i] + angle[i] * 5) *
         RING_WAVE_AMP
@@ -307,13 +275,11 @@ function setupRoot(root) {
     }
   }
 
-  // ---- DEV diagnostics: snapshot the pin + Lenis state to chase the "jump" ----
+  // ---- DEV diagnostics (DEBUG): snapshot pin + Lenis state to chase scroll jumps ----
   let stRef = null
   let lastDebugY = window.scrollY
 
-  // A full snapshot at key pin transitions: scroll positions (native + Lenis
-  // smoothed/target/actual), Lenis velocity, pin progress, and the pinned
-  // track's live geometry (top, position, transform).
+  // Snapshot at pin transitions: scroll positions, Lenis velocity, pin progress, track geometry.
   function debugSnap(self, tag, color) {
     if (!DEBUG) return
     const l = window.lenis
@@ -335,9 +301,7 @@ function setupRoot(root) {
     })
   }
 
-  // One-time layout audit on refresh: the #1 cause of pin jumps in Webflow is a
-  // flex/grid wrapper around the pinned section (the pin-spacer can't size), so
-  // log the spacer height and the display of the spacer's parent + track parent.
+  // One-time layout audit: flags a flex/grid wrapper around the pin (the #1 jump cause).
   function debugLayout(self) {
     if (!DEBUG) return
     const sp = self.spacer
@@ -365,8 +329,7 @@ function setupRoot(root) {
     )
   }
 
-  // Per-frame logger, active only within DEBUG_BOUND px of either pin boundary.
-  // Flags any single-frame scroll skip (> DEBUG_JUMP px) in red — that's the jump.
+  // Per-frame logger near the pin boundaries; flags single-frame scroll skips (the jump).
   function debugFrame() {
     if (!DEBUG || !stRef) return
     const y = window.scrollY
@@ -376,9 +339,7 @@ function setupRoot(root) {
     const nearStart = Math.abs(y - stRef.start) < DEBUG_BOUND
     const nearEnd = Math.abs(y - stRef.end) < DEBUG_BOUND
     if (!nearStart && !nearEnd) return
-    // Only surface actual single-frame scroll skips (the "jump") — don't flood
-    // the console with every smooth frame near the boundary.
-    if (Math.abs(dy) <= DEBUG_JUMP) return
+    if (Math.abs(dy) <= DEBUG_JUMP) return // only surface real skips, not every smooth frame
     const l = window.lenis
     console.log(
       `%c[scroll-morph] ⚠️ JUMP @${nearStart ? 'START' : 'END'}`,
@@ -413,13 +374,9 @@ function setupRoot(root) {
     tl.to(form, { t: 1, duration: ASSEMBLE })
     tl.to({}, { duration: END_HOLD })
 
-    // No GSAP pin: the track is CSS `position: sticky` (set in scroll-morph.css)
-    // and the root is made tall (--scroll-morph-len = PIN_LEN×100vh) to give the
-    // scroll distance. ScrollTrigger here only READS progress (scrub) to drive
-    // the timeline — it never manipulates layout, so there's no pin-spacer, no
-    // refresh-order dependency, and the sticky track can't overlap other
-    // sections (it's clipped to the root). Range: root top→top until bottom→
-    // bottom, which is exactly the span the sticky track stays in view.
+    // No GSAP pin — the track is CSS sticky and the root is made tall
+    // (--scroll-morph-len). ScrollTrigger only READS progress (scrub) to drive the
+    // timeline; no pin-spacer, no refresh-order dependency, no sibling overlap.
     root.style.setProperty('--scroll-morph-len', PIN_LEN * 100 + 'vh')
     tl.scrollTrigger ||
       (stRef = ScrollTrigger.create({
@@ -447,23 +404,17 @@ function setupRoot(root) {
   function boot() {
     buildPointBuffers()
     ready = true
-    // Upgrade the layout BEFORE measuring. `.is-canvas` is what makes the track
-    // `position: sticky; height: 100vh` — measure beforehand and the canvas is
-    // sized against the collapsed (`:not(.is-canvas)`) track, so its backing-store
-    // aspect ratio won't match the painted box and the ring renders as an ellipse
-    // at the wrong scale (only self-correcting on a later resize). Measure after.
-    root.classList.add('is-canvas') // CSS clips the track + switches off the static layout
+    // Add .is-canvas (makes the track sticky/100vh) BEFORE measuring — measure
+    // first and the canvas sizes against the collapsed track → ring renders as an ellipse.
+    root.classList.add('is-canvas')
     resize()
     buildScroll()
     root.classList.add('is-ready') // lift the anti-FOUC gate
     ensureLoop()
   }
 
-  // Visibility: only render while the section is on screen. When it leaves the
-  // viewport the rAF loop stops — but the canvas keeps its last painted frame
-  // and the messages stay revealed (autoAlpha:1), which would otherwise bleed
-  // into the background of other sections. So on exit we clear the canvas and
-  // flag the root .is-offscreen (CSS hides the messages); on re-entry we redraw.
+  // Visibility: render only on screen. On exit, clear the canvas + flag .is-offscreen
+  // (CSS hides the messages) so nothing bleeds into other sections; redraw on re-entry.
   const io = new window.IntersectionObserver(
     (entries) => {
       inView = entries[0].isIntersecting

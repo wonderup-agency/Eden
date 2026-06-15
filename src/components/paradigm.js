@@ -1,22 +1,14 @@
 /*
-Component: paradigm
-Webflow attribute: data-component="paradigm"
-
-Pinned scroll story: three text messages de-blur in/out one at a time, centered
-in the viewport; a hero glow blob rises behind them; the product image de-blurs
-in at the end while the last text settles up.
-
-GSAP + ScrollTrigger are expected as globals (loaded site-wide in Webflow).
-
-The CSS is NOT bundled here — it lives in Webflow's global head custom code.
-The source of truth is ./styles/paradigm.css (copy/paste it into Webflow).
+  Component: paradigm · data-component="paradigm"
+  Pinned scroll story: three text messages de-blur in/out one at a time; a glow blob
+  rises behind them; the product image de-blurs in last as the final text settles up.
+  CSS → ./styles/paradigm.css (paste into Webflow head) · Docs → .claude/rules/components/paradigm.md
 */
 
 const { gsap } = window
 const ScrollTrigger = window.ScrollTrigger
 
-// Per-word reveal: sharpen from a soft blur while fading + rising, then dissolve
-// back into blur on the way out (symmetric, smooth).
+// Per-word reveal: de-blur + fade + rise in, dissolve back to blur out (symmetric).
 const REVEAL = {
   from: { autoAlpha: 0, filter: 'blur(16px)', yPercent: 16 },
   to: {
@@ -37,8 +29,7 @@ const REVEAL = {
   },
 }
 
-// Element whose text gets split: an explicit hook, else the inner heading/paragraph
-// (handles Webflow rich-text), else the message itself.
+// Text to split: explicit hook → inner heading/paragraph (rich-text) → the message.
 const textEl = (m) =>
   m.querySelector('[data-paradigm-text]') ||
   m.querySelector('h1,h2,h3,h4,h5,h6,p') ||
@@ -61,8 +52,7 @@ function splitWords(el) {
   })
 }
 
-// Build the whole animation for one section root. Returns a rebuild() that tears
-// down and re-runs (used on resize / image load so the center offset is exact).
+// Build the animation for one root. Returns rebuild() (re-run on resize / image load).
 function setupRoot(root) {
   const track = root.querySelector('[data-paradigm-track]')
   const blob = root.querySelector('[data-paradigm-blob]')
@@ -85,9 +75,8 @@ function setupRoot(root) {
   const wordsByMessage = messages.map((m) => splitWords(textEl(m)))
   const allWords = wordsByMessage.flat()
 
-  // The hidden image still reserves layout space below the text, which pushes the
-  // lone text above center. Offset the text down by half that reserved height so
-  // messages 1..n-1 sit screen-centered; the last reveal animates it back to y:0.
+  // The hidden image reserves space below the text, pushing it above center. Offset
+  // the text down by half that height so messages center; the last reveal returns it to y:0.
   const centerOffset = () =>
     visual
       ? (visual.offsetHeight +
@@ -98,8 +87,7 @@ function setupRoot(root) {
   const end = '+=' + (messages.length + 1) * 100 + '%'
   let tl = null
 
-  // Gentle idle "breathe" (scale only, so it never fights the yPercent rise the
-  // scroll timeline drives). Created once, lives for good.
+  // Gentle idle breathe (scale only, so it never fights the scroll-driven yPercent).
   if (blob)
     gsap.to(blob, {
       scale: 1.04,
@@ -119,8 +107,7 @@ function setupRoot(root) {
     gsap.set(allWords, { clearProps: 'all' })
     gsap.set(messages, { autoAlpha: 1 })
     gsap.set(allWords, REVEAL.from)
-    // First title is already visible (not scrubbed in) so the section is never
-    // blank as it scrolls into view — you see it the moment the section appears.
+    // First title is pre-revealed so the section is never blank as it scrolls in.
     gsap.set(wordsByMessage[0], {
       autoAlpha: 1,
       filter: 'blur(0px)',
@@ -138,34 +125,27 @@ function setupRoot(root) {
         end,
         pin: true,
         scrub: 1,
-        // Higher priority than sections below it (scroll-morph) so its pin-spacing
-        // is calculated FIRST — otherwise a lower pin can compute its start before
-        // this spacer exists and pin at the wrong offset.
+        // Highest priority so its pin-spacing is computed first (sections below depend on it).
         refreshPriority: 1,
       },
     })
 
     messages.forEach((msg, i) => {
       const isLast = i === messages.length - 1
-      // First title is pre-revealed (above) so the section is never blank; the
-      // rest de-blur in on scroll.
+      // First title is pre-revealed (above); the rest de-blur in on scroll.
       if (i > 0) tl.to(wordsByMessage[i], REVEAL.to)
       tl.to({}, { duration: 0.5 }) // hold
       if (!isLast) tl.to(wordsByMessage[i], REVEAL.out)
     })
-    // Blob stays parked low (just peeking) through all the text above
-
-    // Just before the image: the blob rises back to its resting position —
-    // centered behind/under the image, fully on screen.
+    // Just before the image, the blob rises from parked-low back to its resting spot.
     if (blob) {
       tl.to(blob, { yPercent: 0, duration: 1.4, ease: 'sine.out' })
       tl.to({}, { duration: 0.3 }) // small beat
     }
 
-    // First the last text settles up to its natural spot...
+    // Last text settles up, then the image de-blurs in below it (sequential).
     tl.to(messagesWrap, { y: 0, duration: 1.1, ease: 'sine.out' })
     tl.to({}, { duration: 0.25 }) // beat — let the text fully land
-    // ...then the image de-blurs in below it (sequential → no overlap)
     if (visual) {
       tl.to(visual, {
         autoAlpha: 1,

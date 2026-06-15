@@ -1,18 +1,9 @@
 /*
-Component: tabs-architected
-Webflow attribute: data-component="tabs-architected"
-
-Autoplay tabs (Osmo-style) adapted to the Eden markup. Clickable links drive
-content panels; on switch the incoming panel's image reveals via a vertical
-clip-path wipe while its content (title, subtitle, button) de-blurs + fades in,
-staggered. While a tab is active, its link underline fills left→right as an
-autoplay progress bar; when full, it advances to the next tab. Autoplay starts
-when the section enters the viewport, pauses on hover, restarts on click.
-
-GSAP + ScrollTrigger are expected as globals (loaded site-wide in Webflow).
-
-The CSS is NOT bundled here — it lives in Webflow's global head custom code.
-The source of truth is ./styles/tabs-architected.css (copy/paste it into Webflow).
+  Component: tabs-architected · data-component="tabs-architected"
+  Autoplay tabs: on switch the incoming image wipes open (clip-path) while its content
+  de-blurs in; the active underline fills as a progress bar, then advances. Starts on
+  scroll-in, pauses on hover, restarts on click.
+  CSS → ./styles/tabs-architected.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-architected.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
@@ -24,11 +15,10 @@ const ACTIVE_CLASS = 'is-active'
 const AUTOPLAY_DURATION = 5 // seconds per tab
 
 // Image: vertical clip-path wipe (top→bottom). Flip the inset() sides to reverse.
-const IMG_CLIP_HIDDEN = 'inset(0% 0% 100% 0%)' // clipped from the bottom — nothing shown
+const IMG_CLIP_HIDDEN = 'inset(0% 0% 100% 0%)' // clipped from the bottom
 const IMG_CLIP_SHOWN = 'inset(0% 0% 0% 0%)' // fully revealed
 const IMG_REVEAL = { duration: 1.1, ease: 'power3.inOut' }
-// Content blocks (title / subtitle / button): de-blur + fade + rise, staggered.
-// REVEAL_FROM is the shared paradigm/hero start state (blur + fade + rise).
+// Content blocks de-blur + fade + rise (REVEAL_FROM = shared paradigm/hero start state).
 const CONTENT_TO = {
   autoAlpha: 1,
   filter: 'blur(0px)',
@@ -59,12 +49,28 @@ function setupTabs(root) {
   }
 
   const count = Math.min(links.length, panels.length)
-  const bars = links.map((link) =>
-    link.querySelector('.tabs-architected_tab-link-underline')
-  )
 
-  // Animatable parts per panel: the image wrapper (vertical clip wipe) and the
-  // content blocks — title / subtitle / button — inside the text column (de-blur).
+  // Turn each underline into a grey TRACK + inject a brand-coloured FILL child that
+  // scales 0→1 (the fill keeps the underline's original colour, captured first).
+  // Reduced motion skips track/fill. `bars` points at the fill children (what JS scales).
+  const bars = links.map((link) => {
+    const track = link.querySelector('.tabs-architected_tab-link-underline')
+    if (!track || reduceMotion.matches) return null
+    const fillColor = window.getComputedStyle(track).backgroundColor
+    const fill = document.createElement('span')
+    fill.className = 'tabs-architected_tab-link-fill'
+    if (
+      fillColor &&
+      fillColor !== 'rgba(0, 0, 0, 0)' &&
+      fillColor !== 'transparent'
+    )
+      fill.style.backgroundColor = fillColor
+    track.appendChild(fill)
+    track.classList.add('is-track')
+    return fill
+  })
+
+  // Animatable parts per panel: the image wrapper (clip wipe) + content blocks (de-blur).
   const parts = panels.map((panel) => ({
     image: panel.querySelector('[tabs-architected="image"]'),
     content: gsap.utils.toArray(
@@ -136,15 +142,13 @@ function setupTabs(root) {
     inLink.setAttribute('aria-selected', 'true')
     inLink.setAttribute('tabindex', '0')
 
-    // Start the underline fill immediately (in parallel with the reveal) so the
-    // progress bar doesn't sit empty for the length of the switch animation.
+    // Start the fill immediately (in parallel with the reveal) so the bar isn't empty.
     if (started && !paused) startProgress(index)
 
     const inParts = parts[index]
 
-    // Incoming reveals on top of the outgoing; z-index guarantees it overlays
-    // regardless of DOM order (e.g. switching to an earlier tab). The panel
-    // itself shows instantly — its image + content are what animate in.
+    // Incoming overlays the outgoing (z-index) regardless of DOM order; the panel shows
+    // instantly, its image + content animate in.
     gsap.set(inPanel, { autoAlpha: 1, zIndex: 2 })
     if (outPanel) gsap.set(outPanel, { zIndex: 1 })
 
@@ -198,9 +202,8 @@ function setupTabs(root) {
   const goTo = (index) =>
     reduceMotion.matches ? switchTabInstant(index) : switchTab(index)
 
-  // Initial state: first tab visible, rest hidden — set before paint to avoid CLS.
-  // Clear any pre-existing active classes (the Webflow markup may ship more than
-  // one) so exactly one tab/panel is active.
+  // Initial state: first tab visible, rest hidden (before paint, no CLS). Clear any
+  // pre-existing active classes so exactly one tab/panel is active.
   links.forEach((link) => link.classList.remove(ACTIVE_CLASS))
   panels.forEach((panel) => panel.classList.remove(ACTIVE_CLASS))
   gsap.set(panels, { autoAlpha: 0 })

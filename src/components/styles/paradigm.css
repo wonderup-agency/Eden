@@ -1,15 +1,13 @@
-/* paradigm — pinned scroll story. Not bundled: paste into Webflow global head. */
+/* ===== PARADIGM · pinned scroll story — paste into Webflow head ===== */
 
-/* Root */
+/* — Root — */
 [data-component='paradigm'] {
   position: relative;
   overflow: hidden;
   --paradigm-top-safe: 8rem; /* nav clearance — centres the scene below the fixed nav */
 }
 
-/* Pinned stage — content centres in the area BELOW the nav (top-safe padding),
-   so the final text + image block clears the fixed nav without touching the
-   text↔image gap (the whole block shifts down together). */
+/* — Pinned stage (centres the scene below the nav via top-safe padding) — */
 [data-paradigm-track] {
   position: relative;
   display: flex;
@@ -20,7 +18,7 @@
   padding-top: var(--paradigm-top-safe);
 }
 
-/* Glow blob */
+/* — Glow blob — */
 [data-paradigm-blob] {
   position: absolute;
   top: 56%;
@@ -41,7 +39,7 @@
   will-change: transform;
 }
 
-/* Messages stack */
+/* — Messages stack — */
 [data-paradigm-messages] {
   position: relative;
   z-index: 1;
@@ -65,7 +63,7 @@
   justify-content: center;
 }
 
-/* Split words */
+/* — Split words — */
 .paradigm_word-wrap {
   display: inline-block;
   overflow: visible;
@@ -75,13 +73,13 @@
   will-change: transform, filter, opacity;
 }
 
-/* Product image */
+/* — Product image — */
 [data-paradigm-visual] {
   position: relative;
   z-index: 1;
 }
 
-/* Responsive blob */
+/* — Responsive blob — */
 @media screen and (max-width: 991px) {
   [data-paradigm-blob] {
     width: 36rem;

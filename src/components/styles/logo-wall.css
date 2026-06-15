@@ -1,20 +1,17 @@
-/* logo-wall — testimonial reveal on hover. Paste into Webflow global head.
-   Layout, sizing and the logo roll are handled by Webflow's own logo-wall
-   classes — this ONLY adds the per-logo testimonial (the JS toggles the classes).
-   Don't add layout rules here; they fight Webflow's and collapse the slot. */
+/* ===== LOGO-WALL · testimonial reveal on hover — paste into Webflow head ===== */
+/* Only the testimonial reveal lives here — layout/sizing/roll are Webflow's. Don't add layout (it collapses the slot). */
 
+/* — Tokens — */
 [data-component='logo-wall'] {
   --logo-wall-fade: 0.5s; /* testimonial show/hide transition — keep ~ LOGO_FADE (JS) */
   --logo-wall-blur: 12px; /* testimonial de-blur start amount */
 }
 
-/* Positioning context for the testimonial overlay. */
+/* — Testimonial overlay (hidden until JS adds .is-visible) — */
 [data-component='logo-wall'] .logo-wall__logo {
-  position: relative;
+  position: relative; /* positioning context for the overlay */
 }
 
-/* Testimonial overlay — hidden until JS adds .is-visible
-   (overrides the display:none / opacity:0 set in Webflow). */
 [data-component='logo-wall'] .logo-wall_testimonial {
   position: absolute;
   inset: 0;
@@ -46,10 +43,8 @@
   height: auto;
 }
 
-/* Hide the logo while its testimonial shows.
-   Normal path: GSAP crossfades the logo out (logo-wall.js, LOGO_FADE) — a CSS
-   transition here would fight GSAP's per-frame autoAlpha during the roll, so the
-   instant hide lives in the reduced-motion block below instead. */
+/* Logo hide during the swap is GSAP's job (LOGO_FADE) — a CSS transition here
+   would fight its per-frame autoAlpha, so the instant hide lives in reduced-motion only. */
 
 /* Keyboard focus ring. */
 [data-component='logo-wall'] .logo-wall__logo:focus-visible {
@@ -57,8 +52,7 @@
   outline-offset: 4px;
 }
 
-/* Reduced motion: no fade, no de-blur, and the logo hides instantly (GSAP is
-   skipped on this path, so CSS owns the hide here). */
+/* — Reduced motion (no fade; CSS owns the instant logo hide) — */
 @media (prefers-reduced-motion: reduce) {
   [data-component='logo-wall'] .logo-wall_testimonial {
     filter: none;

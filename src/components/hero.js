@@ -1,23 +1,8 @@
 /*
-Component: hero
-Webflow attribute: data-component="hero"
-
-Orchestrates the hero entrance in one master timeline on load: the visual block
-(background + video, animated as one unit) fades + scales in, the heading de-blurs
-per word, the divider draws, the paragraph
-de-blurs, and the buttons rise — each overlapping for a smooth, subtle reveal.
-
-Reuses the word de-blur from ../utils/word-reveal.js (same effect as paradigm /
-title-animation), so the hero's texts should NOT also carry data-title-animation.
-GSAP is expected as a global (loaded site-wide in Webflow).
-
-Hooks (all optional except the root — the timeline includes whatever is present):
-  data-component="hero"  → section_hero (root)
-  data-hero-visual       → the video / visual wrapper
-  data-hero-heading      → the heading (or its rich-text wrapper)
-  data-hero-divider      → the divider line (animated via scaleX)
-  data-hero-text         → the paragraph (or its rich-text wrapper)
-  data-hero-buttons      → the buttons wrapper (its direct children stagger)
+  Component: hero · data-component="hero"
+  Hero entrance master timeline on load: visual block fades/scales in, heading + paragraph
+  de-blur per word, divider draws, buttons rise. Reuses ../utils/word-reveal.js.
+  No CSS file (styled inline). Docs → .claude/rules/components/hero.md
 */
 
 import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
@@ -27,10 +12,8 @@ const { gsap } = window
 function setupHero(root) {
   const q = (sel) => root.querySelector(sel)
   const visual = q('[data-hero-visual]')
-  // The background lives on the visual's wrapper column (e.g. .hero_visual), not
-  // on the video atom itself. Animate the whole block (background + video) as one
-  // unit so the background reveals together with the video instead of popping in
-  // behind it. Falls back to the visual itself if there's no wrapper.
+  // Animate the visual's wrapper (background + video as one unit), not the video
+  // atom alone, so the background reveals with it. Falls back to the visual itself.
   const visualBlock = (visual && visual.parentElement) || visual
   const heading = q('[data-hero-heading]')
   const divider = q('[data-hero-divider]')
@@ -53,12 +36,10 @@ function setupHero(root) {
   if (textWords.length) gsap.set(textWords, REVEAL_FROM)
   if (buttons.length) gsap.set(buttons, { autoAlpha: 0, y: 12 })
 
-  // Lift the anti-FOUC gate now that everything is hidden (local, not the global
-  // class — see title-animation): the hero becomes visible but shows nothing yet.
+  // Lift the anti-FOUC gate locally now that everything is hidden (shows nothing yet).
   gsap.set(root, { opacity: 1 })
 
-  // Master timeline — absolute positions overlap each step for a continuous flow:
-  // video settles → heading sharpens → divider draws → paragraph → buttons rise.
+  // Master timeline — overlapping steps: video → heading → divider → paragraph → buttons.
   const tl = gsap.timeline({ defaults: { ease: 'power2.out' } })
   if (visualBlock)
     tl.to(visualBlock, { autoAlpha: 1, scale: 1, duration: 1.4 }, 0)

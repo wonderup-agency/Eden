@@ -1,30 +1,15 @@
 /*
-Component: nav
-Webflow attribute: data-component="nav"
-
-On scroll the nav bar morphs into a centered frosted-glass pill (1rem off the
-top) and reverts at the top of the page. GSAP Flip owns the position; the glass
-fades via CSS opacity and the logo shrinks via transform — the bar's size and
-padding stay constant so Flip only ever translates (no flush-left, no jump).
-
-GSAP + the Flip plugin are expected as globals (loaded site-wide in Webflow).
-Runs on all breakpoints: desktop hugs content edge-left and slides to centre;
-mobile keeps the bar full width and contracts it to a centred glass pill.
-
-The CSS is NOT bundled here — it lives in Webflow's global head custom code.
-The source of truth is ./styles/nav.css (copy/paste it into Webflow). Keep
---nav-morph (CSS) in sync with FLIP_DURATION below.
+  Component: nav · data-component="nav"
+  On scroll the bar morphs into a centred frosted-glass pill (GSAP Flip on desktop,
+  CSS-only glass on mobile) and reverts at the top. Runs on all breakpoints.
+  CSS → ./styles/nav.css (paste into Webflow head; keep --nav-morph in sync with
+  FLIP_DURATION) · Docs → .claude/rules/components/nav.md
 */
 
 const { gsap, Flip } = window
 
-// Keep FLIP_DURATION in sync with --nav-morph in nav.css.
-// Hysteresis (deadzone): float once scrolled past *_ON, revert only below *_OFF.
-// Mobile/tablet uses a much higher ON: there Lenis is off and the browser's
-// address bar shows/hides over the first scroll, swinging the viewport height by
-// ~40-56px. Triggering the 1s morph mid-collapse made the nav read as "jumpy", so
-// we wait until well past that zone (the chrome has settled, scrollY is stable).
-// Desktop (Lenis, no browser chrome) can trigger early.
+// Hysteresis deadzone: float past *_ON, revert below *_OFF. Mobile ON is much higher
+// because the address bar swings the viewport over the first scroll (morphing mid-swing read as jumpy).
 const FLOAT_ON_DESKTOP = 24 // px scrolled before the bar floats (desktop)
 const FLOAT_OFF_DESKTOP = 4 // px — revert near the very top (desktop)
 const FLOAT_ON_MOBILE = 80 // px — clear the address-bar-collapse zone first
@@ -32,11 +17,8 @@ const FLOAT_OFF_MOBILE = 8 // px — a touch higher to absorb top overscroll
 const FLIP_DURATION = 1
 const FLIP_EASE = 'power2.inOut'
 
-// DEBUG — on-screen HUD + console logs to chase the mobile scroll "jump".
-// Shows live scrollY, viewport height (address-bar show/hide), the bar's real
-// top, and flags any frame where the bar moves while it shouldn't (red ⚠).
-// Off now that the jump is diagnosed — the per-frame HUD loop is itself overhead.
-// (Prod strips console.* anyway, but the HUD is real DOM, so this flag gates it.)
+// DEBUG — on-screen HUD + logs to chase the mobile scroll "jump". Off (the HUD loop
+// is itself overhead, and the HUD is real DOM so Terser can't strip it).
 const DEBUG = false
 
 // Load entrance — the nav drops in from above the viewport.
@@ -49,8 +31,7 @@ const ENTRANCE = {
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
-// Wire one nav root. Returns { enable, disable } so gsap.matchMedia can switch
-// the behavior on/off across the desktop breakpoint (with proper cleanup).
+// Wire one nav root. Returns { enable, disable } for gsap.matchMedia to switch per breakpoint.
 function setupNav(root) {
   const inner = root.querySelector('[data-nav-inner]')
   if (!inner) {
@@ -60,9 +41,7 @@ function setupNav(root) {
 
   const logo = inner.querySelector('[data-nav-logo]')
 
-  // DEBUG — dump the computed CSS actually applied (from Webflow's head) for the
-  // root, the bar, its ::before glass, and the logo, plus the bar's real top.
-  // Stripped from prod by Terser (drop_console). Remove once positioning is dialed.
+  // DEBUG — dump the computed CSS applied to root/bar/glass/logo + the bar's real top.
   const logCss = (label) => {
     const r = window.getComputedStyle(root)
     const i = window.getComputedStyle(inner)
@@ -96,11 +75,10 @@ function setupNav(root) {
   let flip = null // current Flip tween, so a fast reverse can interrupt it
   let floatOn = FLOAT_ON_DESKTOP // set per breakpoint in enable()
   let floatOff = FLOAT_OFF_DESKTOP
-  let useFlip = true // desktop morphs with Flip; mobile uses a CSS-only transform
+  let useFlip = true // desktop morphs with Flip; mobile uses CSS-only glass
 
-  // DEBUG — fixed on-screen readout + per-frame jump detector. The nav root is
-  // fixed, so the bar's top should stay constant as you scroll; if it moves more
-  // than the scroll delta, something else is shoving it (address bar / Flip).
+  // DEBUG — fixed on-screen readout + per-frame jump detector (flags the bar moving
+  // more than the scroll delta — i.e. shoved by the address bar / Flip).
   let hud = null
   let rafId = null
   let prev = null // { y, h, top }
@@ -123,8 +101,7 @@ function setupNav(root) {
     const dY = prev ? y - prev.y : 0
     const dH = prev ? h - prev.h : 0
     const dTop = prev ? top - prev.top : 0
-    // The bar is fixed → top should barely move. Flag frames where it jumps more
-    // than the scroll moved (i.e. not explained by normal scrolling).
+    // Bar is fixed → flag frames where its top moves more than the scroll did.
     const jump = Math.abs(dTop) > 1 && Math.abs(dTop) > Math.abs(dY) + 1
     if (hud) {
       hud.style.color = jump || dH !== 0 ? '#feb2b2' : '#9ae6b4'
@@ -140,8 +117,7 @@ function setupNav(root) {
         `%c[nav] ⚠ bar jumped ${dTop}px (scroll moved ${dY}px) vh=${h} floating=${isFloating}`,
         'color:#e53e3e;font-weight:bold'
       )
-    // Address-bar vh swings are expected on mobile (shown live in the HUD); only
-    // log a big one-shot change so the console isn't flooded.
+    // Only log a big one-shot vh change (address-bar swings are expected on mobile).
     if (Math.abs(dH) >= 12)
       console.log(
         `%c[nav] viewport height jumped ${dH}px → ${h}`,
@@ -172,11 +148,8 @@ function setupNav(root) {
       )
     isFloating = floating
 
-    // Class-only path: initial sync, reduced motion, AND mobile/tablet. On mobile
-    // the morph is pure CSS (a transform float — see nav.css): no Flip means no
-    // getState/absolute re-measure, which the address-bar viewport resize would
-    // otherwise corrupt mid-tween (the abrupt jump near the top). Just toggle the
-    // class and let the CSS transition animate it.
+    // Class-only path: initial sync, reduced motion, AND mobile/tablet. Mobile morph
+    // is pure CSS (no Flip getState/re-measure for the address-bar resize to corrupt).
     if (!animate || reduceMotion.matches || !useFlip) {
       inner.classList.toggle('is-floating', floating)
       return
@@ -194,8 +167,7 @@ function setupNav(root) {
     })
   }
 
-  // rAF-throttled scroll read — hysteresis keeps it from toggling near the top
-  // (mobile overscroll thrash). Only flips state when leaving the deadzone.
+  // rAF-throttled scroll read — hysteresis flips state only when leaving the deadzone.
   let ticking = false
   const onScroll = () => {
     if (ticking) return
@@ -215,9 +187,8 @@ function setupNav(root) {
       floatOn = opts.floatOn ?? FLOAT_ON_DESKTOP
       floatOff = opts.floatOff ?? FLOAT_OFF_DESKTOP
       useFlip = opts.useFlip ?? true
-      // Measure nav_component's real padding-top and feed it to the CSS so the
-      // floating bar lands at exactly --nav-float-top, regardless of how the nav
-      // is padded in Webflow (no manual token ↔ padding coupling to keep in sync).
+      // Feed nav_component's real padding-top to the CSS so the floating bar lands
+      // at --nav-float-top whatever the Webflow padding (no token ↔ padding coupling).
       root.style.setProperty(
         '--nav-rest-top',
         window.getComputedStyle(root).paddingTop
@@ -250,20 +221,15 @@ export default function (elements) {
   const navs = elements.map(setupNav).filter(Boolean)
   if (!navs.length) return
 
-  // Load entrance (all breakpoints): drop the nav in from above. Lift the
-  // anti-FOUC gate first; reduced motion just shows it in place. clearProps drops
-  // the transform on finish so it can't break the floating glass backdrop-filter.
+  // Load entrance: drop the nav in from above (gate lifted first). clearProps drops
+  // the leftover transform so it can't break the floating glass backdrop-filter.
   gsap.set(elements, { autoAlpha: 1 })
   if (!reduceMotion.matches) {
     gsap.from(elements, { ...ENTRANCE, clearProps: 'transform' })
   }
 
-  // All breakpoints — the morph targets the inline nav bar (logo + links on
-  // desktop, logo + hamburger on mobile). Two matchMedia branches run the SAME
-  // enable/disable, split at 992px only so crossing the boundary re-runs enable()
-  // and re-measures --nav-rest-top per breakpoint (rest padding can differ).
-  // Geometry differs purely in CSS: desktop edge-left → centre; mobile full width
-  // → centred pill.
+  // Two matchMedia branches run the same enable/disable, split at 992px so crossing
+  // re-runs enable() + re-measures --nav-rest-top. Geometry differs purely in CSS.
   const activate = (opts) => {
     navs.forEach((n) => n.enable(opts))
     return () => navs.forEach((n) => n.disable())
