@@ -2,11 +2,15 @@
   Global site-wide setup — runs on every page before any component (via main.js).
   Smooth scroll (Lenis): desktop-only (≥ 992px), driven by the GSAP ticker + synced
   to ScrollTrigger. Webflow head keeps only the Lenis <script>; the init lives here.
+  Also routes anchor links (incl. Finsweet TOC) through lenis.scrollTo().
   Docs → .claude/rules/ARCHITECTURE.md (global.js section)
 */
 
 // Below this width (tablet and down) Lenis stays off — native scroll.
 const SMOOTH_MIN_WIDTH = '(min-width: 992px)'
+
+// Extra gap above an anchor target so the fixed nav doesn't cover it (px).
+const ANCHOR_GAP = 16
 
 // PERF — temporary diagnostic. Logs only janky frames (slower than LONG_FRAME)
 // with scrollY + the centered section, plus a rolling FPS. Set false to remove.
@@ -107,6 +111,30 @@ function initSmoothScroll() {
     lenis = null
     window.lenis = null
   }
+
+  // Anchor links (incl. Finsweet-generated TOC) → route through Lenis so the jump
+  // is smooth and stays in sync. Delegated on document so anchors injected later
+  // (Finsweet runs async) are covered without awaiting it; capture phase + stopPropagation
+  // pre-empts any click handler the anchor carries (e.g. Finsweet's native jump).
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (!lenis) return // Lenis off (mobile / reduced-motion) → native anchor jump
+      const link = e.target.closest('a[href^="#"]')
+      if (!link) return
+      const hash = link.getAttribute('href')
+      if (hash.length < 2) return // bare "#" — ignore
+      const target = document.querySelector(hash)
+      if (!target) return // unknown id → let the browser handle it
+      e.preventDefault()
+      e.stopPropagation()
+      const nav = document.querySelector('[data-component="nav"]')
+      const offset = -((nav?.getBoundingClientRect().height || 0) + ANCHOR_GAP)
+      lenis.scrollTo(target, { offset })
+      window.history.pushState(null, '', hash) // shareable URL + back button
+    },
+    true // capture: beat the anchor's own handler regardless of load order
+  )
 
   // Desktop-only, reactive: start/stop Lenis as the viewport crosses 992px (no reload).
   const mq = window.matchMedia(SMOOTH_MIN_WIDTH)

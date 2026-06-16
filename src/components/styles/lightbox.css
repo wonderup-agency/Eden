@@ -1,0 +1,51 @@
+/* ===== LIGHTBOX · article image figure viewer — paste into Webflow head ===== */
+/* Only our custom UI lives here (clickable affordance + caption panel + custom buttons).
+   PhotoSwipe's CORE css is loaded separately from the CDN <link> in the head — see the doc.
+   Hooks → .claude/rules/components/lightbox.md */
+
+/* Clickable affordance on article images. */
+[data-component='lightbox'] .lightbox_img {
+  cursor: zoom-in;
+}
+[data-component='lightbox'] .lightbox_img:focus-visible {
+  outline: 2px solid var(--base--gold, #c79a4b);
+  outline-offset: 3px;
+}
+
+/* — Caption panel (toggled by the ⓘ button) — */
+.pswp__caption-panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: min(360px, 85vw);
+  padding: 5rem 1.5rem 1.5rem;
+  background: rgba(20, 20, 20, 0.92);
+  color: #f2f2f2;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  z-index: 10;
+}
+.pswp__caption-panel.is-open {
+  transform: translateX(0);
+}
+.pswp__caption-panel.is-empty {
+  display: none;
+}
+
+/* Custom buttons reuse PhotoSwipe's .pswp__button sizing; just center the glyph. */
+.pswp__button--info,
+.pswp__button--download,
+.pswp__button--share {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pswp__caption-panel {
+    transition: none;
+  }
+}

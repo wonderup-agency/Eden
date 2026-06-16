@@ -1,0 +1,52 @@
+/* ===== SHARE · "Copied!" tooltip — paste into Webflow head ===== */
+/* Only the injected tooltip lives here. Buttons/layout are styled in Webflow.
+   Hooks → .claude/rules/components/share.md */
+
+/* Anchor for the absolutely-positioned tooltip. */
+[data-component='share'] [data-share='copy'] {
+  position: relative;
+}
+
+/* — Injected default tooltip (.share_tooltip) — */
+[data-component='share'] .share_tooltip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem); /* sits above the button */
+  left: 50%;
+  z-index: 10;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  background: var(--base--black, #000);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 0.25rem);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+/* Little arrow under the tooltip. */
+[data-component='share'] .share_tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 5px solid transparent;
+  border-top-color: var(--base--black, #000);
+  transform: translateX(-50%);
+}
+
+/* Shown state (JS toggles .is-visible). */
+[data-component='share'] .share_tooltip.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component='share'] .share_tooltip {
+    transition: none;
+  }
+}

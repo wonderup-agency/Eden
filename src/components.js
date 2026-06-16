@@ -14,6 +14,18 @@
 
 export default [
   {
+    selector: "[data-component='lightbox']",
+    importFn: () => import('./components/lightbox.js'),
+  },
+  {
+    selector: "[data-component='references']",
+    importFn: () => import('./components/references.js'),
+  },
+  {
+    selector: "[data-component='share']",
+    importFn: () => import('./components/share.js'),
+  },
+  {
     selector: "[data-component='number-counter']",
     importFn: () => import('./components/number-counter.js'),
   },

@@ -1,0 +1,288 @@
+/* ============================================================
+   WEBFLOW HEAD — global custom code (Project Settings → Custom Code → Head)
+   ------------------------------------------------------------
+   This is the COMBINED CSS pasted (inside a <style>) into Webflow's head.
+   It mirrors what's live on the site. The per-component source files in
+   src/components/styles/*.css are the canonical versions — keep this in sync
+   when you edit a component (or regenerate it; see CONVENTIONS / FILE_STRUCTURE).
+   ============================================================ */
+
+/* ============================================================
+   BUTTON
+   ============================================================ */
+
+/* Tokens + base */
+.button_main-wrap {
+  --anim-time: 0.35s;
+  --anim-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --btn-radius: 0.5rem;
+}
+
+.button_main-wrap .item-link:focus-visible {
+  outline: 2px solid #fbd07c;
+  outline-offset: 2px;
+}
+
+.button_main-element {
+  isolation: isolate;
+  border-radius: var(--btn-radius);
+  transition:
+    transform var(--anim-time) var(--anim-ease),
+    background-color var(--anim-time) var(--anim-ease),
+    box-shadow var(--anim-time) var(--anim-ease);
+}
+
+.button_main-text {
+  white-space: nowrap;
+}
+
+/* Icon nudge on hover */
+.button_main-icon {
+  display: inline-flex;
+  transition: transform var(--anim-time) var(--anim-ease);
+}
+.button_main-wrap:hover .button_main-icon {
+  transform: translateX(0.12em);
+}
+
+/* Primary — liquid glass (gradient fill + radial border + gloss) */
+.button_main-wrap[data-wf--element-button--variant='primary']
+  .button_main-element {
+  color: #ffffff;
+  background:
+    linear-gradient(134deg, #000000 0%, #4e4e4e 40%) padding-box,
+    radial-gradient(
+        135% 180% at 50% 0%,
+        #b8b8b8 0%,
+        #9e9e9e 52%,
+        rgba(0, 0, 0, 0.78) 100%
+      )
+      border-box;
+}
+.button_main-wrap[data-wf--element-button--variant='primary']
+  .button_main-element::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.18) 0%,
+    rgba(255, 255, 255, 0) 45%
+  );
+  pointer-events: none;
+}
+.button_main-wrap[data-wf--element-button--variant='primary']:hover
+  .button_main-element {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.5),
+    inset 0 -3px 8px rgba(0, 0, 0, 0.55),
+    0 12px 26px rgba(0, 0, 0, 0.38);
+}
+
+/* Secondary — light frosted glass */
+.button_main-wrap[data-wf--element-button--variant='secondary']
+  .button_main-element {
+  color: #000000;
+  background: rgba(114, 114, 114, 0.08);
+  -webkit-backdrop-filter: blur(8px) saturate(130%);
+  backdrop-filter: blur(8px) saturate(130%);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+.button_main-wrap[data-wf--element-button--variant='secondary']
+  .button_main-element::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0) 50%
+  );
+  pointer-events: none;
+}
+.button_main-wrap[data-wf--element-button--variant='secondary']:hover
+  .button_main-element {
+  background: rgba(114, 114, 114, 0.14);
+  border-color: rgba(255, 255, 255, 0.75);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    0 6px 14px rgba(0, 0, 0, 0.1);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .button_main-element,
+  .button_main-element::before,
+  .button_main-icon {
+    transition: none !important;
+  }
+}
+
+/* ===== PARADIGM · autoplay tabs (ring + underline progress) — paste into Webflow head ===== */
+
+/* Root */
+[data-component='paradigm'] {
+  position: relative;
+  overflow: hidden;
+}
+
+/* Progress ring (circular) */
+.tabs-paradigm_progress-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+[data-component='paradigm'].is-enhanced .tabs-paradigm_progress-inner {
+  display: none;
+}
+.tabs-paradigm_progress-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible; /* let the arc glow spill past the svg box */
+  pointer-events: none;
+}
+.tabs-paradigm_progress-track {
+  stroke: var(--base--grey-line, #e2e2e2);
+}
+.tabs-paradigm_progress-arc {
+  stroke: var(--base--gold, #f7c661);
+  stroke-linecap: round;
+  transform: rotate(-90deg); /* start the fill from 12 o'clock */
+  transform-box: fill-box;
+  transform-origin: center;
+  /* Gold glow → injected SVG <filter> (explicit region, no clip). See paradigm.js. */
+}
+.tabs-paradigm_progress-number {
+  grid-area: 1 / 1;
+  z-index: 1;
+  opacity: 0;
+}
+.tabs-paradigm_progress-number:first-child,
+.tabs-paradigm_progress-number.is-active {
+  opacity: 1;
+}
+
+/* Clickable progress controls (enhanced only): ring advances, numbers jump */
+[data-component='paradigm'].is-enhanced [data-paradigm='progress-ring'],
+[data-component='paradigm'].is-enhanced [data-paradigm='tab-link'] {
+  cursor: pointer;
+}
+
+/* Text messages (stacked, one shown at a time) */
+[data-paradigm-messages] {
+  display: grid;
+}
+[data-paradigm='tab-title'] {
+  grid-area: 1 / 1;
+}
+.title-anim_word {
+  display: inline-block;
+  will-change: transform, filter, opacity;
+}
+
+/* Underline progress (grey baseline styled in Webflow; only the fill is ours) */
+.tabs-paradigm_underline {
+  overflow: hidden;
+}
+.tabs-paradigm_underline-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--base--black, #000);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+/* Visuals (stacked, crossfaded) */
+.tabs-paradigm_visual-wrapper {
+  display: grid;
+}
+[data-paradigm-visual] {
+  grid-area: 1 / 1;
+}
+
+/* Fallback (no JS / reduced motion): show only the first / active tab */
+[data-component='paradigm']:not(.is-enhanced) [data-paradigm='tab-title'],
+[data-component='paradigm']:not(.is-enhanced) [data-paradigm-visual] {
+  opacity: 0;
+}
+[data-component='paradigm']:not(.is-enhanced)
+  [data-paradigm='tab-title']:first-child,
+[data-component='paradigm']:not(.is-enhanced)
+  [data-paradigm='tab-title'].is-active,
+[data-component='paradigm']:not(.is-enhanced)
+  [data-paradigm-visual]:first-child,
+[data-component='paradigm']:not(.is-enhanced) [data-paradigm-visual].is-active {
+  opacity: 1;
+}
+[data-component='paradigm'].is-static .tabs-paradigm_underline-fill {
+  transform: scaleX(1);
+}
+
+/* ===== TABS-ARCHITECTED · autoplay tabs — paste into Webflow head ===== */
+/* Only panel stacking + the underline/track baseline live here. Hooks → tabs-architected.md. */
+
+/* — Panel stacking (grid: same cell, no CLS) — */
+[data-component='tabs-architected'] .tabs-architected_tabs-content {
+  display: grid;
+}
+[data-component='tabs-architected'] .tabs-architected_tab-item {
+  grid-area: 1 / 1; /* every panel occupies the same grid cell */
+}
+
+/* — Image wipe baseline — */
+[data-component='tabs-architected'] [tabs-architected='image'] {
+  will-change: clip-path;
+}
+
+/* — Progress underline / track / fill (three states) — */
+[data-component='tabs-architected'] {
+  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
+}
+
+/* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
+[data-component='tabs-architected'] .tabs-architected_tab-link-underline {
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* State 1 — grey track on every tab (full width; JS adds .is-track). */
+[data-component='tabs-architected']
+  .tabs-architected_tab-link-underline.is-track {
+  transform: none;
+  background-color: var(--base--grey-line, #e4e2dd);
+  transition: background-color 0.4s ease; /* ease the state-1 ↔ state-2 colour change */
+}
+/* State 2 — the active tab's track is a bit darker, still 100% wide. */
+[data-component='tabs-architected']
+  .tabs-architected_tab-link.is-active
+  .tabs-architected_tab-link-underline.is-track {
+  background-color: var(--tabs-track-active, #b3aea2);
+}
+/* State 3 — black progress fill (cumulative across tabs; JS scales scaleX 0→1). */
+[data-component='tabs-architected'] .tabs-architected_tab-link-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+  background-color: var(--base--black, #000);
+}
+
+/* — Reduced motion (no track/fill; keep the active underline full) — */
+@media (prefers-reduced-motion: reduce) {
+  [data-component='tabs-architected']
+    .tabs-architected_tab-link.is-active
+    .tabs-architected_tab-link-underline {
+    transform: scaleX(1);
+  }
+}

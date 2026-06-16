@@ -5,6 +5,11 @@
    It mirrors what's live on the site. The per-component source files in
    src/components/styles/*.css are the canonical versions — keep this in sync
    when you edit a component (or regenerate it; see CONVENTIONS / FILE_STRUCTURE).
+
+   ⚠ Paste this into Project Settings → Custom Code → HEAD (limit ~20,000 chars),
+   NOT into an HTML Embed: an Embed caps at 10,000 chars and silently truncates,
+   which breaks the whole <style> (every component, incl. buttons). If you must use
+   embeds for canvas preview, split into chunks under 10k each.
    ============================================================ */
 
 /* ============================================================
@@ -46,7 +51,7 @@
 }
 
 /* Primary — liquid glass (gradient fill + radial border + gloss) */
-.button_main-wrap[data-wf--element-button-new--variant='primary']
+.button_main-wrap[data-wf--element-button--variant='primary']
   .button_main-element {
   color: #ffffff;
   background:
@@ -59,7 +64,7 @@
       )
       border-box;
 }
-.button_main-wrap[data-wf--element-button-new--variant='primary']
+.button_main-wrap[data-wf--element-button--variant='primary']
   .button_main-element::before {
   content: '';
   position: absolute;
@@ -73,7 +78,7 @@
   );
   pointer-events: none;
 }
-.button_main-wrap[data-wf--element-button-new--variant='primary']:hover
+.button_main-wrap[data-wf--element-button--variant='primary']:hover
   .button_main-element {
   transform: translateY(-1px);
   box-shadow:
@@ -83,7 +88,7 @@
 }
 
 /* Secondary — light frosted glass */
-.button_main-wrap[data-wf--element-button-new--variant='secondary']
+.button_main-wrap[data-wf--element-button--variant='secondary']
   .button_main-element {
   color: #000000;
   background: rgba(114, 114, 114, 0.08);
@@ -91,7 +96,7 @@
   backdrop-filter: blur(8px) saturate(130%);
   border-color: rgba(255, 255, 255, 0.55);
 }
-.button_main-wrap[data-wf--element-button-new--variant='secondary']
+.button_main-wrap[data-wf--element-button--variant='secondary']
   .button_main-element::before {
   content: '';
   position: absolute;
@@ -105,7 +110,7 @@
   );
   pointer-events: none;
 }
-.button_main-wrap[data-wf--element-button-new--variant='secondary']:hover
+.button_main-wrap[data-wf--element-button--variant='secondary']:hover
   .button_main-element {
   background: rgba(114, 114, 114, 0.14);
   border-color: rgba(255, 255, 255, 0.75);
@@ -531,4 +536,201 @@ html.js-anim [data-component='scroll-morph'].is-ready {
 [data-component='scroll-morph']:not(.is-canvas) [data-scroll-morph-message] {
   grid-area: auto;
   margin: 0 auto 3rem;
+}
+
+/* ===== SHARE · "Copied!" tooltip — paste into Webflow head ===== */
+/* Only the injected tooltip lives here. Buttons/layout are styled in Webflow.
+   Hooks → .claude/rules/components/share.md */
+
+/* Anchor for the absolutely-positioned tooltip. */
+[data-component='share'] [data-share='copy'] {
+  position: relative;
+}
+
+/* — Injected default tooltip (.share_tooltip) — */
+[data-component='share'] .share_tooltip {
+  position: absolute;
+  bottom: calc(100% + 0.5rem); /* sits above the button */
+  left: 50%;
+  z-index: 10;
+  padding: 0.375rem 0.625rem;
+  border-radius: 0.375rem;
+  background: var(--base--black, #000);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, 0.25rem);
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+/* Little arrow under the tooltip. */
+[data-component='share'] .share_tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  border: 5px solid transparent;
+  border-top-color: var(--base--black, #000);
+  transform: translateX(-50%);
+}
+
+/* Shown state (JS toggles .is-visible). */
+[data-component='share'] .share_tooltip.is-visible {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-component='share'] .share_tooltip {
+    transition: none;
+  }
+}
+
+/* ===== REFERENCES · citation cross-linking — paste into Webflow head ===== */
+/* Styles the JS-injected pieces (badge, back-link, cite anchors, active highlight).
+   The reference text + layout and the View/PubMed/Scholar link looks are free in the
+   Designer (target .is-view / .is-pubmed / .is-scholar). Hooks → .claude/rules/components/references.md */
+
+/* — In-body citation markers (the <sup> numbers, now anchors) — */
+[data-references-body] .references_cite {
+  color: var(--base--gold, #c79a4b);
+  text-decoration: none;
+  cursor: pointer;
+  scroll-margin-top: 6rem; /* clear the fixed nav when jumped to */
+}
+[data-references-body] .references_cite:hover {
+  text-decoration: underline;
+}
+
+/* Gold 30% highlight: on the word before the marker (back to citation) and on the
+   reference itself (jump to reference). */
+[data-references-body] .references_cited-word.is-active,
+[data-component='references'] .references_item.is-active {
+  background-color: rgba(199, 154, 75, 0.3);
+  border-radius: 0.25rem;
+  transition: background-color 0.3s ease;
+}
+
+/* — Reference list items (flex row, each separated by a bottom line) — */
+[data-component='references'] .references_item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--base--grey-line, #d9d4c9);
+  scroll-margin-top: 6rem;
+  outline: none;
+}
+[data-component='references'] .references_item:last-child {
+  border-bottom: none;
+}
+[data-component='references'] .references_content {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* Author-typed leading number, wrapped by JS (badge). */
+[data-component='references'] .references_number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  margin-right: 0.75rem;
+  border-radius: 50%;
+  background: var(--base--brown, #5c4a3a);
+  color: #fff;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  flex: none;
+}
+
+/* — "Go to Citation" back-link (injected) — */
+[data-component='references'] .references_backlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex: none; /* pushed to the right by .references_content's flex-grow */
+  margin-left: auto;
+  padding: 0.375rem 0.875rem;
+  border: 1px solid var(--base--grey-line, #d9d4c9);
+  border-radius: 2rem;
+  color: inherit;
+  text-decoration: none;
+  font-size: 0.875rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+[data-component='references'] .references_backlink::before {
+  content: '↵';
+}
+[data-component='references'] .references_backlink[hidden] {
+  display: none;
+}
+
+/* Author links are classified .is-view / .is-pubmed / .is-scholar — style them in the Designer. */
+
+@media (prefers-reduced-motion: reduce) {
+  [data-references-body] .references_cited-word.is-active,
+  [data-component='references'] .references_item.is-active {
+    transition: none;
+  }
+}
+
+/* ===== LIGHTBOX · article image figure viewer — paste into Webflow head ===== */
+/* Only our custom UI lives here (clickable affordance + caption panel + custom buttons).
+   PhotoSwipe's CORE css is loaded separately from the CDN <link> in the head — see the doc.
+   Hooks → .claude/rules/components/lightbox.md */
+
+/* Clickable affordance on article images. */
+[data-component='lightbox'] .lightbox_img {
+  cursor: zoom-in;
+}
+[data-component='lightbox'] .lightbox_img:focus-visible {
+  outline: 2px solid var(--base--gold, #c79a4b);
+  outline-offset: 3px;
+}
+
+/* — Caption panel (toggled by the ⓘ button) — */
+.pswp__caption-panel {
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: min(360px, 85vw);
+  padding: 5rem 1.5rem 1.5rem;
+  background: rgba(20, 20, 20, 0.92);
+  color: #f2f2f2;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  overflow-y: auto;
+  transform: translateX(100%);
+  transition: transform 0.3s ease;
+  z-index: 10;
+}
+.pswp__caption-panel.is-open {
+  transform: translateX(0);
+}
+.pswp__caption-panel.is-empty {
+  display: none;
+}
+
+/* Custom buttons reuse PhotoSwipe's .pswp__button sizing; just center the glyph. */
+.pswp__button--info,
+.pswp__button--download,
+.pswp__button--share {
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pswp__caption-panel {
+    transition: none;
+  }
 }
