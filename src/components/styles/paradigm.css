@@ -7,14 +7,14 @@
 }
 
 /* — Progress ring (circular) — */
-.tabs-paradigm_progress-ring {
+.tabs_progress-ring {
   position: relative;
   display: grid;
   place-items: center;
 }
 
 /* The injected SVG replaces the original CSS fill div */
-[data-component='paradigm'].is-enhanced .tabs-paradigm_progress-inner {
+[data-component='paradigm'].is-enhanced .tabs_progress-inner {
   display: none;
 }
 
@@ -41,13 +41,13 @@
 }
 
 /* Numbers stack centred in the ring; only the active one shows */
-.tabs-paradigm_progress-number {
+.tabs_progress-number {
   grid-area: 1 / 1;
   z-index: 1;
   opacity: 0;
 }
-.tabs-paradigm_progress-number:first-child,
-.tabs-paradigm_progress-number.is-active {
+.tabs_progress-number:first-child,
+.tabs_progress-number.is-active {
   opacity: 1;
 }
 
@@ -72,10 +72,10 @@
 }
 
 /* — Underline progress (grey baseline styled in Webflow; only the fill is ours) — */
-.tabs-paradigm_underline {
+.tabs_number-underline {
   overflow: hidden;
 }
-.tabs-paradigm_underline-fill {
+.tabs_number-underline-fill {
   width: 100%;
   height: 100%;
   background: var(--base--black, #000);
@@ -105,6 +105,6 @@
 [data-component='paradigm']:not(.is-enhanced) [data-paradigm-visual].is-active {
   opacity: 1;
 }
-[data-component='paradigm'].is-static .tabs-paradigm_underline-fill {
+[data-component='paradigm'].is-static .tabs_number-underline-fill {
   transform: scaleX(1);
 }

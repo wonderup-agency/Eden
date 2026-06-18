@@ -67,7 +67,7 @@ function glowFilter(id) {
 function setupRoot(root, rootIndex) {
   const ring = root.querySelector('[data-paradigm="progress-ring"]')
   const numbers = gsap.utils.toArray(
-    root.querySelectorAll('.tabs-paradigm_progress-number')
+    root.querySelectorAll('.tabs_progress-number')
   )
   const titles = gsap.utils.toArray(
     root.querySelectorAll('[data-paradigm="tab-title"]')
@@ -81,7 +81,7 @@ function setupRoot(root, rootIndex) {
   const visuals = gsap.utils.toArray(
     root.querySelectorAll('[data-paradigm-visual]')
   )
-  const underlineFill = root.querySelector('.tabs-paradigm_underline-fill')
+  const underlineFill = root.querySelector('.tabs_number-underline-fill')
   const messagesWrap = root.querySelector('[data-paradigm-messages]')
   const visualsWrap = root.querySelector('.tabs-paradigm_visual-wrapper')
 
@@ -293,7 +293,7 @@ function staticFallback(root) {
   first('[data-paradigm="tab-title"]')?.classList.add('is-active')
   first('[data-paradigm="tab-link"]')?.classList.add('is-active')
   first('[data-paradigm-visual]')?.classList.add('is-active')
-  first('.tabs-paradigm_progress-number')?.classList.add('is-active')
+  first('.tabs_progress-number')?.classList.add('is-active')
   root.classList.add('is-static')
 }
 
