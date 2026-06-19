@@ -567,6 +567,11 @@ function setupRoot(root, rootIndex) {
     cctx = canvas.getContext('2d')
     sprite = makeSprite()
     cloudResize()
+    // Re-measure on ANY wrapper size change (not just width) so the canvas buffer
+    // keeps the stage's aspect — otherwise it stretches and the circle reads as an oval.
+    if (window.ResizeObserver) {
+      new window.ResizeObserver(() => cloudResize()).observe(visualsWrap)
+    }
 
     const srcs = cloudImgs.map((im) => im.currentSrc || im.src)
     const loaded = await Promise.all(srcs.map(loadImage))
