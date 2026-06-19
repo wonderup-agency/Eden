@@ -1,5 +1,5 @@
-/* ===== TABS-FOUNDATION-MODEL · autoplay tabs — paste into Webflow head ===== */
-/* Only panel stacking + the underline/track baseline live here. Hooks → tabs-foundation-model.md. */
+/* ===== TABS-FOUNDATION-MODEL · tabs (no autoplay) — paste into Webflow head ===== */
+/* Panel stacking + active-only underline baseline. Hooks → tabs-foundation-model.md. */
 
 /* — Panel stacking (grid: same cell, no CLS) — */
 [data-component='tabs-foundation-model'] .tabs-foundation-model_tabs-content {
@@ -14,33 +14,24 @@
   will-change: clip-path;
 }
 
-/* — Progress underline / track / fill (three states) — */
-[data-component='tabs-foundation-model'] {
-  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
-}
+/* — Active-only underline — only the active tab is underlined (the black fill); the
+   rail is a transparent full-width rest so the fill can scale within it. JS drives the
+   fill scaleX 1 on the active tab, 0 on the rest (smooth). No progress / no autoplay. */
 
-/* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
+/* Rail: collapsed baseline; transparent (the fill is the visible bar). */
 [data-component='tabs-foundation-model']
   .tabs-foundation-model_tab-link-underline {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
+  background-color: transparent;
 }
-
-/* State 1 — grey track on every tab (full width; JS adds .is-track). */
+/* is-track → expand the rail to full width (still transparent). */
 [data-component='tabs-foundation-model']
   .tabs-foundation-model_tab-link-underline.is-track {
   transform: none;
-  background-color: var(--base--grey-line, #e4e2dd);
-  transition: background-color 0.4s ease; /* ease the state-1 ↔ state-2 colour change */
 }
-/* State 2 — the active tab's track is a bit darker, still 100% wide. */
-[data-component='tabs-foundation-model']
-  .tabs-foundation-model_tab-link.is-active
-  .tabs-foundation-model_tab-link-underline.is-track {
-  background-color: var(--tabs-track-active, #b3aea2);
-}
-/* State 3 — black progress fill (cumulative across tabs; JS scales scaleX 0→1). */
+/* The black underline of the active tab. */
 [data-component='tabs-foundation-model'] .tabs-foundation-model_tab-link-fill {
   display: block;
   width: 100%;
@@ -51,11 +42,12 @@
   background-color: var(--base--black, #000);
 }
 
-/* — Reduced motion (no track/fill; keep the active underline full) — */
+/* — Reduced motion (no fill injected): show the active underline itself, black + full. */
 @media (prefers-reduced-motion: reduce) {
   [data-component='tabs-foundation-model']
     .tabs-foundation-model_tab-link.is-active
     .tabs-foundation-model_tab-link-underline {
     transform: scaleX(1);
+    background-color: var(--base--black, #000);
   }
 }

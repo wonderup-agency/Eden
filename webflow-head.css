@@ -193,9 +193,11 @@
   will-change: transform, filter, opacity;
 }
 
-/* Underline progress (grey baseline styled in Webflow; only the fill is ours) */
+/* Underline progress — light-grey track under all numbers + darker fill that grows
+   left→right as the autoplay loads (JS scales it via scaleX) */
 .tabs_number-underline {
   overflow: hidden;
+  background: var(--base--grey-line, #e2e2e2);
 }
 .tabs_number-underline-fill {
   width: 100%;
@@ -226,9 +228,6 @@
   [data-paradigm-visual]:first-child,
 [data-component='paradigm']:not(.is-enhanced) [data-paradigm-visual].is-active {
   opacity: 1;
-}
-[data-component='paradigm'].is-static .tabs_number-underline-fill {
-  transform: scaleX(1);
 }
 
 /* ===== COMPOUDING · paradigm-clone autoplay tabs (ring + underline progress) — paste into Webflow head ===== */
@@ -290,9 +289,11 @@
   grid-area: 1 / 1;
 }
 
-/* Underline progress (grey baseline styled in Webflow; only the fill is ours) */
+/* Underline progress — light-grey track under all numbers + darker fill that grows
+   left→right as the autoplay loads (JS scales it via scaleX) */
 [data-component='compouding'] .tabs_number-underline {
   overflow: hidden;
+  background: var(--base--grey-line, #e2e2e2);
 }
 [data-component='compouding'] .tabs_number-underline-fill {
   width: 100%;
@@ -345,9 +346,6 @@
 [data-component='compouding']:not(.is-enhanced)
   [data-paradigm-visual].is-active {
   opacity: 1;
-}
-[data-component='compouding'].is-static .tabs_number-underline-fill {
-  transform: scaleX(1);
 }
 
 /* ===== TABS-ARCHITECTED · autoplay tabs — paste into Webflow head ===== */
@@ -411,8 +409,8 @@
   }
 }
 
-/* ===== TABS-IMAGING · autoplay tabs (same engine as tabs-architected) — paste into Webflow head ===== */
-/* Only panel stacking + the underline/track baseline live here. Hooks → tabs-imaging.md. */
+/* ===== TABS-IMAGING · tabs (no autoplay) — paste into Webflow head ===== */
+/* Panel stacking + active-only underline baseline. Hooks → tabs-imaging.md. */
 
 /* Panel stacking (grid: same cell, no CLS) */
 [data-component='tabs-imaging'] .tabs-imaging_tabs-content {
@@ -427,24 +425,15 @@
   will-change: clip-path;
 }
 
-/* Progress underline / track / fill (three states) */
-[data-component='tabs-imaging'] {
-  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
-}
+/* Active-only underline (rail transparent; only the active tab's black fill shows) */
 [data-component='tabs-imaging'] .tabs-imaging_tab-link-underline {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
+  background-color: transparent;
 }
 [data-component='tabs-imaging'] .tabs-imaging_tab-link-underline.is-track {
   transform: none;
-  background-color: var(--base--grey-line, #e4e2dd);
-  transition: background-color 0.4s ease;
-}
-[data-component='tabs-imaging']
-  .tabs-imaging_tab-link.is-active
-  .tabs-imaging_tab-link-underline.is-track {
-  background-color: var(--tabs-track-active, #b3aea2);
 }
 [data-component='tabs-imaging'] .tabs-imaging_tab-link-fill {
   display: block;
@@ -460,11 +449,12 @@
     .tabs-imaging_tab-link.is-active
     .tabs-imaging_tab-link-underline {
     transform: scaleX(1);
+    background-color: var(--base--black, #000);
   }
 }
 
-/* ===== TABS-FOUNDATION-MODEL · autoplay tabs (same engine as tabs-architected) — paste into Webflow head ===== */
-/* Only panel stacking + the underline/track baseline live here. Hooks → tabs-foundation-model.md. */
+/* ===== TABS-FOUNDATION-MODEL · tabs (no autoplay) — paste into Webflow head ===== */
+/* Panel stacking + active-only underline baseline. Hooks → tabs-foundation-model.md. */
 
 /* Panel stacking (grid: same cell, no CLS) */
 [data-component='tabs-foundation-model'] .tabs-foundation-model_tabs-content {
@@ -479,26 +469,17 @@
   will-change: clip-path;
 }
 
-/* Progress underline / track / fill (three states) */
-[data-component='tabs-foundation-model'] {
-  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
-}
+/* Active-only underline (rail transparent; only the active tab's black fill shows) */
 [data-component='tabs-foundation-model']
   .tabs-foundation-model_tab-link-underline {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
+  background-color: transparent;
 }
 [data-component='tabs-foundation-model']
   .tabs-foundation-model_tab-link-underline.is-track {
   transform: none;
-  background-color: var(--base--grey-line, #e4e2dd);
-  transition: background-color 0.4s ease;
-}
-[data-component='tabs-foundation-model']
-  .tabs-foundation-model_tab-link.is-active
-  .tabs-foundation-model_tab-link-underline.is-track {
-  background-color: var(--tabs-track-active, #b3aea2);
 }
 [data-component='tabs-foundation-model'] .tabs-foundation-model_tab-link-fill {
   display: block;
@@ -514,6 +495,7 @@
     .tabs-foundation-model_tab-link.is-active
     .tabs-foundation-model_tab-link-underline {
     transform: scaleX(1);
+    background-color: var(--base--black, #000);
   }
 }
 
@@ -569,31 +551,16 @@
   );
 }
 
-/* — Progress underline / track / fill (three states; shared model with tabs-architected) — */
-[data-component='tabs-stats'] {
-  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
-}
-
-/* Baseline: collapsed. Also the reduced-motion bar (underline itself). */
+/* — Active-only underline (rail transparent; only the active tab's black fill shows) — */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
+  background-color: transparent;
 }
-
-/* State 1 — grey track on every tab (full width; JS adds .is-track). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline.is-track {
   transform: none;
-  background-color: var(--base--grey-line, #e4e2dd);
-  transition: background-color 0.4s ease; /* ease the state-1 ↔ state-2 colour change */
 }
-/* State 2 — the active tab's track is a bit darker, still 100% wide. */
-[data-component='tabs-stats']
-  [tabs-architected='link'].is-active
-  .tabs-architected_tab-link-underline.is-track {
-  background-color: var(--tabs-track-active, #b3aea2);
-}
-/* State 3 — black progress fill (cumulative across tabs; JS scales scaleX 0→1). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;
@@ -604,12 +571,13 @@
   background-color: var(--base--black, #000);
 }
 
-/* — Reduced motion (no canvas/fill; keep the active underline full) — */
+/* — Reduced motion (no canvas/fill): show the active underline itself, black + full. — */
 @media (prefers-reduced-motion: reduce) {
   [data-component='tabs-stats']
-    .tabs-stats_tab-link.is-active
+    [tabs-architected='link'].is-active
     .tabs-architected_tab-link-underline {
     transform: scaleX(1);
+    background-color: var(--base--black, #000);
   }
 }
 

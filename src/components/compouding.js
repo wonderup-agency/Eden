@@ -23,14 +23,14 @@ const RING_STEP = 0.6 // ring step transition between tabs
 const GLOW_COLOR = '#f7c661' // gold arc glow (Figma F7C661)
 
 // ---- Point cloud (visuals — sampled + morphed, same engine as tabs-stats) ----
-const TARGET_POINTS = 7000 // points per state — same for all, for a 1:1 morph
+const TARGET_POINTS = 9500 // points per state — same for all, for a 1:1 morph (denser cloud)
 const SAMPLE_MAX = 560 // longest edge the source PNG is sampled at
 const ALPHA_MIN = 28 // min source alpha to count a pixel as "ink"
 const LUMA_MAX = 245 // opaque PNGs: count pixels darker than this
 const MORPH_DURATION = 1.25
 const MORPH_EASE = 'power2.inOut'
 const DOT_COLOR = '140,145,152' // light slate grey (tuned for a light bg)
-const FIT = 0.92 // fraction of the stage each shape fills (per-state fit; 1 = touches the edges)
+const FIT = 0.8 // per-state: fraction of the stage each shape fills on its limiting axis
 // Varied dot sizes: mostly fine dots, a fraction a bit bigger (keep them slim).
 const BIG_DOT_CHANCE = 0.15 // fraction of dots that are large
 const SMALL_R = [0.35, 0.9] // small-dot radius range (px) — fine
@@ -304,12 +304,15 @@ function setupRoot(root, rootIndex) {
   let flowAY = 1
   let cssW = 0
   let cssH = 0
-  let cscale = 0
+  let cscale = 0 // resting scale of the current state (per-state fit)
+  let scaleFrom = 0 // scale at the start of the current morph (interpolated to cscale)
+  let curState = 0 // index of the current cloud state
   let coverX = 1
   let coverY = 1
-  let extX = 1
-  let extY = 1
   let cdpr = 1
+  const stateExtX = [] // per-state normalized half-width (longer axis = 1)
+  const stateExtY = [] // per-state normalized half-height
+  const stateScale = [] // per-state fit scale (min of width/height fit × FIT)
 
   function makeSprite() {
     const s = document.createElement('canvas')
@@ -326,6 +329,15 @@ function setupRoot(root, rootIndex) {
     return s
   }
 
+  // Point the current scale + scatter cover at a given state (no morph in flight).
+  function setStateScale(idx) {
+    curState = idx
+    cscale = stateScale[idx] || cscale
+    scaleFrom = cscale
+    coverX = cscale ? (cssW * 0.5) / cscale : 1
+    coverY = cscale ? (cssH * 0.5) / cscale : 1
+  }
+
   function cloudResize() {
     if (!visualsWrap) return
     cssW = visualsWrap.clientWidth
@@ -334,7 +346,15 @@ function setupRoot(root, rootIndex) {
     canvas.width = cssW * cdpr
     canvas.height = cssH * cdpr
     cctx.setTransform(cdpr, 0, 0, cdpr, 0, 0)
-    cscale = Math.min((cssW * 0.5) / extX, (cssH * 0.5) / extY) * FIT
+    // Per-state fit: each shape gets its own scale so it fills the stage on its
+    // limiting axis (wide shapes → width, the squarer circle → height). The morph
+    // interpolates between the two states' scales (see drawCloud).
+    for (let i = 0; i < stateExtX.length; i++) {
+      stateScale[i] =
+        Math.min((cssW * 0.5) / stateExtX[i], (cssH * 0.5) / stateExtY[i]) * FIT
+    }
+    cscale = stateScale[curState] || cssW * 0.5 * FIT
+    scaleFrom = cscale
     coverX = cscale ? (cssW * 0.5) / cscale : 1
     coverY = cscale ? (cssH * 0.5) / cscale : 1
     if (cloudReady) drawCloud()
@@ -385,6 +405,7 @@ function setupRoot(root, rootIndex) {
     const tx = toState.x
     const ty = toState.y
     const ta = toState.a
+    const rscale = scaleFrom + (cscale - scaleFrom) * t // interpolated per-state scale
     const R2 = HOVER_RADIUS * HOVER_RADIUS
     const now = window.performance.now() * 0.001
     const driftAmp = SHIMMER_FLOOR * DRIFT
@@ -434,8 +455,8 @@ function setupRoot(root, rootIndex) {
       }
       offX[i] += (txo - offX[i]) * HOVER_EASE
       offY[i] += (tyo - offY[i]) * HOVER_EASE
-      const sx = cx + (bx + offX[i]) * cscale
-      const sy = cy + (by + offY[i]) * cscale
+      const sx = cx + (bx + offX[i]) * rscale
+      const sy = cy + (by + offY[i]) * rscale
       const r = pointR[i] * (1 + glow * 0.7)
       cctx.globalAlpha = fromA[i] + (ta[i] - fromA[i]) * t
       cctx.drawImage(sprite, sx - r, sy - r, r * 2, r * 2)
@@ -478,6 +499,13 @@ function setupRoot(root, rootIndex) {
       fromA[i] = fromA[i] + (ta[i] - fromA[i]) * t
     }
     toState = states[next]
+    // Morph the scale from the current state's fit to the next one's (interpolated in
+    // drawCloud), so the circle grows/shrinks to its own size as the shape changes.
+    scaleFrom = cscale
+    curState = next
+    cscale = stateScale[next] || cscale
+    coverX = cscale ? (cssW * 0.5) / cscale : 1
+    coverY = cscale ? (cssH * 0.5) / cscale : 1
     morph.t = 0
     gsap.killTweensOf(morph)
     gsap.to(morph, { t: 1, duration: MORPH_DURATION, ease: MORPH_EASE })
@@ -487,6 +515,7 @@ function setupRoot(root, rootIndex) {
   function runIntro(target) {
     introTarget = target
     toState = states[target]
+    setStateScale(target) // intro draws at the target state's own scale
     introActive = true
     introProg.v = 0
     introFade.v = 0
@@ -509,6 +538,7 @@ function setupRoot(root, rootIndex) {
     fromY.set(s.y)
     fromA.set(s.a)
     toState = s
+    setStateScale(target)
     morph.t = 1
     drawCloud()
   }
@@ -566,17 +596,16 @@ function setupRoot(root, rootIndex) {
       return
     }
 
-    // Per-state fit: normalize EACH state to its own half-extent so every shape fills
-    // the stage like the Figma frames. (A common scale made the smaller-bbox states —
-    // e.g. the band — render tiny next to the widest one.)
+    // Per-state fit: normalize EACH state to its own max half-extent (longer axis → 1),
+    // centered on its own bbox, and record its normalized half-extents. Each shape then
+    // fills the stage on its limiting axis (cloudResize → stateScale): the wide shapes
+    // fill the width, the squarer circle fills the height — each at its own size.
     states = raw.map((r) => {
       const cxp = (r.bbox.minX + r.bbox.maxX) / 2
       const cyp = (r.bbox.minY + r.bbox.maxY) / 2
-      const half =
-        Math.max(
-          (r.bbox.maxX - r.bbox.minX) / 2,
-          (r.bbox.maxY - r.bbox.minY) / 2
-        ) || 1
+      const hw = (r.bbox.maxX - r.bbox.minX) / 2
+      const hh = (r.bbox.maxY - r.bbox.minY) / 2
+      const half = Math.max(hw, hh) || 1
       const ni = 1 / half
       const x = new Float32Array(N)
       const y = new Float32Array(N)
@@ -584,21 +613,10 @@ function setupRoot(root, rootIndex) {
         x[k] = (r.x[k] - cxp) * ni
         y[k] = (r.y[k] - cyp) * ni
       }
+      stateExtX.push(hw / half || 1)
+      stateExtY.push(hh / half || 1)
       return { x, y, a: r.a }
     })
-
-    extX = 0
-    extY = 0
-    for (const s of states) {
-      for (let k = 0; k < N; k++) {
-        const ax = Math.abs(s.x[k])
-        const ay = Math.abs(s.y[k])
-        if (ax > extX) extX = ax
-        if (ay > extY) extY = ay
-      }
-    }
-    if (!extX) extX = 1
-    if (!extY) extY = 1
 
     // Flow state's own semi-axes (for the ellipse-space circulation).
     if (flowIndex >= 0) {
@@ -749,6 +767,8 @@ function setupRoot(root, rootIndex) {
     ringTo(i, loop)
   }
 
+  // Underline = autoplay progress: a darker fill grows across the light-grey track,
+  // cumulatively over the cycle (tab i runs i/count → (i+1)/count; resets on loop).
   const runProgress = () => {
     progressTl && progressTl.kill()
     progressTl = gsap.timeline({ onComplete: () => goTo((index + 1) % count) })

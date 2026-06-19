@@ -200,8 +200,9 @@ function setupRoot(root, rootIndex) {
     ringTo(i, loop)
   }
 
-  // Underline = global continuous progress: fills across the whole cycle, second by
-  // second (tab i runs i/count → (i+1)/count over the tab duration; resets on loop).
+  // Underline = autoplay progress: a darker fill grows across the light-grey track,
+  // cumulatively over the cycle (tab i runs i/count → (i+1)/count over the tab
+  // duration; resets on loop) — the "fills while it loads" indicator.
   const runProgress = () => {
     progressTl && progressTl.kill()
     progressTl = gsap.timeline({ onComplete: () => goTo((index + 1) % count) })

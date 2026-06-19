@@ -71,9 +71,11 @@
   will-change: transform, filter, opacity;
 }
 
-/* — Underline progress (grey baseline styled in Webflow; only the fill is ours) — */
+/* — Underline progress — a light-grey track under all the numbers + a darker fill
+   that grows left→right as the autoplay loads (JS scales it via scaleX). — */
 .tabs_number-underline {
   overflow: hidden;
+  background: var(--base--grey-line, #e2e2e2);
 }
 .tabs_number-underline-fill {
   width: 100%;
@@ -104,7 +106,4 @@
   [data-paradigm-visual]:first-child,
 [data-component='paradigm']:not(.is-enhanced) [data-paradigm-visual].is-active {
   opacity: 1;
-}
-[data-component='paradigm'].is-static .tabs_number-underline-fill {
-  transform: scaleX(1);
 }

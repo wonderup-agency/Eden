@@ -10,7 +10,6 @@
 const { gsap } = window
 
 const ACTIVE_CLASS = 'is-active'
-const AUTOPLAY_DURATION = 5 // seconds the underline fills before advancing
 
 // ---- Point cloud ----
 const TARGET_POINTS = 7000 // points per state — same for all, for a 1:1 morph
@@ -208,9 +207,9 @@ function setupTabs(root) {
     return null
   }
 
-  // Turn each underline into a grey track + inject a black fill child that scales 0→1.
-  // The fill is cumulative across tabs (see setStaticFills) so the row reads as total
-  // autoplay progress. `bars` = the fill children.
+  // Expand each underline rail (is-track) + inject a black fill child. Only the ACTIVE
+  // tab's fill is shown (scaleX 1, see setActiveUnderline); the rest stay 0 — so just
+  // the active tab is underlined. `bars` = the fill children.
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-architected_tab-link-underline')
     if (!track) return null
@@ -251,10 +250,9 @@ function setupTabs(root) {
   const fromA = new Float32Array(N)
   let toState = null
   const morph = { t: 1 }
-  let morphing = false
   let looping = false
   let ready = false
-  let started = false // intro done + autoplay armed
+  let started = false // intro done
 
   // Hover state (eased per-point offsets → laggy nebula motion)
   let hovActive = false
@@ -281,7 +279,6 @@ function setupTabs(root) {
   let extY = 1 // largest normalized half-height across states
   let dpr = 1
   let inView = false
-  let progressTween = null
 
   function makeSprite() {
     const s = document.createElement('canvas')
@@ -449,63 +446,29 @@ function setupTabs(root) {
     toState = states[next]
     cur = next
     morph.t = 0
-    morphing = true
     gsap.killTweensOf(morph)
-    gsap.to(morph, {
-      t: 1,
-      duration: MORPH_DURATION,
-      ease: MORPH_EASE,
-      onComplete: () => {
-        morphing = false
-      },
-    })
-    // Start the fill immediately (in parallel with the morph) so the bar isn't empty.
-    if (started && !paused()) startProgress(cur)
+    gsap.to(morph, { t: 1, duration: MORPH_DURATION, ease: MORPH_EASE })
+    setActiveUnderline(cur)
     ensureLoop()
   }
 
-  // Autoplay: the active underline fills, then advances. Pauses only off-screen or mid-morph.
-  const paused = () => !inView
-  // Cumulative fills: tabs before the active one stay full, the ones after stay empty
-  // (the active one is animated separately). The row = total autoplay progress.
-  const setStaticFills = (index) => {
+  // Underline only the active tab: its fill scales to 1, every other to 0 (smooth).
+  // No autoplay — switching is click/keyboard only.
+  function setActiveUnderline(index) {
     bars.forEach((bar, k) => {
-      if (!bar || k === index) return
-      gsap.set(bar, {
-        scaleX: k < index ? 1 : 0,
+      if (!bar) return
+      gsap.to(bar, {
+        scaleX: k === index ? 1 : 0,
         transformOrigin: 'left center',
+        duration: 0.45,
+        ease: 'power2.out',
       })
     })
-  }
-  function startProgress(index) {
-    if (progressTween) progressTween.kill()
-    setStaticFills(index)
-    const bar = bars[index]
-    if (!bar) return
-    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
-    progressTween = gsap.to(bar, {
-      scaleX: 1,
-      duration: AUTOPLAY_DURATION,
-      ease: 'none',
-      onComplete: () => {
-        if (!morphing && !paused()) select((cur + 1) % count)
-      },
-    })
-  }
-  function stopProgress() {
-    if (progressTween) progressTween.pause()
-  }
-  function resumeProgress() {
-    if (started && !morphing && !paused()) {
-      if (progressTween && progressTween.progress() < 1) progressTween.resume()
-      else startProgress(cur)
-    }
   }
 
   function select(i) {
     if (i === cur || !ready || introActive) return
     setActiveTab(i)
-    if (progressTween) progressTween.kill() // cumulative fills are reset in startProgress
     morphTo(i)
   }
 
@@ -552,16 +515,13 @@ function setupTabs(root) {
     if (!e.matches) hovActive = false
   })
 
-  // Visibility: arm autoplay + fire the intro on first enter; pause when hidden.
+  // Visibility: fire the intro on first enter; resume the shimmer loop on re-entry.
   const io = new window.IntersectionObserver(
     (entries) => {
       inView = entries[0].isIntersecting
       if (inView) {
         if (ready && !started && !introActive) runIntro()
-        else resumeProgress()
-        ensureLoop() // resume the shimmer loop on re-entry
-      } else {
-        stopProgress()
+        ensureLoop()
       }
     },
     { threshold: 0.05 }
@@ -594,7 +554,7 @@ function setupTabs(root) {
     morph.t = 1
     cur = 0
     started = true
-    if (!paused()) startProgress(0)
+    setActiveUnderline(0)
     draw()
   }
 

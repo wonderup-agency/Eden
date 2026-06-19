@@ -1,26 +1,27 @@
 /* ===== NAV · glass-on-scroll morph (all breakpoints) — paste into Webflow head ===== */
-/* Designer settings + hooks → nav.md. Keep --nav-morph in sync with FLIP_DURATION (nav.js). */
+/* Designer settings + hooks → nav.md. Keep --nav-morph in sync with FLIP_DURATION (nav.js).
+   Set IN WEBFLOW: nav_component → Width 100% · nav_inner → Flex / Position Relative /
+   Align Y Center · nav_logo → Don't shrink. --nav-rest-top is auto-set by nav.js. */
 
 /* — Tokens — */
 [data-component='nav'] {
   --nav-morph: 1s;
   --nav-ease: cubic-bezier(0.45, 0, 0.55, 1);
   --nav-rest-top: 0px; /* auto-set by nav.js from nav_component's real padding-top */
-  --nav-float-top: 0.5rem; /* gap from the top when floating */
+  --nav-float-top: 0.25rem; /* gap from the top when floating */
   --nav-float-pad-x: 1.25rem; /* inner side padding of the mobile pill so logo/menu aren't flush to the edge */
-  --nav-glass: rgba(255, 255, 255, 0.5); /* glass tint (desktop, with blur) */
-  --nav-glass-mobile: rgba(
+  --nav-center-gap: 2.5rem; /* item gap in the centered floating pill — lower = smaller */
+  --nav-glass: rgba(
     255,
     255,
     255,
-    0.6
-  ); /* mobile tint — slightly more opaque so a lighter blur still reads as glass */
-  --nav-blur-mobile: 10px; /* mobile blur radius — smaller than desktop's 16px (cheaper/smoother). Lower if it stutters, raise toward 16px for frostier. */
+    0.75
+  ); /* glass tint — raise/lower to taste */
   --nav-menu-glass: rgba(
     255,
     255,
     255,
-    0.72
+    0.8
   ); /* open mobile-menu tint — a touch more opaque so links stay legible */
 }
 
@@ -32,7 +33,7 @@
   position: absolute;
   inset: 0;
   z-index: 0;
-  border-radius: 1rem;
+  border-radius: 16px;
   background: var(--nav-glass);
   -webkit-backdrop-filter: blur(16px) saturate(135%);
   backdrop-filter: blur(16px) saturate(135%);
@@ -68,31 +69,73 @@
   [data-component='nav'] [data-nav-inner] {
     width: fit-content;
     margin: 0 auto 0 -1rem;
-    padding: 0.5rem 1rem;
+    padding: 0.5rem 0.5rem;
   }
   [data-component='nav'] [data-nav-inner].is-floating {
     margin: calc(var(--nav-float-top) - var(--nav-rest-top)) auto 0;
   }
 }
 
-/* — Mobile / tablet (≤ 991px): full width, glass-only morph (NEVER moves vertically) — */
-/* Any vertical move near the top fights the address-bar viewport resize → reads as a
-   jump. So only glass/corners/padding/logo animate. (Desktop keeps the Flip float.) */
-@media (max-width: 991px) {
-  /* Side padding eases in so logo/menu sit off the glass edge. */
-  [data-component='nav'] [data-nav-inner] {
-    transition: padding var(--nav-morph) var(--nav-ease);
+/* — Centered variant (data-nav-center="True"): full-width spread bar → centred pill
+   (desktop). Layout tuned to: nav_container > [brand · nav_menu > nav_menu-inner]. — */
+@media (min-width: 992px) {
+  [data-component='nav'][data-nav-center='True'] [data-nav-inner] {
+    width: 100%;
+    margin: 0;
   }
-  [data-component='nav'] [data-nav-inner].is-floating {
-    padding-left: var(--nav-float-pad-x);
-    padding-right: var(--nav-float-pad-x);
+  [data-component='nav'][data-nav-center='True'] [data-nav-inner].is-floating {
+    width: fit-content;
+    margin: calc(var(--nav-float-top) - var(--nav-rest-top)) auto 0;
   }
 
-  /* Smaller blur radius than desktop (cheaper per frame on fast scroll). */
-  [data-component='nav'] [data-nav-inner]::before {
-    background: var(--nav-glass-mobile);
-    -webkit-backdrop-filter: blur(var(--nav-blur-mobile));
-    backdrop-filter: blur(var(--nav-blur-mobile));
+  /* Rest: container fills the bar; menu grows so links sit by the logo + buttons reach the right. */
+  [data-component='nav'][data-nav-center='True'] [data-nav-inner] > * {
+    width: 100%;
+    max-width: none;
+  }
+  [data-component='nav'][data-nav-center='True'] .nav_menu {
+    flex: 1 1 auto;
+  }
+  [data-component='nav'][data-nav-center='True'] .nav_menu-inner {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  /* Floating: everything hugs into a small centred pill (gap replaces space-between). */
+  [data-component='nav'][data-nav-center='True']
+    [data-nav-inner].is-floating
+    > * {
+    width: fit-content;
+    gap: var(--nav-center-gap, 2.5rem);
+  }
+  [data-component='nav'][data-nav-center='True']
+    [data-nav-inner].is-floating
+    .nav_menu {
+    flex: 0 0 auto;
+  }
+  [data-component='nav'][data-nav-center='True']
+    [data-nav-inner].is-floating
+    .nav_menu-inner {
+    width: auto;
+    justify-content: flex-start;
+    gap: var(--nav-center-gap, 2.5rem);
+  }
+}
+
+/* — Mobile / tablet (≤ 991px): full width, floats down via transform (cheap composited
+   paint the address-bar resize can't perturb — margin/Flip would jump). Glass only. — */
+@media (max-width: 991px) {
+  [data-component='nav'] [data-nav-inner] {
+    transition:
+      transform var(--nav-morph) var(--nav-ease),
+      padding var(--nav-morph) var(--nav-ease);
+  }
+  [data-component='nav'] [data-nav-inner].is-floating {
+    transform: translateY(calc(var(--nav-float-top) - var(--nav-rest-top)));
+    padding-left: var(--nav-float-pad-x);
+    padding-right: var(--nav-float-pad-x);
   }
 
   /* Open mobile menu — same glass as the pill. Webflow relocates .w-nav-menu into

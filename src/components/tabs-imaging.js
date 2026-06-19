@@ -1,18 +1,17 @@
 /*
   Component: tabs-imaging · data-component="tabs-imaging"
-  Autoplay tabs (same engine as tabs-architected): on switch the incoming image wipes
-  open (clip-path) while its content de-blurs in; the active underline fills as a
-  progress bar, then advances. Starts on scroll-in, pauses on hover, restarts on click.
+  Tabs (NO autoplay) — click/keyboard switches; on switch the incoming image wipes open
+  (clip-path) while its content de-blurs in. Only the ACTIVE link is underlined (a black
+  bar that slides in); the rest show none.
   CSS → ./styles/tabs-imaging.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-imaging.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
 
 const { gsap } = window
-const ScrollTrigger = window.ScrollTrigger
 
 const ACTIVE_CLASS = 'is-active'
-const AUTOPLAY_DURATION = 5 // seconds per tab
+const UNDERLINE = { duration: 0.45, ease: 'power2.out' } // active-underline grow/clear
 
 // Image: vertical clip-path wipe (top→bottom). Flip the inset() sides to reverse.
 const IMG_CLIP_HIDDEN = 'inset(0% 0% 100% 0%)' // clipped from the bottom
@@ -50,9 +49,9 @@ function setupTabs(root) {
 
   const count = Math.min(links.length, panels.length)
 
-  // Turn each underline into a grey TRACK + inject a black FILL child that scales 0→1.
-  // The fill is cumulative across tabs (see setStaticFills) so the row reads as total
-  // autoplay progress. Reduced motion skips track/fill; `bars` = the fill children.
+  // Inject a black fill into each underline + expand the rail (is-track). Only the
+  // ACTIVE link's fill is shown (scaleX 1); the rest stay 0 — so just the active tab
+  // is underlined. Reduced motion skips track/fill (CSS shows the active underline).
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-imaging_tab-link-underline')
     if (!track || reduceMotion.matches) return null
@@ -75,9 +74,6 @@ function setupTabs(root) {
 
   let activeIndex = -1
   let isAnimating = false
-  let progressTween = null
-  let started = false // autoplay has been kicked off (section reached)
-  let paused = false // hover pause
 
   // Accessibility scaffolding — tablist / tab / tabpanel with roving tabindex.
   root
@@ -96,40 +92,21 @@ function setupTabs(root) {
     panel.setAttribute('aria-labelledby', linkId)
   })
 
-  // Cumulative fills: tabs before the active one stay full, the ones after stay empty
-  // (the active one is animated separately). The row = total autoplay progress.
-  const setStaticFills = (index) => {
+  // Underline only the active tab: its fill scales to 1, every other to 0 (smooth).
+  const setActiveUnderline = (index) => {
     bars.forEach((bar, k) => {
-      if (!bar || k === index) return
-      gsap.set(bar, {
-        scaleX: k < index ? 1 : 0,
+      if (!bar) return
+      gsap.to(bar, {
+        scaleX: k === index ? 1 : 0,
         transformOrigin: 'left center',
+        ...UNDERLINE,
       })
-    })
-  }
-
-  // Fill the active tab's underline over AUTOPLAY_DURATION, then advance.
-  function startProgress(index) {
-    if (progressTween) progressTween.kill()
-    setStaticFills(index)
-    const bar = bars[index]
-    if (!bar || reduceMotion.matches) return
-
-    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
-    progressTween = gsap.to(bar, {
-      scaleX: 1,
-      duration: AUTOPLAY_DURATION,
-      ease: 'none',
-      onComplete: () => {
-        if (!isAnimating) switchTab((index + 1) % count)
-      },
     })
   }
 
   function switchTab(index) {
     if (isAnimating || index === activeIndex) return
     isAnimating = true
-    if (progressTween) progressTween.kill()
 
     const outLink = links[activeIndex]
     const outPanel = panels[activeIndex]
@@ -146,13 +123,7 @@ function setupTabs(root) {
     inLink.setAttribute('aria-selected', 'true')
     inLink.setAttribute('tabindex', '0')
 
-    // Start the fill immediately (in parallel with the reveal). Always create the tween
-    // — even when hovered — so a click while the cursor is over the section still leaves
-    // a live tween to resume on mouseleave; pause it right away if currently hovered.
-    if (started) {
-      startProgress(index)
-      if (paused && progressTween) progressTween.pause()
-    }
+    setActiveUnderline(index)
 
     const inParts = parts[index]
 
@@ -186,8 +157,8 @@ function setupTabs(root) {
     }
   }
 
-  // Reduced motion: no crossfade, no progress, no autoplay. Panels toggle
-  // instantly via autoAlpha; click/keyboard only.
+  // Reduced motion: no crossfade. Panels toggle instantly via autoAlpha; the active
+  // underline shows via CSS.
   function switchTabInstant(index) {
     if (index === activeIndex) return
     panels.forEach((p, i) => {
@@ -207,13 +178,13 @@ function setupTabs(root) {
   const goTo = (index) =>
     reduceMotion.matches ? switchTabInstant(index) : switchTab(index)
 
-  // Initial state: first tab visible, rest hidden (before paint, no CLS). Clear any
-  // pre-existing active classes so exactly one tab/panel is active.
+  // Initial state: first tab visible + underlined, rest hidden (before paint, no CLS).
   links.forEach((link) => link.classList.remove(ACTIVE_CLASS))
   panels.forEach((panel) => panel.classList.remove(ACTIVE_CLASS))
   gsap.set(panels, { autoAlpha: 0 })
   gsap.set(panels[0], { autoAlpha: 1 })
   gsap.set(bars.filter(Boolean), { scaleX: 0, transformOrigin: 'left center' })
+  if (bars[0]) gsap.set(bars[0], { scaleX: 1, transformOrigin: 'left center' })
   links[0].classList.add(ACTIVE_CLASS)
   panels[0].classList.add(ACTIVE_CLASS)
   links.forEach((link, i) => {
@@ -222,7 +193,7 @@ function setupTabs(root) {
   })
   activeIndex = 0
 
-  // Click — switch and (re)start the autoplay cycle from there.
+  // Click — switch to the clicked tab.
   const onClick = links.map((link, i) => {
     const handler = () => {
       if (i === activeIndex) return
@@ -254,42 +225,9 @@ function setupTabs(root) {
   }
   root.addEventListener('keydown', onKeydown)
 
-  // Hover pause / resume (skipped under reduced motion — no autoplay to pause).
-  const onEnter = () => {
-    paused = true
-    if (progressTween) progressTween.pause()
-  }
-  const onLeave = () => {
-    paused = false
-    if (started && progressTween) progressTween.resume()
-  }
-  if (!reduceMotion.matches) {
-    root.addEventListener('mouseenter', onEnter)
-    root.addEventListener('mouseleave', onLeave)
-  }
-
-  // Autoplay starts when the section enters the viewport (not on load).
-  let trigger = null
-  if (!reduceMotion.matches) {
-    trigger = ScrollTrigger.create({
-      trigger: root,
-      start: 'top 80%',
-      once: true,
-      onEnter: () => {
-        started = true
-        startProgress(activeIndex)
-        if (paused && progressTween) progressTween.pause()
-      },
-    })
-  }
-
   return {
     destroy() {
-      if (progressTween) progressTween.kill()
-      if (trigger) trigger.kill()
       root.removeEventListener('keydown', onKeydown)
-      root.removeEventListener('mouseenter', onEnter)
-      root.removeEventListener('mouseleave', onLeave)
       links.forEach((link, i) => link.removeEventListener('click', onClick[i]))
     },
   }
@@ -299,13 +237,10 @@ function setupTabs(root) {
  * @param {HTMLElement[]} elements - All elements matching [data-component='tabs-imaging']
  */
 export default function (elements) {
-  if (!gsap || !ScrollTrigger) {
-    console.warn(
-      '[tabs-imaging] GSAP / ScrollTrigger not found on window — skipping'
-    )
+  if (!gsap) {
+    console.warn('[tabs-imaging] GSAP not found on window — skipping')
     return
   }
-  gsap.registerPlugin(ScrollTrigger)
 
   elements.map(setupTabs).filter(Boolean)
 }
