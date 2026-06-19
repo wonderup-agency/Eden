@@ -37,6 +37,18 @@ const HOVER_PUSH_PX = 26 // push distance
 const HOVER_EASE_IN = 0.15 // ease toward pushed position
 const HOVER_EASE_OUT = 0.06 // ease back to rest
 
+// "Water" mode (data-scroll-morph-mode="water"): no ring assembly. Real momentum —
+// the cursor transfers velocity to nearby points, they coast by inertia (friction
+// only, NO spring back to origin), bounce off the section edges and come to rest
+// wherever they end up. Move the cursor through them and they scatter to the
+// extremes and stay there. Positions/velocities here are in cloud-space (same units
+// as the drawn `bx`, where the section half-extent is `coverX/Y * SCATTER`).
+const WATER_HOVER_RADIUS_PX = 200 // cursor influence radius
+const WATER_PUSH = 0.012 // radial impulse per frame while in range (push away from cursor)
+const WATER_FLOW = 0.9 // drag along the cursor's direction of travel (the wake)
+const WATER_FRICTION = 0.95 // coasting friction (<1) — lower stops sooner, higher drifts longer
+const WATER_BOUNCE = 0.5 // velocity kept when a point hits a section edge
+
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
 // Deterministic RNG so the ring is stable across reloads.
@@ -83,6 +95,12 @@ function setupRoot(root) {
   const message = messages[0]
   messages.slice(1).forEach((m) => (m.style.display = 'none'))
 
+  // "water" mode: no ring assembly — the cursor shoves points and they coast by
+  // inertia to the extremes (no spring back). See the WATER_* constants + draw().
+  const waterMode = root.getAttribute('data-scroll-morph-mode') === 'water'
+  const hoverRadiusPx = waterMode ? WATER_HOVER_RADIUS_PX : HOVER_RADIUS_PX
+  const hoverPushPx = HOVER_PUSH_PX // default-mode push distance (water uses WATER_PUSH)
+
   // No GSAP / ScrollTrigger / reduced motion → static, readable layout.
   if (!gsap || !ScrollTrigger || reduceMotion.matches) {
     setupStatic(root, message)
@@ -107,8 +125,10 @@ function setupRoot(root) {
   const scatterY = new Float32Array(N)
   const velX = new Float32Array(N) // dispersed drift velocity (unit/frame)
   const velY = new Float32Array(N)
-  const offX = new Float32Array(N) // eased hover push offset (normalized)
+  const offX = new Float32Array(N) // hover push offset (normalized)
   const offY = new Float32Array(N)
+  const voffX = new Float32Array(N) // offset velocity (water mode momentum)
+  const voffY = new Float32Array(N)
   const assembleDelay = new Float32Array(N)
   let ringExt = 1 // max |coord| of the static ring (for auto-fit)
 
@@ -125,6 +145,8 @@ function setupRoot(root) {
   let hovActive = false
   let mx = 0
   let my = 0
+  let pmx = 0 // previous-frame cursor (water: drag direction = mx-pmx)
+  let pmy = 0
 
   function buildPointBuffers() {
     const rng = mulberry32(7)
@@ -142,11 +164,13 @@ function setupRoot(root) {
           : SMALL_R[0] + rng() * (SMALL_R[1] - SMALL_R[0])
       baseAlpha[i] = ALPHA_MIN + rng() * (ALPHA_MAX - ALPHA_MIN)
       // Dispersed start: random across the section, slow drifting velocity.
+      // Water mode keeps them fixed at their initial position (no drift) — the
+      // cursor is the only thing that moves them.
       scatterX[i] = rng() * 2 - 1
       scatterY[i] = rng() * 2 - 1
       const da = rng() * Math.PI * 2
-      velX[i] = Math.cos(da) * SCATTER_DRIFT
-      velY[i] = Math.sin(da) * SCATTER_DRIFT
+      velX[i] = waterMode ? 0 : Math.cos(da) * SCATTER_DRIFT
+      velY[i] = waterMode ? 0 : Math.sin(da) * SCATTER_DRIFT
       assembleDelay[i] = rng() * STAGGER
       const ax = Math.abs(Math.cos(a) * r)
       const ay = Math.abs(Math.sin(a) * r)
@@ -168,6 +192,18 @@ function setupRoot(root) {
     scale = (Math.min(cssW * 0.5, cssH * 0.5) / ringExt) * FIT
     coverX = scale ? (cssW * 0.5) / scale : 1
     coverY = scale ? (cssH * 0.5) / scale : 1
+    // Water mode: seed each point's live position from its dispersed start (cloud-space)
+    // and reset velocity. Re-seeds on resize (rare) so positions stay inside the bounds.
+    if (waterMode) {
+      const bxMax = coverX * SCATTER
+      const byMax = coverY * SCATTER
+      for (let i = 0; i < N; i++) {
+        offX[i] = scatterX[i] * bxMax
+        offY[i] = scatterY[i] * byMax
+        voffX[i] = 0
+        voffY[i] = 0
+      }
+    }
     if (ready) draw()
   }
 
@@ -182,11 +218,65 @@ function setupRoot(root) {
     const covX = coverX * SCATTER
     const covY = coverY * SCATTER
     // Hover influence expressed in normalized units (keeps the px feel at any scale).
-    const hr = scale ? HOVER_RADIUS_PX / scale : 0
+    const hr = scale ? hoverRadiusPx / scale : 0
     const hr2 = hr * hr
-    const hpush = scale ? HOVER_PUSH_PX / scale : 0
+    const hpush = scale ? hoverPushPx / scale : 0
+    // Cursor travel since last frame (normalized) — drags points along in water mode.
+    const cvx = waterMode ? mx - pmx : 0
+    const cvy = waterMode ? my - pmy : 0
+    pmx = mx
+    pmy = my
     ctx.fillStyle = `rgb(${DOT_COLOR})`
     for (let i = 0; i < N; i++) {
+      // Water mode: real inertia. offX/offY ARE the point's live position (cloud-space)
+      // and voffX/voffY its velocity. The cursor adds velocity (push away + drag along
+      // its motion); friction bleeds it off; edges bounce. No restoring force — points
+      // travel and settle wherever they stop, never returning to their origin.
+      if (waterMode) {
+        let x = offX[i]
+        let y = offY[i]
+        let vx = voffX[i]
+        let vy = voffY[i]
+        if (hovActive) {
+          const ddx = x - mx
+          const ddy = y - my
+          const d2 = ddx * ddx + ddy * ddy
+          if (d2 < hr2) {
+            const d = Math.sqrt(d2) || 1e-4
+            const force = (hr - d) / hr
+            vx += (ddx / d) * force * WATER_PUSH + cvx * force * WATER_FLOW
+            vy += (ddy / d) * force * WATER_PUSH + cvy * force * WATER_FLOW
+          }
+        }
+        vx *= WATER_FRICTION
+        vy *= WATER_FRICTION
+        x += vx
+        y += vy
+        if (x < -covX) {
+          x = -covX
+          vx = -vx * WATER_BOUNCE
+        } else if (x > covX) {
+          x = covX
+          vx = -vx * WATER_BOUNCE
+        }
+        if (y < -covY) {
+          y = -covY
+          vy = -vy * WATER_BOUNCE
+        } else if (y > covY) {
+          y = covY
+          vy = -vy * WATER_BOUNCE
+        }
+        offX[i] = x
+        offY[i] = y
+        voffX[i] = vx
+        voffY[i] = vy
+        ctx.globalAlpha = baseAlpha[i]
+        ctx.beginPath()
+        ctx.arc(cx + x * scale, cy + y * scale, pointR[i], 0, Math.PI * 2)
+        ctx.fill()
+        continue
+      }
+
       // Slow drifting scatter that bounces off the section edges.
       let sxu = scatterX[i] + velX[i]
       let syu = scatterY[i] + velY[i]
@@ -223,7 +313,8 @@ function setupRoot(root) {
       const bx = dispX + (ringX - dispX) * pp
       const by = dispY + (ringY - dispY) * pp
 
-      // Hover push: dots within the cursor radius are pushed away, eased back.
+      // Hover push (default mode): dots within the cursor radius are pushed away,
+      // eased toward the pushed position and eased back to rest on leave.
       let txo = 0
       let tyo = 0
       if (hovActive) {
@@ -291,6 +382,13 @@ function setupRoot(root) {
     })
   }
 
+  // Water mode: no reveal timeline, no ScrollTrigger — the cloud holds its dispersed
+  // start state (form.t = 0) and is only ever moved by the cursor.
+  function buildWater() {
+    gsap.set(message, { autoAlpha: 1 })
+    gsap.set(form, { t: 0 })
+  }
+
   // ---- Boot: build the ring, then arm the scene ----
   function boot() {
     buildPointBuffers()
@@ -299,7 +397,8 @@ function setupRoot(root) {
     // first and the canvas sizes against the collapsed track → ring renders as an ellipse.
     root.classList.add('is-canvas')
     resize()
-    buildReveal()
+    if (waterMode) buildWater()
+    else buildReveal()
     root.classList.add('is-ready') // lift the anti-FOUC gate
     ensureLoop()
   }

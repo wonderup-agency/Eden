@@ -14,6 +14,18 @@
 
 export default [
   {
+    selector: "[data-component='compouding']",
+    importFn: () => import('./components/compouding.js'),
+  },
+  {
+    selector: "[data-component='tabs-foundation-model']",
+    importFn: () => import('./components/tabs-foundation-model.js'),
+  },
+  {
+    selector: "[data-component='tabs-imaging']",
+    importFn: () => import('./components/tabs-imaging.js'),
+  },
+  {
     selector: "[data-component='lightbox']",
     importFn: () => import('./components/lightbox.js'),
   },

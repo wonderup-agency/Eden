@@ -1,0 +1,137 @@
+/* ===== COMPOUDING · paradigm-clone autoplay tabs (ring + underline progress) — paste into Webflow head ===== */
+/* Self-contained (scoped to the root) so it doesn't depend on paradigm.css. Hooks → compouding.md. */
+
+/* — Root — */
+[data-component='compouding'] {
+  position: relative;
+  overflow: hidden;
+}
+
+/* — Progress ring (circular) — */
+[data-component='compouding'] .tabs_progress-ring {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+
+/* The injected SVG replaces the original CSS fill div */
+[data-component='compouding'].is-enhanced .tabs_progress-inner {
+  display: none;
+}
+
+[data-component='compouding'] .tabs-compouding_progress-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible; /* let the arc glow spill past the svg box */
+  pointer-events: none;
+}
+
+[data-component='compouding'] .tabs-compouding_progress-track {
+  stroke: var(--base--grey-line, #e2e2e2);
+}
+
+[data-component='compouding'] .tabs-compouding_progress-arc {
+  stroke: var(--base--gold, #f7c661);
+  stroke-linecap: round;
+  transform: rotate(-90deg); /* start the fill from 12 o'clock */
+  transform-box: fill-box;
+  transform-origin: center;
+  /* Gold glow → injected SVG <filter> (explicit region, no clip). See compouding.js. */
+}
+
+/* Numbers stack centred in the ring; only the active one shows */
+[data-component='compouding'] .tabs_progress-number {
+  grid-area: 1 / 1;
+  z-index: 1;
+  opacity: 0;
+}
+[data-component='compouding'] .tabs_progress-number:first-child,
+[data-component='compouding'] .tabs_progress-number.is-active {
+  opacity: 1;
+}
+
+/* Clickable progress controls (enhanced only): ring advances, numbers jump */
+[data-component='compouding'].is-enhanced [data-paradigm='progress-ring'],
+[data-component='compouding'].is-enhanced [data-paradigm='tab-link'] {
+  cursor: pointer;
+}
+
+/* — Text messages (stacked, one shown at a time) — */
+[data-component='compouding'] [data-paradigm-messages] {
+  display: grid;
+}
+[data-component='compouding'] [data-compunding='tab-title'] {
+  grid-area: 1 / 1;
+}
+
+/* — Underline progress (grey baseline styled in Webflow; only the fill is ours) — */
+[data-component='compouding'] .tabs_number-underline {
+  overflow: hidden;
+}
+[data-component='compouding'] .tabs_number-underline-fill {
+  width: 100%;
+  height: 100%;
+  background: var(--base--black, #000);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+
+/* — Visuals (stacked; crossfade fallback OR injected point-cloud canvas) — */
+[data-component='compouding'] .tabs-compouding_visual-wrapper {
+  position: relative; /* anchor the absolute canvas */
+  display: grid;
+}
+[data-component='compouding'] [data-paradigm-visual] {
+  grid-area: 1 / 1;
+}
+
+/* Canvas mode: the cloud owns the stage; source images are hidden but keep their
+   layout height so the wrapper doesn't collapse (canvas is sized to it). The cloud
+   represents every state, so the source <img>s never show. */
+[data-component='compouding'].is-canvas [data-paradigm-visual] {
+  visibility: hidden;
+}
+[data-component='compouding'] .tabs-compouding_pointcloud {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+[data-component='compouding'].is-canvas .tabs-compouding_pointcloud {
+  pointer-events: auto; /* hover nebula needs the cursor over the canvas */
+}
+
+/* Flow-tab overlay (an <img> with the tags, or HTML pills) — sits above the canvas;
+   JS fades it in only while the flow tab is active. Place it INSIDE the visual
+   wrapper so it shares the stacking context and lands over the dots. pointer-events
+   off so the cursor still reaches the flowing dots underneath (set auto if the tags
+   need to be clickable). Position it in Webflow. */
+[data-component='compouding'] [data-compouding-overlay] {
+  position: relative;
+  z-index: 2;
+  pointer-events: none;
+}
+
+/* — Fallback (no JS / reduced motion): show only the first / active tab — */
+[data-component='compouding']:not(.is-enhanced) [data-compunding='tab-title'],
+[data-component='compouding']:not(.is-enhanced) [data-paradigm-visual] {
+  opacity: 0;
+}
+[data-component='compouding']:not(.is-enhanced)
+  [data-compunding='tab-title']:first-child,
+[data-component='compouding']:not(.is-enhanced)
+  [data-compunding='tab-title'].is-active,
+[data-component='compouding']:not(.is-enhanced)
+  [data-paradigm-visual]:first-child,
+[data-component='compouding']:not(.is-enhanced)
+  [data-paradigm-visual].is-active {
+  opacity: 1;
+}
+[data-component='compouding'].is-static .tabs_number-underline-fill {
+  transform: scaleX(1);
+}
