@@ -129,7 +129,7 @@
   }
 }
 
-/* ===== PARADIGM · autoplay tabs (ring + underline progress) — paste into Webflow head ===== */
+/* ===== PARADIGM · autoplay tabs (underline progress) — paste into Webflow head ===== */
 
 /* Root */
 [data-component='paradigm'] {
@@ -137,46 +137,7 @@
   overflow: hidden;
 }
 
-/* Progress ring (circular) */
-.tabs_progress-ring {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-[data-component='paradigm'].is-enhanced .tabs_progress-inner {
-  display: none;
-}
-.tabs-paradigm_progress-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible; /* let the arc glow spill past the svg box */
-  pointer-events: none;
-}
-.tabs-paradigm_progress-track {
-  stroke: var(--base--grey-line, #e2e2e2);
-}
-.tabs-paradigm_progress-arc {
-  stroke: var(--base--gold, #f7c661);
-  stroke-linecap: round;
-  transform: rotate(-90deg); /* start the fill from 12 o'clock */
-  transform-box: fill-box;
-  transform-origin: center;
-  /* Gold glow → injected SVG <filter> (explicit region, no clip). See paradigm.js. */
-}
-.tabs_progress-number {
-  grid-area: 1 / 1;
-  z-index: 1;
-  opacity: 0;
-}
-.tabs_progress-number:first-child,
-.tabs_progress-number.is-active {
-  opacity: 1;
-}
-
-/* Clickable progress controls (enhanced only): ring advances, numbers jump */
-[data-component='paradigm'].is-enhanced [data-paradigm='progress-ring'],
+/* Clickable menu numbers (enhanced only): each jumps to its tab */
 [data-component='paradigm'].is-enhanced [data-paradigm='tab-link'] {
   cursor: pointer;
 }
@@ -230,7 +191,7 @@
   opacity: 1;
 }
 
-/* ===== COMPOUDING · paradigm-clone autoplay tabs (ring + underline progress) — paste into Webflow head ===== */
+/* ===== COMPOUDING · paradigm-clone autoplay tabs (underline progress) — paste into Webflow head ===== */
 /* Self-contained (scoped to the root) so it doesn't depend on the PARADIGM block. Hooks → compouding.md. */
 
 [data-component='compouding'] {
@@ -238,45 +199,7 @@
   overflow: hidden;
 }
 
-/* Progress ring (circular) */
-[data-component='compouding'] .tabs_progress-ring {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-[data-component='compouding'].is-enhanced .tabs_progress-inner {
-  display: none;
-}
-[data-component='compouding'] .tabs-compouding_progress-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-  pointer-events: none;
-}
-[data-component='compouding'] .tabs-compouding_progress-track {
-  stroke: var(--base--grey-line, #e2e2e2);
-}
-[data-component='compouding'] .tabs-compouding_progress-arc {
-  stroke: var(--base--gold, #f7c661);
-  stroke-linecap: round;
-  transform: rotate(-90deg);
-  transform-box: fill-box;
-  transform-origin: center;
-}
-[data-component='compouding'] .tabs_progress-number {
-  grid-area: 1 / 1;
-  z-index: 1;
-  opacity: 0;
-}
-[data-component='compouding'] .tabs_progress-number:first-child,
-[data-component='compouding'] .tabs_progress-number.is-active {
-  opacity: 1;
-}
-
-/* Clickable progress controls (enhanced only) */
-[data-component='compouding'].is-enhanced [data-paradigm='progress-ring'],
+/* Clickable menu numbers (enhanced only): each jumps to its tab */
 [data-component='compouding'].is-enhanced [data-paradigm='tab-link'] {
   cursor: pointer;
 }
@@ -881,6 +804,11 @@ html.js-anim [data-component='scroll-morph'].is-ready {
    PhotoSwipe's CORE css is loaded separately from the CDN <link> in the head — see the doc.
    Hooks → .claude/rules/components/lightbox.md */
 
+/* Sit above any fixed page chrome (TOC, social rail, citation back-links). */
+.pswp {
+  z-index: 200000;
+}
+
 /* Clickable affordance on article images. */
 [data-component='lightbox'] .lightbox_img {
   cursor: zoom-in;
@@ -914,16 +842,73 @@ html.js-anim [data-component='scroll-morph'].is-ready {
   display: none;
 }
 
-/* Custom buttons reuse PhotoSwipe's .pswp__button sizing; just center the glyph. */
+/* Custom buttons reuse PhotoSwipe's .pswp__button sizing; flex-center the glyph
+   so the unicode chars (⬇ ↗ ⓘ) and the <a> download button align with the rest. */
 .pswp__button--info,
 .pswp__button--download,
 .pswp__button--share {
-  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
   line-height: 1;
+  text-decoration: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .pswp__caption-panel {
     transition: none;
   }
+}
+
+/* ===== TOC · article table of contents (accordion + scrollspy) — paste into Webflow head ===== */
+/* Self-contained — the component injects its own toc_* markup (decoupled from the
+   Finsweet/Relume content27 template), so the whole TOC look lives here. The label keeps
+   the global .text-size-regular class for type sizing.
+   Hooks → .claude/rules/components/toc.md */
+
+/* — List — */
+[data-component='toc'] .toc_item {
+  display: block;
+}
+
+/* — Links (left rail + active indicator) — */
+[data-component='toc'] .toc_link {
+  display: block;
+  padding: 0.4rem 0 0.4rem 1rem;
+  border-left: 2px solid var(--base--grey-line, #e4e2dc);
+  color: var(--base--grey, #8a8f98);
+  text-decoration: none;
+  line-height: 1.35;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+[data-component='toc'] .toc_link:hover {
+  color: var(--base--black, #15110c);
+}
+[data-component='toc'] .toc_link.current {
+  color: var(--base--black, #15110c);
+  border-left-color: var(--base--black, #15110c);
+}
+
+/* Indent per heading level (H3/H4 nested under their H2/H3). */
+[data-component='toc'] .toc_item.is-h3 > .toc_link {
+  padding-left: 2rem;
+}
+[data-component='toc'] .toc_item.is-h4 > .toc_link {
+  padding-left: 3rem;
+}
+
+/* — Accordion — */
+/* Collapsible branch the scrollspy opens/closes (GSAP animates its height). */
+[data-component='toc'] .toc_children {
+  overflow: hidden;
+}
+
+/* — Scroll target clearance — */
+/* Native anchor jumps (mobile / reduced-motion) land below the fixed nav.
+   Desktop smooth scroll already offsets via the global Lenis bridge. */
+[data-component='toc'] [data-toc-target] {
+  scroll-margin-top: 6rem;
 }

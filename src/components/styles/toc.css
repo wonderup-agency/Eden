@@ -1,0 +1,51 @@
+/* ===== TOC · article table of contents (accordion + scrollspy) — paste into Webflow head ===== */
+/* Self-contained — the component injects its own toc_* markup (decoupled from the
+   Finsweet/Relume content27 template), so the whole TOC look lives here. The label keeps
+   the global .text-size-regular class for type sizing.
+   Hooks → .claude/rules/components/toc.md */
+
+/* — List — */
+[data-component='toc'] .toc_item {
+  display: block;
+}
+
+/* — Links (left rail + active indicator) — */
+[data-component='toc'] .toc_link {
+  display: block;
+  padding: 0.4rem 0 0.4rem 1rem;
+  border-left: 2px solid var(--base--grey-line, #e4e2dc);
+  color: var(--base--grey, #8a8f98);
+  text-decoration: none;
+  line-height: 1.35;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease;
+}
+[data-component='toc'] .toc_link:hover {
+  color: var(--base--black, #15110c);
+}
+[data-component='toc'] .toc_link.current {
+  color: var(--base--black, #15110c);
+  border-left-color: var(--base--black, #15110c);
+}
+
+/* Indent per heading level (H3/H4 nested under their H2/H3). */
+[data-component='toc'] .toc_item.is-h3 > .toc_link {
+  padding-left: 2rem;
+}
+[data-component='toc'] .toc_item.is-h4 > .toc_link {
+  padding-left: 3rem;
+}
+
+/* — Accordion — */
+/* Collapsible branch the scrollspy opens/closes (GSAP animates its height). */
+[data-component='toc'] .toc_children {
+  overflow: hidden;
+}
+
+/* — Scroll target clearance — */
+/* Native anchor jumps (mobile / reduced-motion) land below the fixed nav.
+   Desktop smooth scroll already offsets via the global Lenis bridge. */
+[data-component='toc'] [data-toc-target] {
+  scroll-margin-top: 6rem;
+}

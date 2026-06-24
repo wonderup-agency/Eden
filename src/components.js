@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='toc']",
+    importFn: () => import('./components/toc.js'),
+  },
+  {
     selector: "[data-component='compouding']",
     importFn: () => import('./components/compouding.js'),
   },

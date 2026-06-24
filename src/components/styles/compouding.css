@@ -1,4 +1,4 @@
-/* ===== COMPOUDING · paradigm-clone autoplay tabs (ring + underline progress) — paste into Webflow head ===== */
+/* ===== COMPOUDING · paradigm-clone autoplay tabs (underline progress) — paste into Webflow head ===== */
 /* Self-contained (scoped to the root) so it doesn't depend on paradigm.css. Hooks → compouding.md. */
 
 /* — Root — */
@@ -7,53 +7,7 @@
   overflow: hidden;
 }
 
-/* — Progress ring (circular) — */
-[data-component='compouding'] .tabs_progress-ring {
-  position: relative;
-  display: grid;
-  place-items: center;
-}
-
-/* The injected SVG replaces the original CSS fill div */
-[data-component='compouding'].is-enhanced .tabs_progress-inner {
-  display: none;
-}
-
-[data-component='compouding'] .tabs-compouding_progress-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible; /* let the arc glow spill past the svg box */
-  pointer-events: none;
-}
-
-[data-component='compouding'] .tabs-compouding_progress-track {
-  stroke: var(--base--grey-line, #e2e2e2);
-}
-
-[data-component='compouding'] .tabs-compouding_progress-arc {
-  stroke: var(--base--gold, #f7c661);
-  stroke-linecap: round;
-  transform: rotate(-90deg); /* start the fill from 12 o'clock */
-  transform-box: fill-box;
-  transform-origin: center;
-  /* Gold glow → injected SVG <filter> (explicit region, no clip). See compouding.js. */
-}
-
-/* Numbers stack centred in the ring; only the active one shows */
-[data-component='compouding'] .tabs_progress-number {
-  grid-area: 1 / 1;
-  z-index: 1;
-  opacity: 0;
-}
-[data-component='compouding'] .tabs_progress-number:first-child,
-[data-component='compouding'] .tabs_progress-number.is-active {
-  opacity: 1;
-}
-
-/* Clickable progress controls (enhanced only): ring advances, numbers jump */
-[data-component='compouding'].is-enhanced [data-paradigm='progress-ring'],
+/* Clickable menu numbers (enhanced only): each jumps to its tab */
 [data-component='compouding'].is-enhanced [data-paradigm='tab-link'] {
   cursor: pointer;
 }

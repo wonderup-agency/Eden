@@ -1,6 +1,6 @@
 /*
   Component: compouding · data-component="compouding"
-  Paradigm chrome (ring + underline + numbers + per-tab de-blur text + autoplay) with a
+  Paradigm chrome (underline + per-tab de-blur text + autoplay) with a
   tabs-stats-style POINT-CLOUD for the visuals: each visual PNG is sampled to ~7k points
   and the cloud morphs between states on every tab switch (intro float-in, residual
   shimmer, radial breathing, desktop hover-nebula). Falls back to an image crossfade if
@@ -13,14 +13,9 @@ import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
 
 const { gsap } = window
 
-// ---- Chrome (ring + underline + text) ----
+// ---- Chrome (underline + text) ----
 const AUTOPLAY_DURATION = 5 // seconds per tab
 const OUT_FADE = 0.3 // outgoing text fade
-const TRACK_STROKE = 2.5 // grey ring baseline (viewBox 0 0 100 100)
-const ARC_STROKE = 6 // gold ring fill
-const GLOW_PAD = 8 // inset so the gold glow fits inside the viewBox
-const RING_STEP = 0.6 // ring step transition between tabs
-const GLOW_COLOR = '#f7c661' // gold arc glow (Figma F7C661)
 
 // ---- Point cloud (visuals — sampled + morphed, same engine as tabs-stats) ----
 const TARGET_POINTS = 9500 // points per state — same for all, for a 1:1 morph (denser cloud)
@@ -59,7 +54,6 @@ const INTRO_HOLD = 1.0
 const INTRO_DURATION = 1.6
 const INTRO_STAGGER = 0.5
 
-const SVGNS = 'http://www.w3.org/2000/svg'
 const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
 
 // Outgoing tab: plain fade. The de-blur lives on the words, never the parent.
@@ -74,41 +68,6 @@ function mulberry32(seed) {
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296
   }
-}
-
-// ---- Ring SVG helpers ----
-function circle(cls, r, strokeWidth) {
-  const c = document.createElementNS(SVGNS, 'circle')
-  c.setAttribute('class', cls)
-  c.setAttribute('cx', '50')
-  c.setAttribute('cy', '50')
-  c.setAttribute('r', String(r))
-  c.setAttribute('fill', 'none')
-  c.setAttribute('stroke-width', String(strokeWidth))
-  return c
-}
-function dropShadow(blur, opacity) {
-  const fe = document.createElementNS(SVGNS, 'feDropShadow')
-  fe.setAttribute('dx', '0')
-  fe.setAttribute('dy', '0')
-  fe.setAttribute('stdDeviation', String(blur))
-  fe.setAttribute('flood-color', GLOW_COLOR)
-  fe.setAttribute('flood-opacity', String(opacity))
-  return fe
-}
-function glowFilter(id) {
-  const filter = document.createElementNS(SVGNS, 'filter')
-  filter.setAttribute('id', id)
-  filter.setAttribute('x', '-50%')
-  filter.setAttribute('y', '-50%')
-  filter.setAttribute('width', '200%')
-  filter.setAttribute('height', '200%')
-  filter.setAttribute('color-interpolation-filters', 'sRGB')
-  filter.appendChild(dropShadow(2.5, 0.9))
-  filter.appendChild(dropShadow(5, 0.55))
-  const defs = document.createElementNS(SVGNS, 'defs')
-  defs.appendChild(filter)
-  return defs
 }
 
 // ---- Point-cloud sampling (verbatim from tabs-stats) ----
@@ -186,11 +145,7 @@ function sampleImage(img, n, rng) {
   return { x, y, a, bbox: { minX, minY, maxX, maxY } }
 }
 
-function setupRoot(root, rootIndex) {
-  const ring = root.querySelector('[data-paradigm="progress-ring"]')
-  const numbers = gsap.utils.toArray(
-    root.querySelectorAll('.tabs_progress-number')
-  )
+function setupRoot(root) {
   const titles = gsap.utils.toArray(
     root.querySelectorAll('[data-compunding="tab-title"]')
   )
@@ -218,28 +173,6 @@ function setupRoot(root, rootIndex) {
   root.classList.add('is-enhanced')
 
   const wordsByTab = messages.slice(0, count).map(splitElement)
-
-  // Inject the ring SVG (track + progress arc).
-  let progressCircle = null
-  let circumference = 0
-  if (ring) {
-    const r = (100 - ARC_STROKE) / 2 - GLOW_PAD
-    circumference = 2 * Math.PI * r
-    const svg = document.createElementNS(SVGNS, 'svg')
-    svg.setAttribute('class', 'tabs-compouding_progress-svg')
-    svg.setAttribute('viewBox', '0 0 100 100')
-    svg.setAttribute('aria-hidden', 'true')
-    svg.style.overflow = 'visible'
-    const glowId = 'compouding-glow-' + rootIndex
-    svg.appendChild(glowFilter(glowId))
-    svg.appendChild(circle('tabs-compouding_progress-track', r, TRACK_STROKE))
-    progressCircle = circle('tabs-compouding_progress-arc', r, ARC_STROKE)
-    progressCircle.setAttribute('filter', `url(#${glowId})`)
-    progressCircle.style.strokeDasharray = String(circumference)
-    progressCircle.style.strokeDashoffset = String(circumference)
-    svg.appendChild(progressCircle)
-    ring.insertBefore(svg, ring.firstChild)
-  }
 
   // Initial states. Visuals start hidden either way (the canvas paints them in cloud
   // mode; crossfade toggles them in fallback mode).
@@ -698,11 +631,10 @@ function setupRoot(root, rootIndex) {
     }
   }
 
-  // ===================== Paradigm chrome (ring + underline + text + autoplay) =========
+  // ===================== Paradigm chrome (underline + text + autoplay) =========
   let index = 0
   let started = false
   let progressTl = null
-  let ringTween = null
   let onScreen = false
   let hover = false
   let docVisible = !document.hidden
@@ -713,40 +645,7 @@ function setupRoot(root, rootIndex) {
     shouldPlay() ? progressTl.play() : progressTl.pause()
   }
 
-  const ringTarget = (i) => circumference * (1 - (i + 1) / count)
-  const ringTo = (i, loop) => {
-    if (!progressCircle) return
-    ringTween && ringTween.kill()
-    const target = ringTarget(i)
-    if (!loop) {
-      ringTween = gsap.to(progressCircle, {
-        strokeDashoffset: target,
-        duration: RING_STEP,
-        ease: 'power2.out',
-      })
-      return
-    }
-    const current = parseFloat(progressCircle.style.strokeDashoffset) || 0
-    ringTween = gsap.timeline()
-    if (current > 1)
-      ringTween.to(progressCircle, {
-        strokeDashoffset: 0,
-        duration: RING_STEP,
-        ease: 'power2.in',
-      })
-    ringTween
-      .set(progressCircle, { strokeDashoffset: circumference })
-      .to(progressCircle, {
-        strokeDashoffset: target,
-        duration: RING_STEP,
-        ease: 'power2.out',
-      })
-  }
-
-  const activate = (i, loop) => {
-    numbers.forEach((n, k) =>
-      n.classList.toggle('is-active', k === i % numbers.length)
-    )
+  const activate = (i) => {
     links.forEach((l, k) => {
       l.classList.toggle('is-active', k === i)
       l.setAttribute('aria-current', k === i ? 'true' : 'false')
@@ -768,8 +667,6 @@ function setupRoot(root, rootIndex) {
     } else {
       crossfadeVisuals(i)
     }
-
-    ringTo(i, loop)
   }
 
   // Underline = autoplay progress: a darker fill grows across the light-grey track,
@@ -793,9 +690,8 @@ function setupRoot(root, rootIndex) {
   }
 
   function goTo(i) {
-    const loop = i < index
     index = i
-    activate(i, loop)
+    activate(i)
     runProgress()
   }
 
@@ -823,7 +719,7 @@ function setupRoot(root, rootIndex) {
     })
   }
 
-  if (ring) wireButton(ring, () => select((index + 1) % count), 'Next slide')
+  // Clicking a number in the menu jumps to that tab.
   links.forEach((l, i) =>
     wireButton(l, () => select(i), 'Go to slide ' + (i + 1))
   )
@@ -900,7 +796,6 @@ function staticFallback(root) {
   first('[data-compunding="tab-title"]')?.classList.add('is-active')
   first('[data-paradigm="tab-link"]')?.classList.add('is-active')
   first('[data-paradigm-visual]')?.classList.add('is-active')
-  first('.tabs_progress-number')?.classList.add('is-active')
   root.classList.add('is-static')
 }
 

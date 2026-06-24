@@ -3,6 +3,11 @@
    PhotoSwipe's CORE css is loaded separately from the CDN <link> in the head — see the doc.
    Hooks → .claude/rules/components/lightbox.md */
 
+/* Sit above any fixed page chrome (TOC, social rail, citation back-links). */
+.pswp {
+  z-index: 200000;
+}
+
 /* Clickable affordance on article images. */
 [data-component='lightbox'] .lightbox_img {
   cursor: zoom-in;
@@ -36,12 +41,17 @@
   display: none;
 }
 
-/* Custom buttons reuse PhotoSwipe's .pswp__button sizing; just center the glyph. */
+/* Custom buttons reuse PhotoSwipe's .pswp__button sizing; flex-center the glyph
+   so the unicode chars (⬇ ↗ ⓘ) and the <a> download button align with the rest. */
 .pswp__button--info,
 .pswp__button--download,
 .pswp__button--share {
-  font-size: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.125rem;
   line-height: 1;
+  text-decoration: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

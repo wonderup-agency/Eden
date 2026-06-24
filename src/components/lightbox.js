@@ -89,14 +89,17 @@ function registerUI(lightbox) {
       name: 'caption-panel',
       appendTo: 'root',
       onInit: (el, pswp) => {
-        el.className = 'pswp__caption-panel is-open'
+        el.className = 'pswp__caption-panel' // closed by default — opened by the ⓘ button
         const text = document.createElement('div')
         text.className = 'pswp__caption-text'
         el.appendChild(text)
-        pswp.on('change', () => {
-          text.textContent = pswp.currSlide?.data.caption || ''
-          el.classList.toggle('is-empty', !pswp.currSlide?.data.caption)
-        })
+        const update = () => {
+          const cap = pswp.currSlide?.data.caption || ''
+          text.textContent = cap
+          el.classList.toggle('is-empty', !cap)
+        }
+        pswp.on('change', update)
+        update() // populate the first slide too (change doesn't fire on open)
       },
     })
 
