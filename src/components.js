@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='research-search']",
+    importFn: () => import('./components/research-search.js'),
+  },
+  {
     // Blog-post orchestrator — one root drives the whole article reading experience
     // (toc + lightbox + table-collapse + share + references, each an internal module).
     selector: "[data-component='blog-post']",

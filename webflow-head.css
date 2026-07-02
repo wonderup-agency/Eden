@@ -750,13 +750,14 @@ html.js-anim [data-component='scroll-morph'].is-ready {
   transition: background-color 0.3s ease;
 }
 
-/* — Reference list items (flex row, each separated by a bottom line) — */
+/* — Reference list items (number column + content column, each separated by a bottom line) — */
 [data-component='blog-post'] .references_item {
   position: relative;
   display: flex;
-  align-items: center;
-  gap: 1rem;
-  padding-bottom: 1.5rem;
+  align-items: flex-start;
+  gap: 1.25rem;
+  padding-bottom: 1.75rem;
+  margin-bottom: 1.75rem;
   border-bottom: 1px solid var(--base--grey-line, #d9d4c9);
   scroll-margin-top: 6rem;
   outline: none;
@@ -769,40 +770,30 @@ html.js-anim [data-component='scroll-morph'].is-ready {
   min-width: 0;
 }
 
-/* Author-typed leading number, wrapped by JS (badge). */
+/* Author-typed leading number, wrapped by JS — plain left column, aligned to the first line. */
 [data-component='blog-post'] .references_number {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 1.75rem;
-  height: 1.75rem;
-  margin-right: 0.75rem;
-  border-radius: 50%;
-  background: var(--base--brown, #5c4a3a);
-  color: #fff;
-  font-size: 0.8125rem;
-  font-weight: 600;
   flex: none;
+  width: 1rem;
+  color: var(--base--black, #1a1a1a);
+  font-weight: 600;
+  line-height: inherit;
 }
 
-/* — "Go to Citation" back-link (injected) — */
+/* — "Go to Citation" back-link (injected) — sits under the reference text, arrow after. */
 [data-component='blog-post'] .references_backlink {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  flex: none; /* pushed to the right by .references_content's flex-grow */
-  margin-left: auto;
-  padding: 0.375rem 0.875rem;
-  border: 1px solid var(--base--grey-line, #d9d4c9);
-  border-radius: 2rem;
-  color: inherit;
+  gap: 0.5rem;
+  margin-top: 0.875rem;
+  color: var(--base--black, #1a1a1a);
   text-decoration: none;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
-[data-component='blog-post'] .references_backlink::before {
-  content: '↵';
+[data-component='blog-post'] .references_backlink::after {
+  content: '→';
 }
 [data-component='blog-post'] .references_backlink[hidden] {
   display: none;
@@ -1039,4 +1030,33 @@ html.js-anim [data-component='scroll-morph'].is-ready {
     flex-basis: auto;
     width: 100%;
   }
+}
+
+/* ===== RESEARCH-SEARCH · matched-term highlight + clear-icon affordance — paste into Webflow head ===== */
+
+/* — Matched-term highlight —
+   research-search.js wraps each matched substring in the title in
+   <mark class="search-highlight">. Gold @ 30% (matches references). */
+.search-highlight {
+  background-color: rgba(199, 154, 75, 0.3); /* --base--gold @ 30% */
+  border-radius: 0.2em;
+  padding: 0 0.08em;
+  color: inherit;
+}
+
+/* — Clear-search icon —
+   The header search icon [data-research-clear] is a passive magnifier until the
+   input has text, when JS swaps in a ✕ and adds .is-clearable — then it's a button. */
+[data-research-clear] {
+  cursor: default;
+  transition: opacity 0.2s ease;
+}
+
+[data-research-clear].is-clearable {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+[data-research-clear].is-clearable:hover {
+  opacity: 0.6;
 }

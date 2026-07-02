@@ -1,0 +1,28 @@
+/* ===== RESEARCH-SEARCH · matched-term highlight + clear-icon affordance — paste into Webflow head ===== */
+
+/* — Matched-term highlight —
+   research-search.js wraps each matched substring in the title in
+   <mark class="search-highlight">. Gold @ 30% (matches references). */
+.search-highlight {
+  background-color: rgba(199, 154, 75, 0.3); /* --base--gold @ 30% */
+  border-radius: 0.2em;
+  padding: 0 0.08em;
+  color: inherit;
+}
+
+/* — Clear-search icon —
+   The header search icon [data-research-clear] is a passive magnifier until the
+   input has text, when JS swaps in a ✕ and adds .is-clearable — then it's a button. */
+[data-research-clear] {
+  cursor: default;
+  transition: opacity 0.2s ease;
+}
+
+[data-research-clear].is-clearable {
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+[data-research-clear].is-clearable:hover {
+  opacity: 0.6;
+}

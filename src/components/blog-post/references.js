@@ -102,10 +102,14 @@ function buildReferences(list, ns) {
 
     classifyLinks(block)
 
-    // Wrap the reference text so the item can be a flex row (back-link pushed right).
+    // Layout: [number column] [content column]. Move everything into content, then lift
+    // the leading number back out as its own left column, and stack the back-link under the text.
     const content = document.createElement('div')
     content.className = 'references_content'
     while (block.firstChild) content.appendChild(block.firstChild)
+
+    const numberEl = content.querySelector('.references_number')
+    if (numberEl) block.appendChild(numberEl) // left column, out of the text flow
     block.appendChild(content)
 
     const backlink = document.createElement('a')
@@ -113,7 +117,7 @@ function buildReferences(list, ns) {
     backlink.textContent = BACKLINK_LABEL
     backlink.setAttribute('role', 'doc-backlink')
     backlink.setAttribute('aria-label', `Back to citation ${n}`)
-    block.appendChild(backlink)
+    content.appendChild(backlink) // below the reference text
 
     items.set(n, { block, backlink, citations: [], lastRead: null })
   })
