@@ -1,0 +1,31 @@
+/* ===== FIGURES · caption beside the image (blog-post) — paste into Webflow head ===== */
+
+/* Each figure + its caption block are wrapped in .figure-aside by figures.js */
+[data-component='blog-post'] .figure-aside {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+
+[data-component='blog-post'] .figure-aside > figure {
+  flex: 0 0 60%;
+  margin: 0;
+}
+
+[data-component='blog-post'] .figure-aside > .w-embed {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* — Stack below the image on tablet and down — */
+@media (max-width: 767px) {
+  [data-component='blog-post'] .figure-aside {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  [data-component='blog-post'] .figure-aside > figure {
+    flex-basis: auto;
+    width: 100%;
+  }
+}

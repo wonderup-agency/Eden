@@ -10,9 +10,23 @@ import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
 const { gsap } = window
 
 // Tuning
-const AUTOPLAY_DURATION = 5 // seconds per tab
 const CROSSFADE = 0.6 // visual crossfade
 const OUT_FADE = 0.3 // outgoing text fade
+// Autoplay dwell scales with the tab's text length (more words → longer).
+const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
+const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the tab's message
+const AUTOPLAY_MIN = 4 // floor
+const AUTOPLAY_MAX = 11 // ceiling
+
+// Per-tab autoplay seconds from its message word count.
+function autoplayDuration(el) {
+  const words = (el?.textContent || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
+  const d = AUTOPLAY_BASE + words * AUTOPLAY_PER_WORD
+  return Math.min(AUTOPLAY_MAX, Math.max(AUTOPLAY_MIN, d))
+}
 
 // Outgoing tab: plain fade only. The de-blur lives on the words, never the parent —
 // a filter on the title element would linger and blur the words on re-entry.
@@ -99,7 +113,7 @@ function setupRoot(root) {
         underlineFill,
         {
           scaleX: (index + 1) / count,
-          duration: AUTOPLAY_DURATION,
+          duration: autoplayDuration(messages[index]),
           ease: 'none',
         },
         0

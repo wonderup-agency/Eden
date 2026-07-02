@@ -14,8 +14,10 @@
 
 export default [
   {
-    selector: "[data-component='toc']",
-    importFn: () => import('./components/toc.js'),
+    // Blog-post orchestrator — one root drives the whole article reading experience
+    // (toc + lightbox + table-collapse + share + references, each an internal module).
+    selector: "[data-component='blog-post']",
+    importFn: () => import('./components/blog-post/blog-post.js'),
   },
   {
     selector: "[data-component='compouding']",
@@ -28,18 +30,6 @@ export default [
   {
     selector: "[data-component='tabs-imaging']",
     importFn: () => import('./components/tabs-imaging.js'),
-  },
-  {
-    selector: "[data-component='lightbox']",
-    importFn: () => import('./components/lightbox.js'),
-  },
-  {
-    selector: "[data-component='references']",
-    importFn: () => import('./components/references.js'),
-  },
-  {
-    selector: "[data-component='share']",
-    importFn: () => import('./components/share.js'),
   },
   {
     selector: "[data-component='number-counter']",

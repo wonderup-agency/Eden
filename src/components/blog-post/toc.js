@@ -1,5 +1,5 @@
 /*
-  Component: toc · data-component="toc"
+  Module: toc — loaded by the blog-post orchestrator (data-component="blog-post")
   Table of contents built from the headings inside the article body: indexes the
   summary blocks + h2/h3/h4, injects accordion links (own toc_* classes, styled in
   toc.css), drives a scrollspy .current + auto-expanding branch. Smooth scroll is the
@@ -11,24 +11,21 @@ const LEVELS = [2, 3, 4] // heading levels to index (h2/h3/h4)
 const SUMMARY_SELECTOR = '.content27_summary' // top-level pseudo-headings (Summary, Key points)
 const ID_PREFIX = 'toc-'
 const ACTIVE = 'current' // class on the active link (matches the Webflow template)
-const SPY_GAP = 24 // px below the nav where the active heading flips
+const SPY_GAP = 24 // px below the nav — the floor of the activation line
+const ACTIVATION = 0.3 // + this fraction of the viewport, so a heading flips active as it
+// reaches ~30% down the screen (not only when it reaches the nav — that read as "late")
 const EXPAND_DURATION = 0.4
 const EXPAND_EASE = 'power2.inOut'
 
 const HEADING_SELECTOR = LEVELS.map((l) => `h${l}`).join(', ')
 
 /**
- * @param {HTMLElement[]} elements - All elements matching [data-component='toc']
+ * @param {HTMLElement} root - A blog-post article root
+ * @returns {{resize: () => void} | null}
  */
-export default function (elements) {
-  const instances = elements.map((root) => setup(root)).filter(Boolean)
-  if (!instances.length) return
-
-  return {
-    resize() {
-      instances.forEach((i) => i.refresh())
-    },
-  }
+export function initToc(root) {
+  const inst = setup(root)
+  return inst ? { resize: () => inst.refresh() } : null
 }
 
 function setup(root) {
@@ -95,12 +92,25 @@ function setup(root) {
       })
     }
 
+    // The line below the nav where a heading flips active: nav height + a small floor
+    // + a slice of the viewport so it activates as the heading nears the top third.
     function navOffset() {
       const nav = document.querySelector('[data-component="nav"]')
-      return (nav?.getBoundingClientRect().height || 0) + SPY_GAP
+      const navH = nav?.getBoundingClientRect().height || 0
+      return navH + SPY_GAP + window.innerHeight * ACTIVATION
     }
 
     function computeActive() {
+      // Bottom guard: near the end, the last headings never cross the line — force the
+      // last one active so it doesn't stick on a middle heading at the foot of the page.
+      const atBottom =
+        window.innerHeight + window.scrollY >=
+        document.documentElement.scrollHeight - 2
+      if (atBottom) {
+        setActive(entries[entries.length - 1].id)
+        return
+      }
+
       const off = navOffset()
       let id = entries[0].id
       for (const e of entries) {

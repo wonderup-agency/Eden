@@ -62,15 +62,32 @@
   pointer-events: auto; /* hover nebula needs the cursor over the canvas */
 }
 
-/* Flow-tab overlay (an <img> with the tags, or HTML pills) — sits above the canvas;
-   JS fades it in only while the flow tab is active. Place it INSIDE the visual
-   wrapper so it shares the stacking context and lands over the dots. pointer-events
-   off so the cursor still reaches the flowing dots underneath (set auto if the tags
-   need to be clickable). Position it in Webflow. */
+/* Flow-tab overlay — sits above the canvas; JS fades it in only while the flow tab is
+   active. An author-provided [data-compouding-overlay] is positioned in Webflow; if
+   absent the component INJECTS the tags (.tabs-compouding_tags) and positions each pill
+   on the oval ring via JS. pointer-events off so the cursor still reaches the dots. */
 [data-component='compouding'] [data-compouding-overlay] {
-  position: relative;
   z-index: 2;
   pointer-events: none;
+}
+/* Injected tags container fills the stage; JS sets each pill's left/top on the ring. */
+[data-component='compouding'] .tabs-compouding_tags {
+  position: absolute;
+  inset: 0;
+}
+[data-component='compouding'] .tabs-compouding_tag {
+  position: absolute;
+  transform: translate(-50%, -50%); /* center the pill on its anchor point */
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: rgba(244, 243, 240, 0.82);
+  backdrop-filter: blur(4px);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--base--black, #0a0a0a);
 }
 
 /* — Fallback (no JS / reduced motion): show only the first / active tab — */

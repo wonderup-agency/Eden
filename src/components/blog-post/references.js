@@ -1,5 +1,5 @@
 /*
-  Component: references · data-component="references"
+  Module: references — loaded by the blog-post orchestrator (data-component="blog-post")
   Academic citations: matches body <sup>n</sup> markers to a separate references Rich Text
   (the author types the number at the start of each reference — that's the matching key),
   and wires bidirectional anchor links (cite ↔ reference) with "last-read" back-links.
@@ -13,10 +13,10 @@ const ACTIVE_RESET = 1600 // ms the .is-active highlight stays on the jump targe
 let instanceSeq = 0
 
 /**
- * @param {HTMLElement[]} elements - All elements matching [data-component='references']
+ * @param {HTMLElement} root - A blog-post article root (holds the list + the body)
  */
-export default function (elements) {
-  elements.forEach((root) => setupReferences(root))
+export function initReferences(root) {
+  setupReferences(root)
 }
 
 function setupReferences(root) {
@@ -25,8 +25,10 @@ function setupReferences(root) {
     console.warn('[references] missing [data-references-list] — skipping')
     return
   }
-  // The body lives outside the wrapper by design — single documented document-level lookup.
-  const body = document.querySelector('[data-references-body]')
+  // Body is normally inside the article root; fall back to document scope for safety.
+  const body =
+    root.querySelector('[data-references-body]') ||
+    document.querySelector('[data-references-body]')
 
   // Namespace ids per instance so multiple components on one page never collide.
   const ns = `r${instanceSeq++}`

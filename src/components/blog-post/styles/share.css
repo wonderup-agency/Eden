@@ -3,12 +3,12 @@
    Hooks → .claude/rules/components/share.md */
 
 /* Anchor for the absolutely-positioned tooltip. */
-[data-component='share'] [data-share='copy'] {
+[data-component='blog-post'] [data-share='copy'] {
   position: relative;
 }
 
 /* — Injected default tooltip (.share_tooltip) — */
-[data-component='share'] .share_tooltip {
+[data-component='blog-post'] .share_tooltip {
   position: absolute;
   bottom: calc(100% + 0.5rem); /* sits above the button */
   left: 50%;
@@ -29,7 +29,7 @@
 }
 
 /* Little arrow under the tooltip. */
-[data-component='share'] .share_tooltip::after {
+[data-component='blog-post'] .share_tooltip::after {
   content: '';
   position: absolute;
   top: 100%;
@@ -40,13 +40,13 @@
 }
 
 /* Shown state (JS toggles .is-visible). */
-[data-component='share'] .share_tooltip.is-visible {
+[data-component='blog-post'] .share_tooltip.is-visible {
   opacity: 1;
   transform: translate(-50%, 0);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-component='share'] .share_tooltip {
+  [data-component='blog-post'] .share_tooltip {
     transition: none;
   }
 }

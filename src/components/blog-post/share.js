@@ -1,5 +1,5 @@
 /*
-  Component: share · data-component="share"
+  Module: share — loaded by the blog-post orchestrator (data-component="blog-post")
   Blog-post share actions: copy the post URL to the clipboard and open a Bluesky compose intent.
   CSS → ./styles/share.css (paste into Webflow head — the "Copied!" tooltip) · Docs → .claude/rules/components/share.md
 */
@@ -9,17 +9,16 @@ const COPIED_LABEL = 'Copied!'
 const BLUESKY_INTENT = 'https://bsky.app/intent/compose'
 
 /**
- * @param {HTMLElement[]} elements - All elements matching [data-component='share']
+ * @param {HTMLElement} root - A blog-post article root (holds the share buttons)
  */
-export default function (elements) {
-  elements.forEach((root) => {
-    // URL + text default to the current page; override per-post with data-share-url / data-share-text.
-    const url = root.getAttribute('data-share-url') || window.location.href
-    const text = root.getAttribute('data-share-text') || document.title
+export function initShare(root) {
+  // URL + text default to the current page; override per-post with data-share-url /
+  // data-share-text on the blog-post root.
+  const url = root.getAttribute('data-share-url') || window.location.href
+  const text = root.getAttribute('data-share-text') || document.title
 
-    setupCopy(root, url)
-    setupBluesky(root, url, text)
-  })
+  setupCopy(root, url)
+  setupBluesky(root, url, text)
 }
 
 // Copy button — writes the URL to the clipboard, then shows the "Copied!" tooltip

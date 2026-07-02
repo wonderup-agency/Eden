@@ -12,7 +12,21 @@ const { gsap } = window
 const ScrollTrigger = window.ScrollTrigger
 
 const ACTIVE_CLASS = 'is-active'
-const AUTOPLAY_DURATION = 5 // seconds per tab
+// Autoplay dwell scales with the tab's text length (more words → longer).
+const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
+const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the panel's text
+const AUTOPLAY_MIN = 4 // floor (also keeps it ≥ the reveal)
+const AUTOPLAY_MAX = 11 // ceiling
+
+// Per-tab autoplay seconds from its panel's word count.
+function autoplayDuration(el) {
+  const words = (el?.textContent || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
+  const d = AUTOPLAY_BASE + words * AUTOPLAY_PER_WORD
+  return Math.min(AUTOPLAY_MAX, Math.max(AUTOPLAY_MIN, d))
+}
 
 // Image: vertical clip-path wipe (top→bottom). Flip the inset() sides to reverse.
 const IMG_CLIP_HIDDEN = 'inset(0% 0% 100% 0%)' // clipped from the bottom
@@ -109,7 +123,7 @@ function setupTabs(root) {
     })
   }
 
-  // Fill the active tab's underline over AUTOPLAY_DURATION, then advance.
+  // Fill the active tab's underline over its text-scaled dwell, then advance.
   function startProgress(index) {
     if (progressTween) progressTween.kill()
     setStaticFills(index)
@@ -119,7 +133,7 @@ function setupTabs(root) {
     gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
     progressTween = gsap.to(bar, {
       scaleX: 1,
-      duration: AUTOPLAY_DURATION,
+      duration: autoplayDuration(panels[index]),
       ease: 'none',
       onComplete: () => {
         if (!isAnimating) switchTab((index + 1) % count)

@@ -250,9 +250,27 @@
   pointer-events: auto;
 }
 [data-component='compouding'] [data-compouding-overlay] {
-  position: relative;
   z-index: 2;
   pointer-events: none;
+}
+/* Injected flow-tab tags — container fills the stage; JS sets each pill's left/top on the ring */
+[data-component='compouding'] .tabs-compouding_tags {
+  position: absolute;
+  inset: 0;
+}
+[data-component='compouding'] .tabs-compouding_tag {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  background: rgba(244, 243, 240, 0.82);
+  backdrop-filter: blur(4px);
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--base--black, #0a0a0a);
 }
 
 /* Fallback (no JS / reduced motion): show only the first / active tab */
@@ -659,12 +677,12 @@ html.js-anim [data-component='scroll-morph'].is-ready {
    Hooks → .claude/rules/components/share.md */
 
 /* Anchor for the absolutely-positioned tooltip. */
-[data-component='share'] [data-share='copy'] {
+[data-component='blog-post'] [data-share='copy'] {
   position: relative;
 }
 
 /* — Injected default tooltip (.share_tooltip) — */
-[data-component='share'] .share_tooltip {
+[data-component='blog-post'] .share_tooltip {
   position: absolute;
   bottom: calc(100% + 0.5rem); /* sits above the button */
   left: 50%;
@@ -685,7 +703,7 @@ html.js-anim [data-component='scroll-morph'].is-ready {
 }
 
 /* Little arrow under the tooltip. */
-[data-component='share'] .share_tooltip::after {
+[data-component='blog-post'] .share_tooltip::after {
   content: '';
   position: absolute;
   top: 100%;
@@ -696,13 +714,13 @@ html.js-anim [data-component='scroll-morph'].is-ready {
 }
 
 /* Shown state (JS toggles .is-visible). */
-[data-component='share'] .share_tooltip.is-visible {
+[data-component='blog-post'] .share_tooltip.is-visible {
   opacity: 1;
   transform: translate(-50%, 0);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  [data-component='share'] .share_tooltip {
+  [data-component='blog-post'] .share_tooltip {
     transition: none;
   }
 }
@@ -726,14 +744,14 @@ html.js-anim [data-component='scroll-morph'].is-ready {
 /* Gold 30% highlight: on the word before the marker (back to citation) and on the
    reference itself (jump to reference). */
 [data-references-body] .references_cited-word.is-active,
-[data-component='references'] .references_item.is-active {
+[data-component='blog-post'] .references_item.is-active {
   background-color: rgba(199, 154, 75, 0.3);
   border-radius: 0.25rem;
   transition: background-color 0.3s ease;
 }
 
 /* — Reference list items (flex row, each separated by a bottom line) — */
-[data-component='references'] .references_item {
+[data-component='blog-post'] .references_item {
   position: relative;
   display: flex;
   align-items: center;
@@ -743,16 +761,16 @@ html.js-anim [data-component='scroll-morph'].is-ready {
   scroll-margin-top: 6rem;
   outline: none;
 }
-[data-component='references'] .references_item:last-child {
+[data-component='blog-post'] .references_item:last-child {
   border-bottom: none;
 }
-[data-component='references'] .references_content {
+[data-component='blog-post'] .references_content {
   flex: 1 1 auto;
   min-width: 0;
 }
 
 /* Author-typed leading number, wrapped by JS (badge). */
-[data-component='references'] .references_number {
+[data-component='blog-post'] .references_number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -768,7 +786,7 @@ html.js-anim [data-component='scroll-morph'].is-ready {
 }
 
 /* — "Go to Citation" back-link (injected) — */
-[data-component='references'] .references_backlink {
+[data-component='blog-post'] .references_backlink {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -783,10 +801,10 @@ html.js-anim [data-component='scroll-morph'].is-ready {
   cursor: pointer;
   white-space: nowrap;
 }
-[data-component='references'] .references_backlink::before {
+[data-component='blog-post'] .references_backlink::before {
   content: '↵';
 }
-[data-component='references'] .references_backlink[hidden] {
+[data-component='blog-post'] .references_backlink[hidden] {
   display: none;
 }
 
@@ -794,7 +812,7 @@ html.js-anim [data-component='scroll-morph'].is-ready {
 
 @media (prefers-reduced-motion: reduce) {
   [data-references-body] .references_cited-word.is-active,
-  [data-component='references'] .references_item.is-active {
+  [data-component='blog-post'] .references_item.is-active {
     transition: none;
   }
 }
@@ -810,55 +828,60 @@ html.js-anim [data-component='scroll-morph'].is-ready {
 }
 
 /* Clickable affordance on article images. */
-[data-component='lightbox'] .lightbox_img {
+[data-component='blog-post'] .lightbox_img {
   cursor: zoom-in;
 }
-[data-component='lightbox'] .lightbox_img:focus-visible {
+[data-component='blog-post'] .lightbox_img:focus-visible {
   outline: 2px solid var(--base--gold, #c79a4b);
   outline-offset: 3px;
 }
 
-/* — Caption panel (toggled by the ⓘ button) — */
-.pswp__caption-panel {
-  position: absolute;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  width: min(360px, 85vw);
-  padding: 5rem 1.5rem 1.5rem;
-  background: rgba(20, 20, 20, 0.92);
+/* — Inline caption (top bar, beside the icons) — */
+.pswp__caption-bar {
+  display: flex;
+  align-items: center;
+  max-width: min(46vw, 620px);
+  height: 100%;
+  margin-right: 0.5rem;
+  padding: 0 0.375rem;
   color: #f2f2f2;
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  overflow-y: auto;
-  transform: translateX(100%);
-  transition: transform 0.3s ease;
-  z-index: 10;
+  font-size: 0.875rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
 }
-.pswp__caption-panel.is-open {
-  transform: translateX(0);
-}
-.pswp__caption-panel.is-empty {
+.pswp__caption-bar.is-empty {
   display: none;
 }
+@media (max-width: 767px) {
+  .pswp__caption-bar {
+    max-width: 42vw;
+    font-size: 0.8125rem;
+  }
+}
 
-/* Custom buttons reuse PhotoSwipe's .pswp__button sizing; flex-center the glyph
-   so the unicode chars (⬇ ↗ ⓘ) and the <a> download button align with the rest. */
-.pswp__button--info,
+/* — Custom buttons — SVG glyph, centered, with a subtle rounded hover. */
 .pswp__button--download,
 .pswp__button--share {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.125rem;
-  line-height: 1;
   text-decoration: none;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .pswp__caption-panel {
-    transition: none;
-  }
+.pswp__button--download svg,
+.pswp__button--share svg {
+  display: block;
+}
+.pswp__top-bar .pswp__button {
+  border-radius: 8px;
+  transition:
+    background-color 0.2s ease,
+    opacity 0.2s ease;
+}
+.pswp__top-bar .pswp__button:hover {
+  background: rgba(255, 255, 255, 0.14);
 }
 
 /* ===== TOC · article table of contents (accordion + scrollspy) — paste into Webflow head ===== */
@@ -868,12 +891,12 @@ html.js-anim [data-component='scroll-morph'].is-ready {
    Hooks → .claude/rules/components/toc.md */
 
 /* — List — */
-[data-component='toc'] .toc_item {
+[data-component='blog-post'] .toc_item {
   display: block;
 }
 
 /* — Links (left rail + active indicator) — */
-[data-component='toc'] .toc_link {
+[data-component='blog-post'] .toc_link {
   display: block;
   padding: 0.4rem 0 0.4rem 1rem;
   border-left: 2px solid var(--base--grey-line, #e4e2dc);
@@ -884,31 +907,136 @@ html.js-anim [data-component='scroll-morph'].is-ready {
     color 0.2s ease,
     border-color 0.2s ease;
 }
-[data-component='toc'] .toc_link:hover {
+[data-component='blog-post'] .toc_link:hover {
   color: var(--base--black, #15110c);
 }
-[data-component='toc'] .toc_link.current {
+[data-component='blog-post'] .toc_link.current {
   color: var(--base--black, #15110c);
   border-left-color: var(--base--black, #15110c);
 }
 
 /* Indent per heading level (H3/H4 nested under their H2/H3). */
-[data-component='toc'] .toc_item.is-h3 > .toc_link {
+[data-component='blog-post'] .toc_item.is-h3 > .toc_link {
   padding-left: 2rem;
 }
-[data-component='toc'] .toc_item.is-h4 > .toc_link {
+[data-component='blog-post'] .toc_item.is-h4 > .toc_link {
   padding-left: 3rem;
 }
 
 /* — Accordion — */
 /* Collapsible branch the scrollspy opens/closes (GSAP animates its height). */
-[data-component='toc'] .toc_children {
+[data-component='blog-post'] .toc_children {
   overflow: hidden;
 }
 
 /* — Scroll target clearance — */
 /* Native anchor jumps (mobile / reduced-motion) land below the fixed nav.
    Desktop smooth scroll already offsets via the global Lenis bridge. */
-[data-component='toc'] [data-toc-target] {
+[data-component='blog-post'] [data-toc-target] {
   scroll-margin-top: 6rem;
+}
+
+/* ===== TABLE-COLLAPSE · long article tables → show more/less — paste into Webflow head ===== */
+/* The component wraps each long <table> in .table-collapse_wrap (clips to the fold),
+   overlays a fade, and injects a .table-collapse_toggle button. Height is animated by GSAP.
+   Hooks → .claude/rules/components/table-collapse.md */
+
+/* — Clipping wrapper (JS sets max-height to the fold) — */
+.table-collapse_wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+/* — Fade over the clipped rows (only while collapsed) — */
+.table-collapse_fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0),
+    var(--base--white, #fff)
+  );
+}
+.table-collapse_wrap.is-collapsed .table-collapse_fade {
+  opacity: 1;
+}
+
+/* — Toggle button — */
+.table-collapse_toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1;
+  color: var(--base--black, #15110c);
+  background: transparent;
+  border: 1px solid var(--base--grey-line, #e4e2dc);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+.table-collapse_toggle:hover {
+  border-color: var(--base--black, #15110c);
+  background: var(--base--grey-line, #e4e2dc);
+}
+.table-collapse_toggle:focus-visible {
+  outline: 2px solid var(--base--black, #15110c);
+  outline-offset: 2px;
+}
+
+/* Caret — points down (show more), flips up when expanded (show less). */
+.table-collapse_toggle::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.2s ease;
+}
+.table-collapse_toggle[aria-expanded='true']::after {
+  transform: translateY(1px) rotate(-135deg);
+}
+
+/* ===== FIGURES · caption beside the image (blog-post) — paste into Webflow head ===== */
+
+/* Each figure + its caption block are wrapped in .figure-aside by figures.js */
+[data-component='blog-post'] .figure-aside {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.5rem;
+  margin: 1.5rem 0;
+}
+
+[data-component='blog-post'] .figure-aside > figure {
+  flex: 0 0 60%;
+  margin: 0;
+}
+
+[data-component='blog-post'] .figure-aside > .w-embed {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* — Stack below the image on tablet and down — */
+@media (max-width: 767px) {
+  [data-component='blog-post'] .figure-aside {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  [data-component='blog-post'] .figure-aside > figure {
+    flex-basis: auto;
+    width: 100%;
+  }
 }

@@ -1,8 +1,9 @@
 /*
   Component: tabs-imaging · data-component="tabs-imaging"
-  Tabs (NO autoplay) — click/keyboard switches; on switch the incoming image wipes open
-  (clip-path) while its content de-blurs in. Only the ACTIVE link is underlined (a black
-  bar that slides in); the rest show none.
+  Autoplay tabs — the active link's underline fills as a progress bar (cumulative across
+  the row) over a text-scaled dwell, then advances; on switch the incoming image wipes
+  open (clip-path) while its content de-blurs in. Starts on scroll-in, pauses on hover,
+  restarts from the clicked tab. Click / keyboard also switch.
   CSS → ./styles/tabs-imaging.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-imaging.md
 */
 
@@ -11,7 +12,11 @@ import { REVEAL_FROM } from '../utils/word-reveal.js'
 const { gsap } = window
 
 const ACTIVE_CLASS = 'is-active'
-const UNDERLINE = { duration: 0.45, ease: 'power2.out' } // active-underline grow/clear
+// Autoplay dwell scales with the tab's text length (more words → longer).
+const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
+const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the panel's text
+const AUTOPLAY_MIN = 4 // floor (also keeps it ≥ the reveal)
+const AUTOPLAY_MAX = 11 // ceiling
 
 // Image: vertical clip-path wipe (top→bottom). Flip the inset() sides to reverse.
 const IMG_CLIP_HIDDEN = 'inset(0% 0% 100% 0%)' // clipped from the bottom
@@ -31,6 +36,16 @@ const OUT_FADE = { autoAlpha: 0, duration: 0.4, ease: 'power2.out' }
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
+// Per-tab autoplay seconds from its panel's word count.
+function autoplayDuration(el) {
+  const words = (el?.textContent || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean).length
+  const d = AUTOPLAY_BASE + words * AUTOPLAY_PER_WORD
+  return Math.min(AUTOPLAY_MAX, Math.max(AUTOPLAY_MIN, d))
+}
+
 // Wire one tabs root. Returns { destroy } for cleanup, or null if the markup is
 // incomplete.
 function setupTabs(root) {
@@ -49,9 +64,9 @@ function setupTabs(root) {
 
   const count = Math.min(links.length, panels.length)
 
-  // Inject a black fill into each underline + expand the rail (is-track). Only the
-  // ACTIVE link's fill is shown (scaleX 1); the rest stay 0 — so just the active tab
-  // is underlined. Reduced motion skips track/fill (CSS shows the active underline).
+  // Inject a black fill into each underline + expand the rail (is-track). The fill is
+  // cumulative across tabs (see setStaticFills) so the row reads as total autoplay
+  // progress. Reduced motion skips track/fill (CSS shows the active underline).
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-imaging_tab-link-underline')
     if (!track || reduceMotion.matches) return null
@@ -74,6 +89,10 @@ function setupTabs(root) {
 
   let activeIndex = -1
   let isAnimating = false
+  let progressTween = null
+  let started = false // autoplay kicked off (section reached)
+  let hover = false
+  let onScreen = false
 
   // Accessibility scaffolding — tablist / tab / tabpanel with roving tabindex.
   root
@@ -92,16 +111,42 @@ function setupTabs(root) {
     panel.setAttribute('aria-labelledby', linkId)
   })
 
-  // Underline only the active tab: its fill scales to 1, every other to 0 (smooth).
-  const setActiveUnderline = (index) => {
+  // Cumulative fills: tabs before the active one stay full, the ones after stay empty
+  // (the active one is animated separately). The row = total autoplay progress.
+  const setStaticFills = (index) => {
     bars.forEach((bar, k) => {
-      if (!bar) return
-      gsap.to(bar, {
-        scaleX: k === index ? 1 : 0,
+      if (!bar || k === index) return
+      gsap.set(bar, {
+        scaleX: k < index ? 1 : 0,
         transformOrigin: 'left center',
-        ...UNDERLINE,
       })
     })
+  }
+
+  // Pause/resume the progress tween from on-screen + not-hovered + tab-visible.
+  const sync = () => {
+    if (!progressTween) return
+    started && onScreen && !hover && !document.hidden
+      ? progressTween.resume()
+      : progressTween.pause()
+  }
+
+  // Fill the active tab's underline over its text-scaled dwell, then advance.
+  function startProgress(index) {
+    if (progressTween) progressTween.kill()
+    setStaticFills(index)
+    const bar = bars[index]
+    if (!bar || reduceMotion.matches) return
+    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+    progressTween = gsap.to(bar, {
+      scaleX: 1,
+      duration: autoplayDuration(panels[index]),
+      ease: 'none',
+      onComplete: () => {
+        if (!isAnimating) switchTab((index + 1) % count)
+      },
+    })
+    sync()
   }
 
   function switchTab(index) {
@@ -123,7 +168,10 @@ function setupTabs(root) {
     inLink.setAttribute('aria-selected', 'true')
     inLink.setAttribute('tabindex', '0')
 
-    setActiveUnderline(index)
+    // Start the fill immediately (in parallel with the reveal). Always create the tween
+    // — even when hovered — so a click while the cursor is over the section still leaves
+    // a live tween to resume on mouseleave; sync() pauses it right away if needed.
+    if (started) startProgress(index)
 
     const inParts = parts[index]
 
@@ -157,8 +205,8 @@ function setupTabs(root) {
     }
   }
 
-  // Reduced motion: no crossfade. Panels toggle instantly via autoAlpha; the active
-  // underline shows via CSS.
+  // Reduced motion: no crossfade, no autoplay. Panels toggle instantly via autoAlpha;
+  // the active underline shows via CSS.
   function switchTabInstant(index) {
     if (index === activeIndex) return
     panels.forEach((p, i) => {
@@ -178,13 +226,13 @@ function setupTabs(root) {
   const goTo = (index) =>
     reduceMotion.matches ? switchTabInstant(index) : switchTab(index)
 
-  // Initial state: first tab visible + underlined, rest hidden (before paint, no CLS).
+  // Initial state: first tab visible, rest hidden (before paint, no CLS). Fills start
+  // empty; the active underline fills once autoplay starts (on scroll-in).
   links.forEach((link) => link.classList.remove(ACTIVE_CLASS))
   panels.forEach((panel) => panel.classList.remove(ACTIVE_CLASS))
   gsap.set(panels, { autoAlpha: 0 })
   gsap.set(panels[0], { autoAlpha: 1 })
   gsap.set(bars.filter(Boolean), { scaleX: 0, transformOrigin: 'left center' })
-  if (bars[0]) gsap.set(bars[0], { scaleX: 1, transformOrigin: 'left center' })
   links[0].classList.add(ACTIVE_CLASS)
   panels[0].classList.add(ACTIVE_CLASS)
   links.forEach((link, i) => {
@@ -193,7 +241,7 @@ function setupTabs(root) {
   })
   activeIndex = 0
 
-  // Click — switch to the clicked tab.
+  // Click — switch and (re)start the autoplay cycle from there.
   const onClick = links.map((link, i) => {
     const handler = () => {
       if (i === activeIndex) return
@@ -225,9 +273,45 @@ function setupTabs(root) {
   }
   root.addEventListener('keydown', onKeydown)
 
+  // Hover pause / resume + tab-visibility gating (skipped under reduced motion).
+  const onEnter = () => {
+    hover = true
+    sync()
+  }
+  const onLeave = () => {
+    hover = false
+    sync()
+  }
+  const onVisibility = () => sync()
+  let io = null
+  if (!reduceMotion.matches) {
+    root.addEventListener('mouseenter', onEnter)
+    root.addEventListener('mouseleave', onLeave)
+    document.addEventListener('visibilitychange', onVisibility)
+    // Autoplay starts when the section enters the viewport; pauses while off-screen.
+    io = new window.IntersectionObserver(
+      (entries) => {
+        onScreen = entries[0].isIntersecting
+        if (onScreen && !started) {
+          started = true
+          startProgress(activeIndex)
+        } else {
+          sync()
+        }
+      },
+      { threshold: 0.4 }
+    )
+    io.observe(root)
+  }
+
   return {
     destroy() {
+      if (progressTween) progressTween.kill()
+      if (io) io.disconnect()
       root.removeEventListener('keydown', onKeydown)
+      root.removeEventListener('mouseenter', onEnter)
+      root.removeEventListener('mouseleave', onLeave)
+      document.removeEventListener('visibilitychange', onVisibility)
       links.forEach((link, i) => link.removeEventListener('click', onClick[i]))
     },
   }

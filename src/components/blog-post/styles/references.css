@@ -17,14 +17,14 @@
 /* Gold 30% highlight: on the word before the marker (back to citation) and on the
    reference itself (jump to reference). */
 [data-references-body] .references_cited-word.is-active,
-[data-component='references'] .references_item.is-active {
+[data-component='blog-post'] .references_item.is-active {
   background-color: rgba(199, 154, 75, 0.3);
   border-radius: 0.25rem;
   transition: background-color 0.3s ease;
 }
 
 /* — Reference list items (flex row, each separated by a bottom line) — */
-[data-component='references'] .references_item {
+[data-component='blog-post'] .references_item {
   position: relative;
   display: flex;
   align-items: center;
@@ -34,16 +34,16 @@
   scroll-margin-top: 6rem;
   outline: none;
 }
-[data-component='references'] .references_item:last-child {
+[data-component='blog-post'] .references_item:last-child {
   border-bottom: none;
 }
-[data-component='references'] .references_content {
+[data-component='blog-post'] .references_content {
   flex: 1 1 auto;
   min-width: 0;
 }
 
 /* Author-typed leading number, wrapped by JS (badge). */
-[data-component='references'] .references_number {
+[data-component='blog-post'] .references_number {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -59,7 +59,7 @@
 }
 
 /* — "Go to Citation" back-link (injected) — */
-[data-component='references'] .references_backlink {
+[data-component='blog-post'] .references_backlink {
   display: inline-flex;
   align-items: center;
   gap: 0.375rem;
@@ -74,10 +74,10 @@
   cursor: pointer;
   white-space: nowrap;
 }
-[data-component='references'] .references_backlink::before {
+[data-component='blog-post'] .references_backlink::before {
   content: '↵';
 }
-[data-component='references'] .references_backlink[hidden] {
+[data-component='blog-post'] .references_backlink[hidden] {
   display: none;
 }
 
@@ -85,7 +85,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   [data-references-body] .references_cited-word.is-active,
-  [data-component='references'] .references_item.is-active {
+  [data-component='blog-post'] .references_item.is-active {
     transition: none;
   }
 }

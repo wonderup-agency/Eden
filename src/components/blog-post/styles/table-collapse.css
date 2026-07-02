@@ -1,0 +1,72 @@
+/* ===== TABLE-COLLAPSE · long article tables → show more/less — paste into Webflow head ===== */
+/* The component wraps each long <table> in .table-collapse_wrap (clips to the fold),
+   overlays a fade, and injects a .table-collapse_toggle button. Height is animated by GSAP.
+   Hooks → .claude/rules/components/table-collapse.md */
+
+/* — Clipping wrapper (JS sets max-height to the fold) — */
+.table-collapse_wrap {
+  position: relative;
+  overflow: hidden;
+}
+
+/* — Fade over the clipped rows (only while collapsed) — */
+.table-collapse_fade {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 5rem;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0),
+    var(--base--white, #fff)
+  );
+}
+.table-collapse_wrap.is-collapsed .table-collapse_fade {
+  opacity: 1;
+}
+
+/* — Toggle button — */
+.table-collapse_toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.5rem 1.25rem;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1;
+  color: var(--base--black, #15110c);
+  background: transparent;
+  border: 1px solid var(--base--grey-line, #e4e2dc);
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease;
+}
+.table-collapse_toggle:hover {
+  border-color: var(--base--black, #15110c);
+  background: var(--base--grey-line, #e4e2dc);
+}
+.table-collapse_toggle:focus-visible {
+  outline: 2px solid var(--base--black, #15110c);
+  outline-offset: 2px;
+}
+
+/* Caret — points down (show more), flips up when expanded (show less). */
+.table-collapse_toggle::after {
+  content: '';
+  width: 0.5rem;
+  height: 0.5rem;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: translateY(-2px) rotate(45deg);
+  transition: transform 0.2s ease;
+}
+.table-collapse_toggle[aria-expanded='true']::after {
+  transform: translateY(1px) rotate(-135deg);
+}
