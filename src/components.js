@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='impact-map']",
+    importFn: () => import('./components/impact-map.js'),
+  },
+  {
     selector: "[data-component='research-search']",
     importFn: () => import('./components/research-search.js'),
   },

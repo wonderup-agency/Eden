@@ -1,0 +1,139 @@
+/* ===== IMPACT-MAP · animated US map: odometer % synced with a clustered gold-dot reveal — paste into Webflow head ===== */
+
+[data-component='impact-map'] {
+  /* — Tokens (Figma) — */
+  --im-bg: #000000; /* frame fill: Black */
+  --im-land: #333333; /* state fill: 333333 */
+  --im-land-stroke: rgba(
+    232,
+    226,
+    210,
+    0.4
+  ); /* state borders: Beige, weight 0.1 */
+  --im-dot-glow: rgba(247, 201, 72, 0.5); /* dot drop shadow: gold @ 50% */
+  --im-label: rgba(255, 255, 255, 0.3);
+}
+
+/* — Counter (value beside the caption) — */
+[data-impact-counter] {
+  font-weight: 800;
+}
+
+/* — Stage: reserves aspect-ratio so there is zero CLS while the SVG loads — */
+[data-impact-stage] {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 960 / 600;
+  background: var(--im-bg);
+  border-radius: 0.75rem;
+  overflow: hidden;
+}
+[data-impact-stage] svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* — Map geometry — */
+[data-impact-land] path {
+  fill: var(--im-land);
+  stroke: var(--im-land-stroke);
+  stroke-width: 0.4;
+  stroke-linejoin: round;
+}
+
+/* State initials, sitting behind the dots — */
+[data-impact-labels] text {
+  fill: var(--im-label);
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+/* — Dots: each is a <g> (halo + core); GSAP fades the group in and twinkles it — */
+[data-impact-dots] > g {
+  opacity: 0;
+  transition: filter 0.3s ease;
+}
+/* Soft bloom behind the dot — the Figma drop shadow, as a real radial.
+   pointer-events:all makes the whole disc hoverable (even its transparent edge). */
+[data-impact-dots] .im-halo {
+  fill: url(#im-glow-grad);
+  pointer-events: all;
+}
+/* Bright core: hot-white centre → gold, plus a tight glow for the spread. */
+[data-impact-dots] .im-core {
+  fill: url(#im-dot-grad);
+  filter: drop-shadow(0 0 2px var(--im-dot-glow));
+}
+/* Hover: brighten the whole dot (glow + core) — CSS only, so it rides on top of
+   the GSAP opacity twinkle without fighting it. */
+[data-impact-dots] > g:hover {
+  filter: brightness(1.7) saturate(1.12);
+}
+
+/* — Odometer (rolling digits) — */
+.impact-map_odo {
+  /* Cell taller than the glyph so the digit is centred by leading and never
+     clips top/bottom; the reel advances by one cell (percentage) per digit. */
+  --odo-h: 1.3em;
+  display: inline-flex;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+}
+/* Slot keeps a real text baseline (via the invisible anchor) so the rolling
+   digits line up with the comma, % and caption text. The clip — not the slot —
+   hides the overflow, because an overflow:hidden inline-block reports its bottom
+   edge as the baseline and floats the digits up. */
+.impact-map_odo .odo-digit {
+  position: relative;
+  display: inline-block;
+  width: 0.72em;
+  height: var(--odo-h);
+  line-height: var(--odo-h);
+}
+.impact-map_odo .odo-digit::before {
+  content: '8';
+  visibility: hidden;
+}
+.impact-map_odo .odo-clip {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+.impact-map_odo .odo-reel {
+  display: block;
+  will-change: transform;
+}
+.impact-map_odo .odo-reel span {
+  display: block;
+  height: var(--odo-h);
+  line-height: var(--odo-h);
+  text-align: center;
+}
+.impact-map_odo .odo-sep {
+  display: inline-block;
+}
+
+.impact-map_sronly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Reduced motion: no rolling / no fade — final state shown instantly (JS also guards). */
+@media (prefers-reduced-motion: reduce) {
+  .impact-map_odo .odo-reel {
+    will-change: auto;
+  }
+}

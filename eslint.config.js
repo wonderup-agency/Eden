@@ -21,6 +21,7 @@ export default [
         cancelAnimationFrame: 'readonly',
         getComputedStyle: 'readonly',
         matchMedia: 'readonly',
+        fetch: 'readonly',
       },
     },
   },

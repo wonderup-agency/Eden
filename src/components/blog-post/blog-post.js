@@ -20,7 +20,15 @@ import { initFigures } from './figures.js'
 export default function (elements) {
   const hooks = []
 
-  elements.forEach((root) => {
+  // Guard against a mis-tagged CMS template with nested roots (e.g. the attribute left on
+  // both an outer wrapper and the article): a root inside another would double-init every
+  // module. Keep only the innermost roots — the outer wrapper would over-scan (lightbox
+  // grabbing nav/footer images, etc.).
+  const roots = elements.filter(
+    (el) => !elements.some((other) => other !== el && el.contains(other))
+  )
+
+  roots.forEach((root) => {
     run('figures', () => initFigures(root)) // wrap figure + caption before lightbox scans images
     hooks.push(run('toc', () => initToc(root)))
     run('lightbox', () => initLightbox(root)) // async — fire and forget

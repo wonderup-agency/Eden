@@ -2,7 +2,8 @@
   Global site-wide setup — runs on every page before any component (via main.js).
   Smooth scroll (Lenis): desktop-only (≥ 992px), driven by the GSAP ticker + synced
   to ScrollTrigger. Webflow head keeps only the Lenis <script>; the init lives here.
-  Also routes anchor links (incl. Finsweet TOC) through lenis.scrollTo().
+  Also routes anchor links (incl. Finsweet TOC) through lenis.scrollTo(), and speeds
+  up the secondary-button gold beam on hover (button.css owns the spin).
   Docs → .claude/rules/ARCHITECTURE.md (global.js section)
 */
 
@@ -12,6 +13,11 @@ const SMOOTH_MIN_WIDTH = '(min-width: 992px)'
 // Extra gap above an anchor target so the fixed nav doesn't cover it (px).
 const ANCHOR_GAP = 16
 
+// Secondary-button beam: hover playbackRate multiplier over the idle spin
+// (idle lap = --btn-beam-speed in button.css). Keep this JS-owned so the speed
+// change preserves the beam's position — no jump/reset (see initButtonBeams).
+const BEAM_HOVER_RATE = 2.4
+
 // PERF — temporary diagnostic. Logs only janky frames (slower than LONG_FRAME)
 // with scrollY + the centered section, plus a rolling FPS. Set false to remove.
 const PERF = false
@@ -19,7 +25,34 @@ const LONG_FRAME = 50 // ms — a slower frame (~<20fps) is logged as a stall
 
 export default function () {
   initSmoothScroll()
+  initButtonBeams()
   initPerfMonitor()
+}
+
+// Secondary buttons spin a gold beam via a CSS animation on .button_main-element.
+// On hover/focus we only bump that animation's playbackRate (Web Animations API):
+// changing the rate keeps the current time, so the beam speeds up from where it is
+// and slows back down in place — never snapping to the idle-clock position.
+function initButtonBeams() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  // Only the beam variant spins — plain secondary buttons have a static ring, no JS.
+  const wraps = document.querySelectorAll(
+    "[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']"
+  )
+  wraps.forEach((wrap) => {
+    const el = wrap.querySelector('.button_main-element')
+    if (!el) return
+    const setRate = (rate) => {
+      const beam = el
+        .getAnimations()
+        .find((a) => a.animationName === 'buttonBeamSpin')
+      if (beam) beam.playbackRate = rate
+    }
+    wrap.addEventListener('mouseenter', () => setRate(BEAM_HOVER_RATE))
+    wrap.addEventListener('mouseleave', () => setRate(1))
+    wrap.addEventListener('focusin', () => setRate(BEAM_HOVER_RATE))
+    wrap.addEventListener('focusout', () => setRate(1))
+  })
 }
 
 function initPerfMonitor() {

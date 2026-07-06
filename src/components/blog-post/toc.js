@@ -42,6 +42,11 @@ function setup(root) {
       return null
     }
 
+    // If the TOC is made scrollable in the Designer (max-height + overflow), stop Lenis
+    // from hijacking the wheel over it so it scrolls natively. Lenis honors
+    // [data-lenis-prevent] on the wheel target or any ancestor of it.
+    markLenisPrevent(root, list)
+
     const gsap = window.gsap
     const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const animate = !!gsap && !reduce
@@ -137,6 +142,22 @@ function setup(root) {
   } catch (err) {
     console.error('[toc] init failed', err)
     return null
+  }
+}
+
+// Find the TOC's scroll container (nearest ancestor of the list, up to the root, whose
+// computed overflow-y scrolls) and mark it [data-lenis-prevent] so Lenis lets it scroll
+// natively. Only marks a real scroll container — never the list when it isn't scrollable
+// (that would create a dead zone where the wheel scrolls nothing).
+function markLenisPrevent(root, list) {
+  let el = list
+  while (el && el !== root) {
+    const oy = getComputedStyle(el).overflowY
+    if (oy === 'auto' || oy === 'scroll') {
+      el.setAttribute('data-lenis-prevent', '')
+      return
+    }
+    el = el.parentElement
   }
 }
 

@@ -10,6 +10,14 @@
 const BACKLINK_LABEL = 'Go to Citation'
 const ACTIVE_RESET = 1600 // ms the .is-active highlight stays on the jump target
 
+// Scraped scientific articles use <sup> for many things besides citations (chemistry,
+// figure/table numbers, time ranges). These guards skip the obvious non-citations so we
+// never link e.g. "18–24 h" to reference 18 — see .md → "Which <sup> become citations".
+const NON_CITE_WORD = // a cross-ref word right before the marker → not a citation
+  /^(fig|figs|figure|figures|table|tables|eq|eqn|equation|ref|refs|reaction|reactions|section|sections|step|steps|lane|lanes|panel|panels|chapter|scheme)$/i
+const UNIT_AFTER = // a measurement unit right after the marker → a range/quantity, not a cite
+  /^[.,)\s]*\d*\.?\d*\s*(h|hr|hrs|min|mins|sec|secs|d|days?|weeks?|months?|years?|nm|µm|um|mm|cm|m|mM|nM|µM|uM|M|mL|ml|µL|uL|L|mg|µg|ug|ng|g|kg|bp|kb|rpm|°c|%)\b/i
+
 let instanceSeq = 0
 
 /**
@@ -20,7 +28,11 @@ export function initReferences(root) {
 }
 
 function setupReferences(root) {
-  const list = root.querySelector('[data-references-list]')
+  // The references block is often a sibling section outside the article root (a footer
+  // block in the Webflow template), so fall back to document scope — same as the body.
+  const list =
+    root.querySelector('[data-references-list]') ||
+    document.querySelector('[data-references-list]')
   if (!list) {
     console.warn('[references] missing [data-references-list] — skipping')
     return
@@ -49,6 +61,7 @@ function setupReferences(root) {
     item.lastRead = item.citations[0]
     item.backlink.setAttribute('href', `#${item.lastRead.id}`)
     item.backlink.dataset.refN = n
+    item.backlink.dataset.refNs = ns // scope clicks to this instance (list may be outside root)
   })
 
   // One delegated capture-phase listener: records "last read" + moves focus/highlight.
@@ -69,7 +82,7 @@ function setupReferences(root) {
         return
       }
       const back = e.target.closest('.references_backlink')
-      if (back && root.contains(back)) {
+      if (back && back.dataset.refNs === ns) {
         const occ = items.get(Number(back.dataset.refN))?.lastRead
         if (!occ) return
         if (occ.word) flagActive(occ.word) // highlight the word before the marker
@@ -172,6 +185,7 @@ function buildCitations(body, items, ns) {
 
   body.querySelectorAll('sup').forEach((sup) => {
     if (sup.querySelector('a')) return // already enhanced
+    if (!looksLikeCitation(sup)) return // skip figures/tables/units/chemistry superscripts
     const nums = parseNumbers(sup.textContent)
     if (!nums.length) return
 
@@ -204,6 +218,21 @@ function buildCitations(body, items, ns) {
   })
 }
 
+// A <sup> is a citation unless it's clearly a cross-reference (preceded by Figure/Table/…)
+// or a quantity (followed by a unit like "h"/"mM"). High precision on purpose: when unsure
+// we treat it as a citation, but numbers with no matching reference stay plain text anyway.
+function looksLikeCitation(sup) {
+  const prev = sup.previousSibling
+  if (prev && prev.nodeType === 3) {
+    const word = prev.nodeValue.match(/([\p{L}]+)[\s(]*$/u) // last word before the marker
+    if (word && NON_CITE_WORD.test(word[1])) return false
+  }
+  const next = sup.nextSibling
+  if (next && next.nodeType === 3 && UNIT_AFTER.test(next.nodeValue))
+    return false
+  return true
+}
+
 // Wrap the last word of the text node right before a <sup> in .references_cited-word.
 function wrapPrecedingWord(sup) {
   const prev = sup.previousSibling
@@ -220,12 +249,23 @@ function wrapPrecedingWord(sup) {
   return span
 }
 
-// "1", "1,2", "1, 2" → [1, 2]. Non-numeric sups are ignored.
+// "1", "1,2", "1, 2" → [1, 2]. Ranges expand: "5–7" (hyphen / en- / em-dash) → [5, 6, 7],
+// as academic citations are written both ways. Non-numeric tokens are ignored.
 function parseNumbers(text) {
-  return text
-    .split(/[,\s]+/)
-    .map((s) => parseInt(s, 10))
-    .filter((n) => Number.isInteger(n))
+  const out = []
+  text.split(/[,\s]+/).forEach((tok) => {
+    const range = tok.match(/^(\d+)\s*[–—-]\s*(\d+)$/)
+    if (range) {
+      const a = +range[1]
+      const b = +range[2]
+      if (b >= a && b - a <= 50) for (let n = a; n <= b; n++) out.push(n)
+      else out.push(a)
+    } else {
+      const n = parseInt(tok, 10)
+      if (Number.isInteger(n)) out.push(n)
+    }
+  })
+  return out
 }
 
 function flagActive(el) {

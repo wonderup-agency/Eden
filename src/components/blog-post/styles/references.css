@@ -43,30 +43,44 @@
   min-width: 0;
 }
 
-/* Author-typed leading number, wrapped by JS — plain left column, aligned to the first line. */
+/* Author-typed leading number, wrapped by JS — plain left column, aligned to the first line.
+   Resets background/border so no circle "badge" (from Designer styling) survives; min-width
+   fits up to 3-digit numbers without shifting the text column. */
 [data-component='blog-post'] .references_number {
   flex: none;
-  width: 1rem;
+  min-width: 1.75rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
   color: var(--base--black, #1a1a1a);
   font-weight: 600;
   line-height: inherit;
+  text-align: left;
 }
 
-/* — "Go to Citation" back-link (injected) — sits under the reference text, arrow after. */
+/* — "Go to Citation" back-link (injected) — plain underlined text link under the reference,
+   arrow after. Resets padding/background/border so no "pill" (from Designer styling) survives. */
 [data-component='blog-post'] .references_backlink {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.5rem;
+  display: block;
+  width: fit-content;
   margin-top: 0.875rem;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: 0;
   color: var(--base--black, #1a1a1a);
-  text-decoration: none;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
   font-size: 0.9375rem;
   font-weight: 600;
   cursor: pointer;
-  white-space: nowrap;
 }
 [data-component='blog-post'] .references_backlink::after {
   content: '→';
+  display: inline-block; /* atomic inline → the link underline skips the arrow */
+  margin-left: 0.4em;
+  text-decoration: none;
 }
 [data-component='blog-post'] .references_backlink[hidden] {
   display: none;

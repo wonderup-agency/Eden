@@ -50,22 +50,34 @@
   );
 }
 
-/* — Active-only underline — only the active tab is underlined (the black fill); the
-   rail is a transparent full-width rest so the fill can scale within it. JS drives the
-   fill scaleX 1 on the active tab, 0 on the rest (smooth). No progress / no autoplay. */
+/* — Progress underline / track / fill (three states) — the grey track shows the full
+   width (the "remaining" part), the active tab's track is a bit darker, and the black
+   fill grows cumulatively across tabs as the autoplay loads. JS injects the fill + adds
+   .is-track. Mirror of tabs-architected. */
+[data-component='tabs-stats'] {
+  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
+}
 
-/* Rail: collapsed baseline; transparent (the fill is the visible bar). */
+/* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
-  background-color: transparent;
 }
-/* is-track → expand the rail to full width (still transparent). */
+
+/* State 1 — grey track on every tab (full width; JS adds .is-track). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline.is-track {
   transform: none;
+  background-color: var(--base--grey-line, #e4e2dd);
+  transition: background-color 0.4s ease; /* ease the state-1 ↔ state-2 colour change */
 }
-/* The black underline of the active tab. */
+/* State 2 — the active tab's track is a bit darker, still 100% wide. */
+[data-component='tabs-stats']
+  [tabs-architected='link'].is-active
+  .tabs-architected_tab-link-underline.is-track {
+  background-color: var(--tabs-track-active, #b3aea2);
+}
+/* State 3 — black progress fill (cumulative across tabs; JS scales scaleX 0→1). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;

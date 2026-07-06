@@ -1,0 +1,188 @@
+/* ===== BUTTON · primary + secondary variants — paste into Webflow head ===== */
+
+/* — Tokens + base — */
+.button_main-wrap {
+  --anim-time: 0.35s;
+  --anim-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --btn-radius: 0.5rem;
+  --btn-beam-width: 1.5px; /* rotating-beam ring thickness (secondary) */
+  --btn-beam-speed: 6s; /* idle beam lap time; hover accel is JS (playbackRate) */
+}
+
+/* Rotating gold beam angle (secondary). @property makes --btn-angle animatable;
+   inherits:true so the animation (on the element) reaches ::after which reads it.
+   Hover acceleration is done in global.js via the Web Animations API (playbackRate)
+   so speed changes preserve the current angle — no jump/reset. */
+@property --btn-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: true;
+}
+@keyframes buttonBeamSpin {
+  to {
+    --btn-angle: 360deg;
+  }
+}
+
+.button_main-wrap .item-link:focus-visible {
+  outline: 2px solid #fbd07c;
+  outline-offset: 2px;
+}
+
+.button_main-element {
+  isolation: isolate;
+  border-radius: var(--btn-radius);
+  transition:
+    transform var(--anim-time) var(--anim-ease),
+    background-color var(--anim-time) var(--anim-ease),
+    box-shadow var(--anim-time) var(--anim-ease);
+}
+
+.button_main-text {
+  white-space: nowrap;
+}
+
+/* — Icon nudge on hover — */
+.button_main-icon {
+  display: inline-flex;
+  transition: transform var(--anim-time) var(--anim-ease);
+}
+.button_main-wrap:hover .button_main-icon {
+  transform: translateX(0.12em);
+}
+
+/* — Primary (gradient fill + radial border, subtle gloss) — */
+.button_main-wrap[data-wf--element-button--variant='primary']
+  .button_main-element {
+  color: #ffffff;
+  background:
+    linear-gradient(134deg, #000000 0%, #4e4e4e 40%) padding-box,
+    radial-gradient(
+        135% 180% at 50% 0%,
+        #b8b8b8 0%,
+        #9e9e9e 52%,
+        rgba(0, 0, 0, 0.78) 100%
+      )
+      border-box;
+}
+.button_main-wrap[data-wf--element-button--variant='primary']
+  .button_main-element::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0) 45%
+  );
+  pointer-events: none;
+}
+.button_main-wrap[data-wf--element-button--variant='primary']:hover
+  .button_main-element {
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.2),
+    0 4px 10px rgba(0, 0, 0, 0.18);
+}
+
+/* — Secondary (light frosted glass, no border) —
+   Plain secondary is borderless: just the frosted glass + a subtle background lift on
+   hover. Add data-gradient-animation="True" on the wrap for the rotating gold-beam ring. */
+.button_main-wrap[data-wf--element-button--variant*='secondary']
+  .button_main-element {
+  position: relative;
+  color: #000000;
+  background: rgba(114, 114, 114, 0.08);
+  -webkit-backdrop-filter: blur(4px) saturate(115%);
+  backdrop-filter: blur(4px) saturate(115%);
+  border-color: transparent;
+}
+/* Gloss */
+.button_main-wrap[data-wf--element-button--variant*='secondary']
+  .button_main-element::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0) 50%
+  );
+  pointer-events: none;
+}
+.button_main-wrap[data-wf--element-button--variant*='secondary']:hover
+  .button_main-element {
+  background: rgba(114, 114, 114, 0.14);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    0 3px 8px rgba(0, 0, 0, 0.06);
+}
+
+/* — Secondary · rotating-beam variant (data-gradient-animation="True") — */
+.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
+  .button_main-element {
+  /* Beam spin lives on the element (not ::after) so global.js can grab it via
+     el.getAnimations() and only change playbackRate on hover — no position jump. */
+  animation: buttonBeamSpin var(--btn-beam-speed) linear infinite;
+}
+/* Beam ring: two bright gold arcs ride the perimeter (opposite ends), masked to a thin
+   ring. Only the animated variant has a gold ring — plain secondary has none. */
+.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
+  .button_main-element::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  padding: var(--btn-beam-width);
+  background: conic-gradient(
+    from var(--btn-angle, 0deg),
+    rgba(199, 154, 75, 0) 0deg,
+    /* beam 2 (opposite end) */ rgba(199, 154, 75, 0) 120deg,
+    rgba(199, 154, 75, 0.5) 150deg,
+    var(--base--gold, #c79a4b) 170deg,
+    #ffedb5 175deg,
+    var(--base--gold, #c79a4b) 178deg,
+    rgba(199, 154, 75, 0) 195deg,
+    /* beam 1 */ rgba(199, 154, 75, 0) 300deg,
+    rgba(199, 154, 75, 0.5) 330deg,
+    var(--base--gold, #c79a4b) 350deg,
+    #ffedb5 355deg,
+    var(--base--gold, #c79a4b) 358deg,
+    rgba(199, 154, 75, 0) 360deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+/* Hover acceleration: JS (global.js) bumps the spin's playbackRate — see @property note. */
+
+/* — Reduced motion — */
+@media (prefers-reduced-motion: reduce) {
+  .button_main-element,
+  .button_main-element::before,
+  .button_main-element::after,
+  .button_main-icon {
+    transition: none !important;
+  }
+  /* No spin — the beam variant falls back to a static uniform gold ring */
+  .button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
+    .button_main-element {
+    animation: none;
+  }
+  .button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
+    .button_main-element::after {
+    background: var(--base--gold, #c79a4b);
+  }
+}
