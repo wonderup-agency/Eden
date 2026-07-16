@@ -11,7 +11,7 @@ const VIEW_H = 600
 const NS = 'http://www.w3.org/2000/svg'
 
 // Tuning
-const DOT_COUNT = 55 // dots placed on the map
+const DOT_EXTRA = 60 // clustered dots ON TOP of the guaranteed one-per-state
 const COUNT_DURATION = 2.8 // seconds — the whole odometer + dot reveal
 const SCATTER = 1.1 // degrees of gaussian spread around each city hotspot
 const DOT_FADE = 1.4 // seconds each dot takes to ease on
@@ -19,6 +19,17 @@ const GLOW_R = 15 // halo radius (viewBox units) — the soft gold bloom size
 const ROLL_SPAN = 0.6 // fraction of the count each digit spends rolling (overlap)
 const TWINKLE_MIN = 0.45 // dimmest a lit dot drifts to
 const TWINKLE_SPEED = [0.9, 2.4] // seconds per half-pulse (random per cycle)
+
+// State FIPS ids dropped so the projection frames the continental US (AK, HI +
+// territories) — they'd shrink the lower 48 or sit off-frame.
+const SKIP_FIPS = new Set(['02', '15', '60', '66', '69', '72', '78'])
+
+// Country labels, positioned in viewBox units (the continental fit is deterministic).
+const COUNTRIES = [
+  { name: 'Canada', x: 480, y: 40 },
+  { name: 'United States', x: 470, y: 300 },
+  { name: 'Mexico', x: 315, y: 528 },
+]
 
 // Real city hotspots [lng, lat, weight] — dots cluster around these.
 const HOTSPOTS = [
@@ -120,10 +131,22 @@ function loadMap() {
         import('https://cdn.jsdelivr.net/npm/d3-geo@3/+esm'),
         import('https://cdn.jsdelivr.net/npm/topojson-client@3/+esm'),
       ])
-      const us = await fetch(
-        'https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json'
-      ).then((r) => r.json())
-      return { geo, states: topojson.feature(us, us.objects.states) }
+      const [us, world] = await Promise.all([
+        fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(
+          (r) => r.json()
+        ),
+        fetch(
+          'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json'
+        ).then((r) => r.json()),
+      ])
+      const countries = topojson.feature(
+        world,
+        world.objects.countries
+      ).features
+      const neighbors = countries.filter(
+        (f) => f.properties.name === 'Canada' || f.properties.name === 'Mexico'
+      )
+      return { geo, states: topojson.feature(us, us.objects.states), neighbors }
     })()
   }
   return mapPromise
@@ -180,12 +203,13 @@ function buildStage(stage) {
   svg.setAttribute('aria-hidden', 'true')
   svg.setAttribute('data-impact-svg', '')
   ensureDefs(svg)
+  const neighborsG = svgGroup('data-impact-neighbors')
   const landG = svgGroup('data-impact-land')
   const labelsG = svgGroup('data-impact-labels')
   const dotsG = svgGroup('data-impact-dots')
-  svg.append(landG, labelsG, dotsG)
+  svg.append(neighborsG, landG, labelsG, dotsG)
   stage.appendChild(svg)
-  return { landG, labelsG, dotsG }
+  return { neighborsG, landG, labelsG, dotsG }
 }
 
 // ---- Counter: odometer host + screen-reader text injected into [data-impact-counter] ----
@@ -279,16 +303,34 @@ function weightedHotspot() {
   return HOTSPOTS[0]
 }
 
-// Places clustered points, keeping only those that fall on US land — geoContains
-// rejects ocean, lakes and neighbouring countries, so no dot lands in water.
-function makePoints(projection, geoContains, states, count, scatter) {
+// A random interior point of a single state (sampled in its bbox until inside),
+// falling back to the centroid. Guarantees the dot lands on that state's land.
+function statePoint(geo, projection, f) {
+  const b = geo.geoBounds(f) // [[west, south], [east, north]]
+  for (let i = 0; i < 250; i++) {
+    const lng = b[0][0] + Math.random() * (b[1][0] - b[0][0])
+    const lat = b[0][1] + Math.random() * (b[1][1] - b[0][1])
+    if (geo.geoContains(f, [lng, lat])) return projection([lng, lat])
+  }
+  return projection(geo.geoCentroid(f))
+}
+
+// One guaranteed dot per state, then `extra` clustered dots — all kept on US land
+// via geoContains (rejects ocean, lakes and neighbouring countries).
+function makePoints(geo, projection, states, extra, scatter) {
   const pts = []
+  states.features.forEach((f) => {
+    const p = statePoint(geo, projection, f)
+    if (p && !isNaN(p[0]) && !isNaN(p[1])) pts.push(p)
+  })
+
+  const target = pts.length + extra
   let guard = 0
-  while (pts.length < count && guard < count * 80) {
+  while (pts.length < target && guard < extra * 100) {
     guard++
     const [lng, lat] = weightedHotspot()
     const coord = [lng + gaussian() * scatter, lat + gaussian() * scatter]
-    if (!geoContains(states, coord)) continue // on-land only — no water
+    if (!geo.geoContains(states, coord)) continue // on-land only — no water
     const p = projection(coord)
     if (!p) continue
     const [x, y] = p
@@ -393,50 +435,65 @@ async function setup(wrapper) {
   const odo = buildOdometer(odoHost, target, hasGSAP)
   sr.textContent = odo.finalStr + '%'
 
-  const { landG, labelsG, dotsG } = buildStage(stage)
+  const { neighborsG, landG, labelsG, dotsG } = buildStage(stage)
+
+  const addLabel = (x, y, text, cls) => {
+    const t = document.createElementNS(NS, 'text')
+    t.setAttribute('x', x)
+    t.setAttribute('y', y)
+    if (cls) t.setAttribute('class', cls)
+    t.textContent = text
+    labelsG.appendChild(t)
+  }
 
   // Draw the map. Degrades to counter-only if the CDN load/parse fails.
-  let projection = null
-  let mapGeo = null
-  let mapStates = null
+  const circles = []
   try {
-    const { geo, states } = await loadMap()
-    mapGeo = geo
-    mapStates = states
-    projection = geo.geoAlbersUsa().fitSize([VIEW_W, VIEW_H], states)
+    const { geo, states, neighbors } = await loadMap()
+
+    // Frame the continental US (drop AK, HI + territories), but use plain
+    // geoAlbers (not geoAlbersUsa) so Canada + Mexico project too.
+    const continental = {
+      type: 'FeatureCollection',
+      features: states.features.filter((f) => !SKIP_FIPS.has(String(f.id))),
+    }
+    const projection = geo.geoAlbers().fitSize([VIEW_W, VIEW_H], continental)
     const path = geo.geoPath(projection)
-    states.features.forEach((f) => {
+
+    // Canada + Mexico behind (dark) — clipped to the stage by overflow.
+    neighbors.forEach((f) => {
       const d = path(f)
-      if (!d) return // territories albersUsa doesn't project (e.g. Puerto Rico)
+      if (!d) return
+      const p = document.createElementNS(NS, 'path')
+      p.setAttribute('d', d)
+      neighborsG.appendChild(p)
+    })
+
+    // US states (grey) + their initials.
+    continental.features.forEach((f) => {
+      const d = path(f)
+      if (!d) return
       const p = document.createElementNS(NS, 'path')
       p.setAttribute('d', d)
       landG.appendChild(p)
 
       const abbr = STATE_ABBR[f.properties && f.properties.name]
       const c = path.centroid(f)
-      if (abbr && !isNaN(c[0]) && !isNaN(c[1])) {
-        const t = document.createElementNS(NS, 'text')
-        t.setAttribute('x', c[0].toFixed(1))
-        t.setAttribute('y', c[1].toFixed(1))
-        t.textContent = abbr
-        labelsG.appendChild(t)
-      }
+      if (abbr && !isNaN(c[0]) && !isNaN(c[1]))
+        addLabel(c[0].toFixed(1), c[1].toFixed(1), abbr)
     })
+
+    // Country labels.
+    COUNTRIES.forEach(({ name, x, y }) => addLabel(x, y, name, 'im-country'))
+
+    // Dots: one per state + clustered extras, all on US land.
+    makePoints(geo, projection, continental, DOT_EXTRA, SCATTER).forEach(
+      ([x, y]) => {
+        circles.push(createDot(dotsG, x, y))
+      }
+    )
   } catch (e) {
     console.warn('impact-map: map failed to load', e)
-  }
-
-  const circles = []
-  if (projection) {
-    makePoints(
-      projection,
-      mapGeo.geoContains,
-      mapStates,
-      DOT_COUNT,
-      SCATTER
-    ).forEach(([x, y]) => {
-      circles.push(createDot(dotsG, x, y))
-    })
   }
 
   // Static final state for reduced motion / no GSAP; otherwise play.

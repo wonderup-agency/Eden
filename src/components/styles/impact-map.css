@@ -12,6 +12,7 @@
   ); /* state borders: Beige, weight 0.1 */
   --im-dot-glow: rgba(247, 201, 72, 0.5); /* dot drop shadow: gold @ 50% */
   --im-label: rgba(255, 255, 255, 0.3);
+  --im-country: rgba(255, 255, 255, 0.4); /* country name labels */
 }
 
 /* — Counter (value beside the caption) — */
@@ -35,6 +36,8 @@
 }
 
 /* — Map geometry — */
+/* Canada + Mexico + the US states share the exact same land style. */
+[data-impact-neighbors] path,
 [data-impact-land] path {
   fill: var(--im-land);
   stroke: var(--im-land-stroke);
@@ -51,6 +54,13 @@
   letter-spacing: 0.08em;
   text-anchor: middle;
   dominant-baseline: middle;
+}
+/* Country names — larger + a touch brighter than the state initials. */
+[data-impact-labels] .im-country {
+  fill: var(--im-country);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 /* — Dots: each is a <g> (halo + core); GSAP fades the group in and twinkles it — */
