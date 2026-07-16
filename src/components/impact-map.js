@@ -12,7 +12,7 @@ const NS = 'http://www.w3.org/2000/svg'
 
 // Tuning
 const DOT_EXTRA = 60 // clustered dots ON TOP of the guaranteed one-per-state
-const COUNT_DURATION = 2.8 // seconds — the whole odometer + dot reveal
+const COUNT_DURATION = 16 // seconds — the whole odometer + dot reveal
 const SCATTER = 1.1 // degrees of gaussian spread around each city hotspot
 const DOT_FADE = 1.4 // seconds each dot takes to ease on
 const GLOW_R = 15 // halo radius (viewBox units) — the soft gold bloom size
