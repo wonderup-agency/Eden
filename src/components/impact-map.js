@@ -24,6 +24,11 @@ const TWINKLE_SPEED = [0.9, 2.4] // seconds per half-pulse (random per cycle)
 // territories) — they'd shrink the lower 48 or sit off-frame.
 const SKIP_FIPS = new Set(['02', '15', '60', '66', '69', '72', '78'])
 
+// Framing: the US is fit into a slightly inset box (not the whole viewBox) so it
+// zooms out a touch and the margins let a bit of Canada/Mexico show. Small pads
+// = subtle zoom-out; bigger padTop = more Canada.
+const FRAME = { padX: 45, padTop: 60, padBottom: 45 }
+
 // Country labels, positioned in viewBox units (the continental fit is deterministic).
 const COUNTRIES = [
   { name: 'Canada', x: 480, y: 40 },
@@ -457,7 +462,13 @@ async function setup(wrapper) {
       type: 'FeatureCollection',
       features: states.features.filter((f) => !SKIP_FIPS.has(String(f.id))),
     }
-    const projection = geo.geoAlbers().fitSize([VIEW_W, VIEW_H], continental)
+    const projection = geo.geoAlbers().fitExtent(
+      [
+        [FRAME.padX, FRAME.padTop],
+        [VIEW_W - FRAME.padX, VIEW_H - FRAME.padBottom],
+      ],
+      continental
+    )
     const path = geo.geoPath(projection)
 
     // Canada + Mexico behind (dark) — clipped to the stage by overflow.
