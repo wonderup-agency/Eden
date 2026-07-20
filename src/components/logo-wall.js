@@ -13,7 +13,6 @@ const LOOP_DELAY = 1.5 // seconds between swaps
 const SWAP_DURATION = 1.1 // logo roll duration — longer = gentler
 const SWAP_TRAVEL = 100 // % of slot height — full roll so logos never crowd the centre
 const SWAP_EASE = 'power2.inOut' // even motion across the roll (expo crossed too fast)
-const DEFAULT_POOL_FACTOR = 2 // times the logo set is duplicated into the pool
 
 // Logo ⇄ testimonial hover crossfade (GSAP fades the logo; CSS de-blurs the testimonial).
 const LOGO_FADE = 0.5 // keep ~ --logo-wall-fade (CSS)
@@ -52,8 +51,19 @@ function resolveSlots(root) {
       if (testimonial && testimonial.parentElement !== parent) {
         parent.appendChild(testimonial)
       }
-      const isFixed = !!target && target.classList.contains('is-last')
-      return { parent, target, testimonial, isFixed }
+      // Fixed slot = CMS-bound data-logo-last on the item or target, or the legacy
+      // .is-last class. Accepts 'Last' (the value bound from the CMS Name field) and
+      // 'True'/'true'; empty (a non-fixed record) is NOT fixed. Case-insensitive.
+      const isLast = (el) => {
+        if (!el) return false
+        const v = (el.getAttribute('data-logo-last') || '').toLowerCase()
+        return v === 'last' || v === 'true'
+      }
+      const isFixed =
+        isLast(item) ||
+        isLast(target) ||
+        (!!target && target.classList.contains('is-last'))
+      return { item, parent, target, testimonial, isFixed }
     })
     .filter((s) => s.target)
 
@@ -78,6 +88,7 @@ function showTestimonial(slot) {
 }
 
 function hideTestimonial(slot) {
+  if (slot.pinned) return // fixed slot keeps its testimonial shown forever
   slot.parent.classList.remove('is-showing-testimonial')
   if (slot.current && slot.current.testimonial) {
     slot.current.testimonial.classList.remove('is-visible')
@@ -94,12 +105,42 @@ function hideTestimonial(slot) {
 }
 
 function setupLogoWall(root) {
-  const slots = resolveSlots(root)
-  if (!slots) return
+  const entries = resolveSlots(root)
+  if (!entries) return
 
-  const cycling = slots.filter((s) => !s.isFixed)
+  // Split the entries into the visible grid slots and a surplus queue. The queue
+  // is real, unique logos that AREN'T on screen — so rotation never repeats a logo.
+  // Visible cycling positions = data-logo-wall-slots (cycling only); default = every
+  // cycling entry → no surplus → the wall stays static (paused). "7 logos → paused".
+  const cyclingAll = entries.filter((e) => !e.isFixed)
+  // Diagnostic: data-logo-last must mark ONE item. If every item is flagged, the CMS
+  // binding is static ('True' on all) instead of bound to a per-record field → nothing cycles.
+  if (!cyclingAll.length && entries.length > 1) {
+    console.warn(
+      '[logo-wall] every item is marked data-logo-last="True" — bind that attribute ' +
+        'to a CMS field so only the fixed item carries it; otherwise nothing cycles'
+    )
+  }
+  const visibleCount =
+    parseInt(root.getAttribute('data-logo-wall-slots'), 10) || cyclingAll.length
+  const cycling = cyclingAll.slice(0, visibleCount)
+  const surplus = cyclingAll.slice(visibleCount)
+
+  // Pull the surplus logos out of the grid — they exist only in the rotation queue.
+  surplus.forEach((e) => e.item.remove())
+
+  // Pin the fixed slot(s) to the end of the list so it's always the last visible
+  // cell (the 8th, with 7 cycling before it) regardless of CMS order. It's never
+  // cycled nor queued, so it stays put and visible forever.
+  entries
+    .filter((e) => e.isFixed)
+    .forEach((e) => e.item.parentElement.appendChild(e.item))
+
+  // The slots that occupy the grid (visible cycling + the fixed one).
+  const slots = entries.filter((e) => cycling.includes(e) || e.isFixed)
+
   // Every slot (cycling AND fixed) can reveal its testimonial on hover; only cycling
-  // slots join the loop/pool.
+  // slots join the loop, fed by the surplus queue.
   slots.forEach((slot, i) => {
     slot.current = { target: slot.target, testimonial: slot.testimonial }
     slot.busy = false
@@ -113,7 +154,7 @@ function setupLogoWall(root) {
   console.log(
     `[logo-wall] resolved ${slots.length} slots — ${cycling.length} cycling, ${
       slots.length - cycling.length
-    } fixed`
+    } fixed, ${surplus.length} surplus in queue`
   )
 
   // Hover / focus → pause the wall + show that slot's testimonial.
@@ -154,36 +195,36 @@ function setupLogoWall(root) {
     slot.parent.addEventListener('focusout', () => setActive(slot, false))
   })
 
-  // Reduced motion: static logos, no loop — hover/focus testimonial still works.
-  if (reduceMotion.matches || cycling.length < 1) return
-
-  // Build the cycle pool (virtual clones until this becomes a CMS list).
-  const cloneEntry = (slot) => ({
-    target: slot.current.target.cloneNode(true),
-    testimonial: slot.current.testimonial
-      ? slot.current.testimonial.cloneNode(true)
-      : null,
+  // Fixed slot shows its testimonial PERMANENTLY — its "logo" is really the
+  // "and 1,900+ institutions" text, so reveal it now (logo hidden) and hideTestimonial
+  // no-ops for it. Runs before the pause guard so it applies even when the wall is static.
+  slots.forEach((slot) => {
+    if (!slot.isFixed || !slot.testimonial) return
+    slot.pinned = true
+    slot.parent.classList.add('is-showing-testimonial')
+    slot.testimonial.classList.add('is-visible')
+    slot.testimonial.setAttribute('aria-hidden', 'false')
+    if (!reduceMotion.matches) gsap.set(slot.target, { autoAlpha: 0 })
   })
 
-  const factor = Math.max(
-    2,
-    parseInt(root.getAttribute('data-logo-wall-pool'), 10) ||
-      DEFAULT_POOL_FACTOR
-  )
-  let pool = []
-  for (let r = 1; r < factor; r++) {
-    cycling.forEach((slot) => pool.push(cloneEntry(slot)))
-  }
-  console.log(
-    `[logo-wall] pool factor ${factor} → ${pool.length} virtual copies`
-  )
-  // Reset inherited state on the cloned testimonials.
+  // No loop when: reduced motion, no cycling slots, OR no surplus logos to rotate in.
+  // With as many logos as slots there's nothing to swap without repeating → paused.
+  if (reduceMotion.matches || cycling.length < 1 || surplus.length < 1) return
+
+  // The rotation queue: the real surplus logos, none currently on screen. A swap
+  // pulls the front and sends the outgoing logo to the back, so the displayed set
+  // and the queue stay disjoint — a logo is never shown twice at once.
+  let pool = surplus.map((e) => ({
+    target: e.target,
+    testimonial: e.testimonial,
+  }))
   pool.forEach((entry) => {
     if (entry.testimonial) {
       entry.testimonial.classList.remove('is-visible')
       entry.testimonial.setAttribute('aria-hidden', 'true')
     }
   })
+  console.log(`[logo-wall] rotation queue → ${pool.length} unique logos`)
 
   const shuffleEnabled = root.getAttribute('data-logo-wall-shuffle') !== 'false'
   if (shuffleEnabled) pool = shuffle(pool)

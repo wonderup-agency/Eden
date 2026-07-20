@@ -1,9 +1,10 @@
 /*
   Component: tabs-imaging · data-component="tabs-imaging"
-  Autoplay tabs — the active link's underline fills as a progress bar (cumulative across
-  the row) over a text-scaled dwell, then advances; on switch the incoming image wipes
-  open (clip-path) while its content de-blurs in. Starts on scroll-in, pauses on hover,
-  restarts from the clicked tab. Click / keyboard also switch.
+  Autoplay tabs — the active tab's dwell = its own VIDEO's duration (advances on the
+  video's `ended`); the underline tracks the video playhead. Tabs with no video fall back
+  to a text-scaled timer. On switch the incoming image wipes open (clip-path) while its
+  content de-blurs in. Starts on scroll-in, pauses on hover, restarts from the clicked tab.
+  Click / keyboard also switch.
   CSS → ./styles/tabs-imaging.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-imaging.md
 */
 
@@ -12,7 +13,7 @@ import { REVEAL_FROM } from '../utils/word-reveal.js'
 const { gsap } = window
 
 const ACTIVE_CLASS = 'is-active'
-// Autoplay dwell scales with the tab's text length (more words → longer).
+// Fallback autoplay dwell (tabs with no video) — scales with the tab's text length.
 const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
 const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the panel's text
 const AUTOPLAY_MIN = 4 // floor (also keeps it ≥ the reveal)
@@ -77,7 +78,8 @@ function setupTabs(root) {
     return fill
   })
 
-  // Animatable parts per panel: the image wrapper (clip wipe) + content blocks (de-blur).
+  // Animatable parts per panel: the image wrapper (clip wipe) + content blocks (de-blur)
+  // + the tab's video (drives the dwell).
   const parts = panels.map((panel) => ({
     image: panel.querySelector('[tabs-imaging="image"]'),
     content: gsap.utils.toArray(
@@ -85,14 +87,57 @@ function setupTabs(root) {
         '[tabs-imaging="text-content"] .tabs-imaging_tab-content-inner'
       )?.children || panel.querySelectorAll('[tabs-imaging="text-content"] > *')
     ),
+    video:
+      panel.querySelector('video.tabs-imaging_tab-image') ||
+      panel.querySelector('[tabs-imaging="image"] video') ||
+      panel.querySelector('video'),
   }))
 
   let activeIndex = -1
   let isAnimating = false
-  let progressTween = null
+  let progressTween = null // fallback timer (tabs with no video)
+  let activeVideo = null
+  let activeBar = null
   let started = false // autoplay kicked off (section reached)
   let hover = false
   let onScreen = false
+
+  // Prep each tab video: muted inline autoplay (autoplay-with-sound is blocked, so the
+  // video would never play and the tab would never advance), no loop so `ended` fires →
+  // advance. The tab's dwell = the video's own duration.
+  const endedHandlers = []
+  parts.forEach((part, i) => {
+    const v = part.video
+    if (!v) return
+    v.muted = true
+    v.loop = false
+    v.playsInline = true
+    v.setAttribute('playsinline', '')
+    v.preload = 'auto'
+    const onEnded = () => {
+      if (i === activeIndex && !isAnimating && !reduceMotion.matches) {
+        switchTab((i + 1) % count)
+      }
+    }
+    v.addEventListener('ended', onEnded)
+    endedHandlers[i] = onEnded
+  })
+
+  // Underline fill tracks the active video's playhead — smooth + always in sync (a fixed
+  // tween would drift from the video under pause/resume + buffering).
+  const tickBar = () => {
+    if (!activeVideo || !activeBar) return
+    const d = activeVideo.duration
+    if (isFinite(d) && d > 0) {
+      gsap.set(activeBar, { scaleX: Math.min(1, activeVideo.currentTime / d) })
+    }
+  }
+  if (!reduceMotion.matches) gsap.ticker.add(tickBar)
+
+  const playVideo = (v) => {
+    const p = v.play()
+    if (p && typeof p.catch === 'function') p.catch(() => {})
+  }
 
   // Accessibility scaffolding — tablist / tab / tabpanel with roving tabindex.
   root
@@ -123,20 +168,45 @@ function setupTabs(root) {
     })
   }
 
-  // Pause/resume the progress tween from on-screen + not-hovered + tab-visible.
+  // Pause/resume the active clock (video, else the fallback tween) from on-screen +
+  // not-hovered + tab-visible.
   const sync = () => {
-    if (!progressTween) return
-    started && onScreen && !hover && !document.hidden
-      ? progressTween.resume()
-      : progressTween.pause()
+    const play = started && onScreen && !hover && !document.hidden
+    if (activeVideo) {
+      play ? playVideo(activeVideo) : activeVideo.pause()
+    } else if (progressTween) {
+      play ? progressTween.resume() : progressTween.pause()
+    }
   }
 
-  // Fill the active tab's underline over its text-scaled dwell, then advance.
+  // Start the active tab's dwell: video-driven when the tab has one (advance on `ended`,
+  // bar tracks the playhead), else the text-scaled fallback timer.
   function startProgress(index) {
-    if (progressTween) progressTween.kill()
+    if (progressTween) {
+      progressTween.kill()
+      progressTween = null
+    }
     setStaticFills(index)
+    if (reduceMotion.matches) return
+
     const bar = bars[index]
-    if (!bar || reduceMotion.matches) return
+    const video = parts[index].video
+    activeVideo = video || null
+    activeBar = bar || null
+
+    if (video) {
+      if (bar) gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+      try {
+        video.currentTime = 0
+      } catch {
+        /* not seekable yet — plays from 0 anyway */
+      }
+      sync() // plays now if on-screen + not hovered
+      return
+    }
+
+    // No video → text-scaled timer (advance on complete).
+    if (!bar) return
     gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
     progressTween = gsap.to(bar, {
       scaleX: 1,
@@ -157,6 +227,9 @@ function setupTabs(root) {
     const outPanel = panels[activeIndex]
     const inLink = links[index]
     const inPanel = panels[index]
+
+    // Stop the outgoing video so only the active one ever plays.
+    parts[activeIndex]?.video?.pause()
 
     // ARIA + active-class state flip
     outLink?.classList.remove(ACTIVE_CLASS)
@@ -307,6 +380,13 @@ function setupTabs(root) {
   return {
     destroy() {
       if (progressTween) progressTween.kill()
+      if (!reduceMotion.matches) gsap.ticker.remove(tickBar)
+      parts.forEach((part, i) => {
+        if (part.video && endedHandlers[i]) {
+          part.video.removeEventListener('ended', endedHandlers[i])
+          part.video.pause()
+        }
+      })
       if (io) io.disconnect()
       root.removeEventListener('keydown', onKeydown)
       root.removeEventListener('mouseenter', onEnter)
