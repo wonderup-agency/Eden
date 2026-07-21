@@ -88,7 +88,6 @@ function showTestimonial(slot) {
 }
 
 function hideTestimonial(slot) {
-  if (slot.pinned) return // fixed slot keeps its testimonial shown forever
   slot.parent.classList.remove('is-showing-testimonial')
   if (slot.current && slot.current.testimonial) {
     slot.current.testimonial.classList.remove('is-visible')
@@ -148,8 +147,13 @@ function setupLogoWall(root) {
     // Force every original logo visible — Webflow starts some at opacity:0 on certain
     // breakpoints, which left them blank until their first swap.
     if (!reduceMotion.matches) gsap.set(slot.target, { autoAlpha: 1 })
-    if (slot.testimonial) slot.testimonial.setAttribute('aria-hidden', 'true')
-    else console.warn(`[logo-wall] slot ${i} has no testimonial`)
+    // Reset to the rest state — the Designer may ship the hover-state classes baked in
+    // (is-showing-testimonial / is-visible), which would leave the testimonial shown.
+    slot.parent.classList.remove('is-showing-testimonial')
+    if (slot.testimonial) {
+      slot.testimonial.classList.remove('is-visible')
+      slot.testimonial.setAttribute('aria-hidden', 'true')
+    } else console.warn(`[logo-wall] slot ${i} has no testimonial`)
   })
   console.log(
     `[logo-wall] resolved ${slots.length} slots — ${cycling.length} cycling, ${
@@ -193,18 +197,6 @@ function setupLogoWall(root) {
     slot.parent.addEventListener('mouseleave', () => setActive(slot, false))
     slot.parent.addEventListener('focusin', () => setActive(slot, true))
     slot.parent.addEventListener('focusout', () => setActive(slot, false))
-  })
-
-  // Fixed slot shows its testimonial PERMANENTLY — its "logo" is really the
-  // "and 1,900+ institutions" text, so reveal it now (logo hidden) and hideTestimonial
-  // no-ops for it. Runs before the pause guard so it applies even when the wall is static.
-  slots.forEach((slot) => {
-    if (!slot.isFixed || !slot.testimonial) return
-    slot.pinned = true
-    slot.parent.classList.add('is-showing-testimonial')
-    slot.testimonial.classList.add('is-visible')
-    slot.testimonial.setAttribute('aria-hidden', 'false')
-    if (!reduceMotion.matches) gsap.set(slot.target, { autoAlpha: 0 })
   })
 
   // No loop when: reduced motion, no cycling slots, OR no surplus logos to rotate in.
