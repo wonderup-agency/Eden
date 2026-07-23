@@ -65,9 +65,9 @@ function setupTabs(root) {
 
   const count = Math.min(links.length, panels.length)
 
-  // Inject a black fill into each underline + expand the rail (is-track). The fill is
-  // cumulative across tabs (see setStaticFills) so the row reads as total autoplay
-  // progress. Reduced motion skips track/fill (CSS shows the active underline).
+  // Inject a black fill into each underline + expand the rail (is-track). Active-only
+  // (see setStaticFills): only the active tab's fill shows, every other tab stays empty
+  // (inactive). Reduced motion skips track/fill (CSS shows the active underline).
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-imaging_tab-link-underline')
     if (!track || reduceMotion.matches) return null
@@ -156,13 +156,13 @@ function setupTabs(root) {
     panel.setAttribute('aria-labelledby', linkId)
   })
 
-  // Cumulative fills: tabs before the active one stay full, the ones after stay empty
-  // (the active one is animated separately). The row = total autoplay progress.
+  // Active-only fills: every non-active tab stays empty (inactive); the active one is
+  // animated separately (tracks the video playhead). Only the active tab carries a fill.
   const setStaticFills = (index) => {
     bars.forEach((bar, k) => {
       if (!bar || k === index) return
       gsap.set(bar, {
-        scaleX: k < index ? 1 : 0,
+        scaleX: 0,
         transformOrigin: 'left center',
       })
     })

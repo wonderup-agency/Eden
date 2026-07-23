@@ -1,7 +1,7 @@
 /*
   Component: tabs-foundation-model · data-component="tabs-foundation-model"
-  Autoplay tabs — the active link's underline fills as a progress bar (cumulative across
-  the row) over a text-scaled dwell, then advances; on switch the incoming image wipes
+  Autoplay tabs — only the active link's underline fills as a progress bar over a
+  text-scaled dwell (others stay empty/inactive), then advances; on switch the incoming image wipes
   open (clip-path) while its content de-blurs in. Starts on scroll-in, pauses on hover,
   restarts from the clicked tab. Click / keyboard also switch.
   CSS → ./styles/tabs-foundation-model.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-foundation-model.md
@@ -66,9 +66,9 @@ function setupTabs(root) {
 
   const count = Math.min(links.length, panels.length)
 
-  // Inject a black fill into each underline + expand the rail (is-track). The fill is
-  // cumulative across tabs (see setStaticFills) so the row reads as total autoplay
-  // progress. Reduced motion skips track/fill (CSS shows the active underline).
+  // Inject a black fill into each underline + expand the rail (is-track). Active-only
+  // (see setStaticFills): only the active tab's fill shows, every other tab stays empty
+  // (inactive). Reduced motion skips track/fill (CSS shows the active underline).
   const bars = links.map((link) => {
     const track = link.querySelector(
       '.tabs-foundation-model_tab-link-underline'
@@ -116,13 +116,13 @@ function setupTabs(root) {
     panel.setAttribute('aria-labelledby', linkId)
   })
 
-  // Cumulative fills: tabs before the active one stay full, the ones after stay empty
-  // (the active one is animated separately). The row = total autoplay progress.
+  // Active-only fills: every non-active tab stays empty (inactive); the active one is
+  // animated separately. Only the active tab carries a filled underline.
   const setStaticFills = (index) => {
     bars.forEach((bar, k) => {
       if (!bar || k === index) return
       gsap.set(bar, {
-        scaleX: k < index ? 1 : 0,
+        scaleX: 0,
         transformOrigin: 'left center',
       })
     })

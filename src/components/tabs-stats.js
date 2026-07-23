@@ -223,8 +223,8 @@ function setupTabs(root) {
   }
 
   // Expand each underline rail (is-track) + inject a black fill child. The fill is the
-  // autoplay progress bar — cumulative across tabs (setStaticFills + startProgress), so
-  // the row reads as total progress. `bars` = the fill children.
+  // autoplay progress bar — active-only (setStaticFills + startProgress): only the active
+  // tab's fill shows, every other tab stays empty (inactive). `bars` = the fill children.
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-architected_tab-link-underline')
     if (!track) return null
@@ -469,13 +469,13 @@ function setupTabs(root) {
     ensureLoop()
   }
 
-  // Cumulative fills: tabs before the active one stay full, after stay empty; the active
-  // one is the animated progress bar. The row reads as total autoplay progress.
+  // Active-only fills: every non-active tab stays empty (inactive); the active one is the
+  // animated progress bar. Only the active tab carries a filled underline.
   const setStaticFills = (index) => {
     bars.forEach((bar, k) => {
       if (!bar || k === index) return
       gsap.set(bar, {
-        scaleX: k < index ? 1 : 0,
+        scaleX: 0,
         transformOrigin: 'left center',
       })
     })

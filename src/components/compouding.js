@@ -251,7 +251,6 @@ function setupRoot(root) {
   const visuals = gsap.utils.toArray(
     root.querySelectorAll('[data-paradigm-visual]')
   )
-  const underlineFill = root.querySelector('.tabs_number-underline-fill')
   const messagesWrap = root.querySelector('[data-paradigm-messages]')
   const visualsWrap = root.querySelector('.tabs-compouding_visual-wrapper')
 
@@ -265,6 +264,19 @@ function setupRoot(root) {
 
   root.classList.add('is-enhanced')
 
+  // Per-number underline (active-only): inject a grey track + black fill into each number.
+  // Only the active number's fill grows 0→1; the rest stay empty (inactive). Replaces the
+  // single full-width .tabs_number-underline (hidden via CSS).
+  const bars = links.slice(0, count).map((link) => {
+    const track = document.createElement('span')
+    track.className = 'tabs-compouding_tab-link-underline is-track'
+    const fill = document.createElement('span')
+    fill.className = 'tabs-compouding_tab-link-fill'
+    track.appendChild(fill)
+    link.appendChild(track)
+    return fill
+  })
+
   const wordsByTab = messages.slice(0, count).map(splitElement)
 
   // Initial states. Visuals start hidden either way (the canvas paints them in cloud
@@ -272,8 +284,7 @@ function setupRoot(root) {
   gsap.set(titles, { autoAlpha: 0 })
   gsap.set(visuals, { autoAlpha: 0 })
   gsap.set(wordsByTab.flat(), REVEAL_FROM)
-  if (underlineFill)
-    gsap.set(underlineFill, { scaleX: 0, transformOrigin: 'left center' })
+  gsap.set(bars, { scaleX: 0, transformOrigin: 'left center' })
 
   // ===================== Point-cloud visuals =====================
   const cloudImgs = visuals
@@ -910,23 +921,31 @@ function setupRoot(root) {
     }
   }
 
-  // Underline = autoplay progress: a darker fill grows across the light-grey track,
-  // cumulatively over the cycle (tab i runs i/count → (i+1)/count; resets on loop).
+  // Every non-active number's fill stays empty (inactive).
+  const setStaticFills = (i) => {
+    bars.forEach((bar, k) => {
+      if (k === i) return
+      gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+    })
+  }
+
+  // Underline = autoplay progress, active-only: only the active number's fill grows
+  // 0→1 over its text-scaled dwell; the others stay empty. Advances on complete.
   const runProgress = () => {
     progressTl && progressTl.kill()
+    setStaticFills(index)
     progressTl = gsap.timeline({ onComplete: () => goTo((index + 1) % count) })
-    if (underlineFill) {
-      gsap.set(underlineFill, { scaleX: index / count })
-      progressTl.to(
-        underlineFill,
-        {
-          scaleX: (index + 1) / count,
-          duration: autoplayDuration(messages[index]),
-          ease: 'none',
-        },
-        0
-      )
-    }
+    const bar = bars[index]
+    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+    progressTl.to(
+      bar,
+      {
+        scaleX: 1,
+        duration: autoplayDuration(messages[index]),
+        ease: 'none',
+      },
+      0
+    )
     sync()
   }
 
