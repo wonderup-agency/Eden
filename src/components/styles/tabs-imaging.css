@@ -14,20 +14,32 @@
   will-change: clip-path;
 }
 
-/* — Active-only underline — only the active tab is underlined (the black fill); the
-   rail is a transparent full-width rest so the fill can scale within it. JS drives the
-   fill scaleX 1 on the active tab, 0 on the rest (smooth). No progress / no autoplay. */
+/* — Tab text: inactive grey, active black, always medium (500) — */
+[data-component='tabs-imaging'] [tabs-imaging='link'],
+[data-component='tabs-imaging'] [tabs-imaging='link'] * {
+  color: var(--base--grey, #666);
+  font-weight: 500;
+}
+[data-component='tabs-imaging'] [tabs-imaging='link'].is-active,
+[data-component='tabs-imaging'] [tabs-imaging='link'].is-active * {
+  color: var(--base--black, #000);
+}
 
-/* Rail: collapsed baseline; transparent (the fill is the visible bar). */
+/* — Underline (two states) — grey track under every tab (inactive) + black fill only
+   on the active tab. JS drives the fill scaleX 1 on the active tab, 0 on the rest
+   (smooth). No progress / no autoplay. */
+
+/* Rail: collapsed baseline; transparent until expanded to the grey track. */
 [data-component='tabs-imaging'] .tabs-imaging_tab-link-underline {
   transform: scaleX(0);
   transform-origin: left center;
   will-change: transform;
   background-color: transparent;
 }
-/* is-track → expand the rail to full width (still transparent). */
+/* is-track → grey track on every tab (full width). */
 [data-component='tabs-imaging'] .tabs-imaging_tab-link-underline.is-track {
   transform: none;
+  background-color: var(--base--grey-line, #e4e2dd);
 }
 /* The black underline of the active tab. */
 [data-component='tabs-imaging'] .tabs-imaging_tab-link-fill {

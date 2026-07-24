@@ -25,18 +25,48 @@
   will-change: transform, filter, opacity;
 }
 
-/* — Underline progress — a light-grey track under all the numbers + a darker fill
-   that grows left→right as the autoplay loads (JS scales it via scaleX). — */
-.tabs_number-underline {
-  overflow: hidden;
-  background: var(--base--grey-line, #e2e2e2);
+/* — Tab text: inactive grey, active black, always medium (500) — */
+[data-component='paradigm'] [data-paradigm='tab-link'],
+[data-component='paradigm'] [data-paradigm='tab-link'] * {
+  color: var(--base--grey, #666);
+  font-weight: 500;
 }
-.tabs_number-underline-fill {
+[data-component='paradigm'] [data-paradigm='tab-link'].is-active,
+[data-component='paradigm'] [data-paradigm='tab-link'].is-active * {
+  color: var(--base--black, #000);
+}
+
+/* — Underline progress (active-only, one per number) — JS injects a grey track + black
+   fill into EACH number; only the active number's fill grows left→right (scaleX), the
+   rest stay empty (inactive). Grey track under every number, black fill only on the
+   active one. Replaces the old single full-width bar (hidden when enhanced). — */
+/* The old single full-width underline is no longer used — hide it. */
+[data-component='paradigm'].is-enhanced .tabs_number-underline {
+  display: none;
+}
+/* Anchor each number's underline to it. */
+[data-component='paradigm'].is-enhanced [data-paradigm='tab-link'] {
+  position: relative;
+}
+/* Grey track, full width of the number, at its bottom edge (height is tunable). */
+[data-component='paradigm'] .tabs-paradigm_tab-link-underline {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 2px;
+  overflow: hidden;
+  background-color: var(--base--grey-line, #e2e2e2);
+}
+/* Black progress fill — only the active number's is grown (JS scaleX 0→1). */
+[data-component='paradigm'] .tabs-paradigm_tab-link-fill {
+  display: block;
   width: 100%;
   height: 100%;
-  background: var(--base--black, #000);
   transform: scaleX(0);
   transform-origin: left center;
+  will-change: transform;
+  background-color: var(--base--black, #000);
 }
 
 /* — Visuals (stacked, crossfaded) — */

@@ -24,10 +24,19 @@
   object-fit: cover;
 }
 
-/* — Progress underline / track / fill (three states) — */
-[data-component='tabs-architected'] {
-  --tabs-track-active: #b3aea2; /* state 2 — a darker shade of --base--grey-line */
+/* — Tab text: inactive grey, active black, always medium (500) — */
+[data-component='tabs-architected'] [tabs-architected='link'],
+[data-component='tabs-architected'] [tabs-architected='link'] * {
+  color: var(--base--grey, #666);
+  font-weight: 500;
 }
+[data-component='tabs-architected'] [tabs-architected='link'].is-active,
+[data-component='tabs-architected'] [tabs-architected='link'].is-active * {
+  color: var(--base--black, #000);
+}
+
+/* — Progress underline / track / fill (two states) — grey track under every tab
+   (inactive), black fill only on the active tab. No intermediate active-track shade. */
 
 /* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
 [data-component='tabs-architected'] .tabs-architected_tab-link-underline {
@@ -36,20 +45,13 @@
   will-change: transform;
 }
 
-/* State 1 — grey track on every tab (full width; JS adds .is-track). */
+/* Grey track on every tab (full width; JS adds .is-track). */
 [data-component='tabs-architected']
   .tabs-architected_tab-link-underline.is-track {
   transform: none;
   background-color: var(--base--grey-line, #e4e2dd);
-  transition: background-color 0.4s ease; /* ease the state-1 ↔ state-2 colour change */
 }
-/* State 2 — the active tab's track is a bit darker, still 100% wide. */
-[data-component='tabs-architected']
-  .tabs-architected_tab-link.is-active
-  .tabs-architected_tab-link-underline.is-track {
-  background-color: var(--tabs-track-active, #b3aea2);
-}
-/* State 3 — black progress fill (active-only; JS scales scaleX 0→1 across the segment). */
+/* Black progress fill (active-only; JS scales scaleX 0→1 across the segment). */
 [data-component='tabs-architected'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;
