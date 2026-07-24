@@ -16,7 +16,7 @@ const ANCHOR_GAP = 16
 // Secondary-button beam: hover playbackRate multiplier over the idle spin
 // (idle lap = --btn-beam-speed in button.css). Keep this JS-owned so the speed
 // change preserves the beam's position — no jump/reset (see initButtonBeams).
-const BEAM_HOVER_RATE = 2.4
+const BEAM_HOVER_RATE = 3.6
 
 // PERF — temporary diagnostic. Logs only janky frames (slower than LONG_FRAME)
 // with scrollY + the centered section, plus a rolling FPS. Set false to remove.

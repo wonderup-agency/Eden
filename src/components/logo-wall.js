@@ -129,7 +129,7 @@ function setupLogoWall(root) {
   surplus.forEach((e) => e.item.remove())
 
   // Pin the fixed slot(s) to the end of the list so it's always the last visible
-  // cell (the 8th, with 7 cycling before it) regardless of CMS order. It's never
+  // cell (the 4th, with 3 cycling before it) regardless of CMS order. It's never
   // cycled nor queued, so it stays put and visible forever.
   entries
     .filter((e) => e.isFixed)

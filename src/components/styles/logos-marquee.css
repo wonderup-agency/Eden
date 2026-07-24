@@ -1,0 +1,84 @@
+/* ===== LOGOS-MARQUEE · CSS-only infinite logo scroll — paste into Webflow head ===== */
+/* Two identical CMS lists animate in lockstep inside the clipped wrapper. No JS.
+   Requires exactly TWO .logos_marquee-list-wrapper (duplicate the CMS list) so the
+   loop is seamless. Each list carries a trailing gap so -100% lands seamlessly. */
+
+/* — Tokens — */
+.logos_marquee-wrapper {
+  --marquee-duration: 30s; /* full lap time — higher = slower */
+  --marquee-gap: 4rem; /* space between logos (and between the two copies) */
+  --marquee-logo-h: 2.5rem; /* logo height */
+  --marquee-fade: 6rem; /* edge fade width; set to 0 to disable */
+}
+
+/* — Clip + fade edges — */
+.logos_marquee-wrapper {
+  display: flex;
+  width: 100%;
+  overflow: hidden;
+  /* Soft fade on both edges so logos ease in/out instead of hard-cutting. */
+  -webkit-mask: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--marquee-fade),
+    #000 calc(100% - var(--marquee-fade)),
+    transparent 100%
+  );
+  mask: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--marquee-fade),
+    #000 calc(100% - var(--marquee-fade)),
+    transparent 100%
+  );
+}
+
+/* — Track (both copies move as one) — */
+.logos_marquee-list-wrapper {
+  flex: 0 0 auto;
+  display: flex;
+  animation: logosMarquee var(--marquee-duration) linear infinite;
+  will-change: transform;
+}
+
+.logos_marquee-list {
+  display: flex;
+  align-items: center;
+  gap: var(--marquee-gap);
+  padding-right: var(
+    --marquee-gap
+  ); /* trailing gap → seamless join between copies */
+}
+
+.logos_marquee-item {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+}
+
+.stats_bottom-logo {
+  height: var(--marquee-logo-h);
+  width: auto;
+  object-fit: contain;
+}
+
+@keyframes logosMarquee {
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+/* — Pause on hover — */
+.logos_marquee-wrapper:hover .logos_marquee-list-wrapper {
+  animation-play-state: paused;
+}
+
+/* — Reduced motion: freeze, no scroll — */
+@media (prefers-reduced-motion: reduce) {
+  .logos_marquee-list-wrapper {
+    animation: none;
+  }
+  .logos_marquee-wrapper {
+    overflow-x: auto; /* let users scroll manually instead */
+  }
+}

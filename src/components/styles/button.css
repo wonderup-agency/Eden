@@ -166,6 +166,31 @@
   mask-composite: exclude;
   pointer-events: none;
 }
+/* Subtle gold wash on hover (beam variant only) — overrides the grey secondary hover bg. */
+.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']:hover
+  .button_main-element {
+  background: rgba(212, 165, 74, 0.2);
+}
+/* Longer + brighter beam arcs on hover — same two arcs, wider footprint, hotter core. */
+.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']:hover
+  .button_main-element::after {
+  background: conic-gradient(
+    from var(--btn-angle, 0deg),
+    rgba(255, 213, 128, 0) 0deg,
+    /* beam 2 (opposite end) */ rgba(255, 213, 128, 0) 95deg,
+    rgba(255, 213, 128, 0.65) 130deg,
+    #f2c65c 162deg,
+    #fff4cf 175deg,
+    #f2c65c 188deg,
+    rgba(255, 213, 128, 0.65) 220deg,
+    rgba(255, 213, 128, 0) 250deg,
+    /* beam 1 */ rgba(255, 213, 128, 0) 290deg,
+    rgba(255, 213, 128, 0.65) 320deg,
+    #f2c65c 347deg,
+    #fff4cf 355deg,
+    #f2c65c 360deg
+  );
+}
 /* Hover acceleration: JS (global.js) bumps the spin's playbackRate — see @property note. */
 
 /* — Reduced motion — */

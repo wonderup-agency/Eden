@@ -1,17 +1,27 @@
-/* ===== TABS-ARCHITECTED · autoplay tabs — paste into Webflow head ===== */
-/* Only panel stacking + the underline/track baseline live here. Hooks → tabs-architected.md. */
+/* ===== TABS-ARCHITECTED · video-driven text tabs — paste into Webflow head ===== */
+/* Panel stacking + the underline/track baseline live here. Hooks → tabs-architected.md. */
 
-/* — Panel stacking (grid: same cell, no CLS) — */
-[data-component='tabs-architected'] .tabs-architected_tabs-content {
+/* — Text panel stacking (grid: same cell) — the N text blocks stack in the text-content
+   column; only the active one shows (JS autoAlpha). The video stays put.
+   Gated on .is-enhanced (added by JS at runtime) so in the Webflow Designer — where the
+   bundle never runs — the blocks stay in normal flow, one below the other, editable. — */
+[data-component='tabs-architected'].is-enhanced
+  [tabs-architected='text-content'] {
   display: grid;
 }
-[data-component='tabs-architected'] .tabs-architected_tab-item {
-  grid-area: 1 / 1; /* every panel occupies the same grid cell */
+[data-component='tabs-architected'].is-enhanced
+  .tabs-architected_tab-content-inner {
+  grid-area: 1 / 1; /* every text block occupies the same grid cell */
 }
 
-/* — Image wipe baseline — */
-[data-component='tabs-architected'] [tabs-architected='image'] {
-  will-change: clip-path;
+/* — Shared video (one for all tabs; the playhead drives the text) — */
+[data-component='tabs-architected'] [tabs-architected='video'] video,
+[data-component='tabs-architected'] [tabs-architected='image'] video,
+[data-component='tabs-architected'] video[tabs-architected='video'] {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 /* — Progress underline / track / fill (three states) — */
@@ -39,7 +49,7 @@
   .tabs-architected_tab-link-underline.is-track {
   background-color: var(--tabs-track-active, #b3aea2);
 }
-/* State 3 — black progress fill (cumulative across tabs; JS scales scaleX 0→1). */
+/* State 3 — black progress fill (active-only; JS scales scaleX 0→1 across the segment). */
 [data-component='tabs-architected'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;
