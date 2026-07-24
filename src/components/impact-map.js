@@ -1,131 +1,48 @@
 /*
   Component: impact-map · data-component="impact-map"
-  Autoplay odometer % synced with a staggered, twinkling clustered gold-dot reveal on a US map.
-  Map geometry (d3-geo + topojson + us-atlas) is loaded on demand from CDN; the <svg>,
+  Perpetual odometer % (slow intro count, then rises forever) synced with a staggered,
+  twinkling gold-dot reveal across a map of ALL the Americas (Canada → Tierra del Fuego).
+  Map geometry (d3-geo + topojson + world-atlas) is loaded on demand from CDN; the <svg>,
   gradients and dots are injected by JS, so Webflow only needs 3 elements + the head CSS.
   CSS → ./styles/impact-map.css (paste into Webflow head) · Docs → .claude/rules/components/impact-map.md
 */
 
 const VIEW_W = 960
-const VIEW_H = 600
+const VIEW_H = 600 // landscape — the Americas sit centered (black margins at the sides)
 const NS = 'http://www.w3.org/2000/svg'
 
-// Tuning
-const DOT_EXTRA = 60 // clustered dots ON TOP of the guaranteed one-per-state
-const COUNT_DURATION = 16 // seconds — the whole odometer + dot reveal
-const SCATTER = 1.1 // degrees of gaussian spread around each city hotspot
+// Tuning — counter
+const SECONDS_PER_STEP = 6 // seconds the last digit rests on each number before ticking to the next (super slow, one at a time)
+const CARRY = 0.1 // fraction of a step spent rolling to the next number (lower = snappier tick)
+const DOTS_REVEAL = 6 // seconds over which the dots fade in on load (decoupled from the counter)
+
+// Tuning — dots
+const DOT_COUNT = 30 // total gold dots, spread evenly across the continent
 const DOT_FADE = 1.4 // seconds each dot takes to ease on
-const GLOW_R = 15 // halo radius (viewBox units) — the soft gold bloom size
-const ROLL_SPAN = 0.6 // fraction of the count each digit spends rolling (overlap)
+const GLOW_R = 12 // halo radius (viewBox units) — the soft gold bloom size
+const CORE_R = 3 // dot core radius
 const TWINKLE_MIN = 0.45 // dimmest a lit dot drifts to
 const TWINKLE_SPEED = [0.9, 2.4] // seconds per half-pulse (random per cycle)
 
-// State FIPS ids dropped so the projection frames the continental US (AK, HI +
-// territories) — they'd shrink the lower 48 or sit off-frame.
-const SKIP_FIPS = new Set(['02', '15', '60', '66', '69', '72', '78'])
+// Geographic window shown. Fitting to this box (not to the raw feature bounds) keeps the
+// framing deterministic and crops Alaska/Hawaii + the high arctic; SVG overflow hides the rest.
+const BBOX = { lng0: -140, lng1: -33, lat0: -56, lat1: 74 }
+const FRAME_PAD = 10
 
-// Framing: the US is fit into a slightly inset box (not the whole viewBox) so it
-// zooms out a touch and the margins let a bit of Canada/Mexico show. Small pads
-// = subtle zoom-out; bigger padTop = more Canada.
-const FRAME = { padX: 45, padTop: 60, padBottom: 45 }
+// Dropped from the Americas centroid filter (geographically N. America but skews the frame).
+const EXCLUDE = new Set(['Greenland'])
 
-// Country labels, positioned in viewBox units (the continental fit is deterministic).
-const COUNTRIES = [
-  { name: 'Canada', x: 480, y: 40 },
-  { name: 'United States', x: 470, y: 300 },
-  { name: 'Mexico', x: 315, y: 528 },
+// Country labels — manual [lng,lat] anchors (projected at draw time; robust to projection changes).
+const COUNTRY_LABELS = [
+  { name: 'Canada', lng: -100, lat: 60 },
+  { name: 'United States', lng: -98, lat: 39 },
+  { name: 'Mexico', lng: -102, lat: 23 },
+  { name: 'Colombia', lng: -73.5, lat: 3.5 },
+  { name: 'Peru', lng: -75, lat: -9.5 },
+  { name: 'Brazil', lng: -51, lat: -10 },
+  { name: 'Chile', lng: -71, lat: -38 },
+  { name: 'Argentina', lng: -65, lat: -36 },
 ]
-
-// Real city hotspots [lng, lat, weight] — dots cluster around these.
-const HOTSPOTS = [
-  // West
-  [-118.24, 34.05, 3],
-  [-122.42, 37.77, 3],
-  [-122.33, 47.61, 2],
-  [-117.16, 32.72, 2],
-  [-122.68, 45.52, 1.5],
-  [-121.49, 38.58, 1.5],
-  [-115.14, 36.17, 1.5],
-  [-112.07, 33.45, 2],
-  // Mountain / Central
-  [-104.99, 39.74, 2],
-  [-111.89, 40.76, 1.5],
-  [-96.8, 32.78, 2.5],
-  [-95.37, 29.76, 2.5],
-  [-97.74, 30.27, 1.5],
-  [-87.63, 41.88, 3],
-  [-93.27, 44.98, 2],
-  [-94.58, 39.1, 1.5],
-  [-90.2, 38.63, 1.5],
-  [-97.52, 35.47, 1.2],
-  // East
-  [-74.0, 40.71, 3.5],
-  [-71.06, 42.36, 2],
-  [-77.04, 38.9, 2.5],
-  [-75.16, 39.95, 2],
-  [-84.39, 33.75, 2.5],
-  [-80.19, 25.76, 2],
-  [-80.84, 35.23, 1.5],
-  [-86.78, 36.16, 1.5],
-  [-83.05, 42.33, 2],
-  [-81.69, 41.5, 1.2],
-  [-82.46, 27.95, 1.2],
-]
-
-// Full state name → USPS abbreviation (us-atlas exposes properties.name).
-const STATE_ABBR = {
-  Alabama: 'AL',
-  Alaska: 'AK',
-  Arizona: 'AZ',
-  Arkansas: 'AR',
-  California: 'CA',
-  Colorado: 'CO',
-  Connecticut: 'CT',
-  Delaware: 'DE',
-  'District of Columbia': 'DC',
-  Florida: 'FL',
-  Georgia: 'GA',
-  Hawaii: 'HI',
-  Idaho: 'ID',
-  Illinois: 'IL',
-  Indiana: 'IN',
-  Iowa: 'IA',
-  Kansas: 'KS',
-  Kentucky: 'KY',
-  Louisiana: 'LA',
-  Maine: 'ME',
-  Maryland: 'MD',
-  Massachusetts: 'MA',
-  Michigan: 'MI',
-  Minnesota: 'MN',
-  Mississippi: 'MS',
-  Missouri: 'MO',
-  Montana: 'MT',
-  Nebraska: 'NE',
-  Nevada: 'NV',
-  'New Hampshire': 'NH',
-  'New Jersey': 'NJ',
-  'New Mexico': 'NM',
-  'New York': 'NY',
-  'North Carolina': 'NC',
-  'North Dakota': 'ND',
-  Ohio: 'OH',
-  Oklahoma: 'OK',
-  Oregon: 'OR',
-  Pennsylvania: 'PA',
-  'Rhode Island': 'RI',
-  'South Carolina': 'SC',
-  'South Dakota': 'SD',
-  Tennessee: 'TN',
-  Texas: 'TX',
-  Utah: 'UT',
-  Vermont: 'VT',
-  Virginia: 'VA',
-  Washington: 'WA',
-  'West Virginia': 'WV',
-  Wisconsin: 'WI',
-  Wyoming: 'WY',
-}
 
 // ---- Map libs + geometry: imported from CDN once, shared across instances -----
 let mapPromise
@@ -136,25 +53,33 @@ function loadMap() {
         import('https://cdn.jsdelivr.net/npm/d3-geo@3/+esm'),
         import('https://cdn.jsdelivr.net/npm/topojson-client@3/+esm'),
       ])
-      const [us, world] = await Promise.all([
-        fetch('https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json').then(
-          (r) => r.json()
-        ),
-        fetch(
-          'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json'
-        ).then((r) => r.json()),
-      ])
+      const world = await fetch(
+        'https://cdn.jsdelivr.net/npm/world-atlas@2/countries-50m.json'
+      ).then((r) => r.json())
       const countries = topojson.feature(
         world,
         world.objects.countries
       ).features
-      const neighbors = countries.filter(
-        (f) => f.properties.name === 'Canada' || f.properties.name === 'Mexico'
-      )
-      return { geo, states: topojson.feature(us, us.objects.states), neighbors }
+      return { geo, countries }
     })()
   }
   return mapPromise
+}
+
+// A country belongs to the Americas if its centroid sits in the western hemisphere band
+// (excludes Europe/Africa/Asia, whose centroids fall outside this lng/lat window).
+function isAmericas(geo, f) {
+  const c = geo.geoCentroid(f)
+  const name = (f.properties && f.properties.name) || ''
+  // Lower lng bound is -125 (not -170) so far-Pacific island nations (French Polynesia,
+  // etc.) are excluded — every mainland American country's centroid is east of -125.
+  return (
+    c[0] >= -125 &&
+    c[0] <= -33 &&
+    c[1] >= -58 &&
+    c[1] <= 84 &&
+    !EXCLUDE.has(name)
+  )
 }
 
 // ---- SVG scaffold (injected — Webflow ships an empty stage) --------------------
@@ -208,13 +133,12 @@ function buildStage(stage) {
   svg.setAttribute('aria-hidden', 'true')
   svg.setAttribute('data-impact-svg', '')
   ensureDefs(svg)
-  const neighborsG = svgGroup('data-impact-neighbors')
   const landG = svgGroup('data-impact-land')
   const labelsG = svgGroup('data-impact-labels')
   const dotsG = svgGroup('data-impact-dots')
-  svg.append(neighborsG, landG, labelsG, dotsG)
+  svg.append(landG, labelsG, dotsG)
   stage.appendChild(svg)
-  return { neighborsG, landG, labelsG, dotsG }
+  return { landG, labelsG, dotsG }
 }
 
 // ---- Counter: odometer host + screen-reader text injected into [data-impact-counter] ----
@@ -234,14 +158,22 @@ function formatNumber(v, decimals) {
   return v.toFixed(decimals).replace('.', ',')
 }
 
-// One reel (0-9 column) per digit slot; each reel knows its final digit and
-// rolls up to it (see play). Comma sits before the decimals, % at the end.
-function buildOdometer(host, target, hasGSAP) {
+const CELL = 1.3 // em — must match --odo-h in impact-map.css
+
+// A continuous odometer: each reel (0-9 + a trailing 0 so 9→0 wraps seamlessly) is
+// translated to the live fractional digit. The last (fastest) digit glides continuously;
+// higher digits stay crisp and only roll during the final CARRY window before they carry.
+function buildOdometer(host, target) {
   host.innerHTML = ''
   const decimals = (String(target).split('.')[1] || '').length || 0
   const finalStr = formatNumber(target, decimals) // e.g. "0,239768"
   const intLen = finalStr.split(',')[0].length
   const digitsStr = finalStr.replace(',', '')
+  const n = digitsStr.length
+
+  // Place value per position: 10^(intLen-1-i). Smallest = the fastest (last) digit.
+  const places = []
+  for (let i = 0; i < n; i++) places.push(Math.pow(10, intLen - 1 - i))
 
   const sep = (ch) => {
     const s = document.createElement('span')
@@ -251,7 +183,7 @@ function buildOdometer(host, target, hasGSAP) {
   }
 
   const reels = []
-  for (let pos = 0; pos < digitsStr.length; pos++) {
+  for (let pos = 0; pos < n; pos++) {
     if (pos === intLen) host.appendChild(sep(','))
     const digit = document.createElement('span')
     digit.className = 'odo-digit'
@@ -259,85 +191,62 @@ function buildOdometer(host, target, hasGSAP) {
     clip.className = 'odo-clip'
     const reel = document.createElement('span')
     reel.className = 'odo-reel'
-    for (let n = 0; n <= 9; n++) {
+    for (let k = 0; k <= 10; k++) {
+      // 0..9 then a trailing 0 so the wrap 9→0 is seamless
       const s = document.createElement('span')
-      s.textContent = n
+      s.textContent = k % 10
       reel.appendChild(s)
     }
     clip.appendChild(reel)
     digit.appendChild(clip)
     host.appendChild(digit)
-    reels.push({ reel, digit: parseInt(digitsStr[pos], 10) || 0 })
+    reels.push(reel)
   }
   host.appendChild(sep('%'))
 
-  const setY = (reel, d) => {
-    const y = -d * 10 // reel is 1000% tall, one digit = 10%
-    if (hasGSAP) window.gsap.set(reel, { yPercent: y })
-    else reel.style.transform = `translateY(${y}%)`
+  const setReel = (reel, disp) => {
+    reel.style.transform = `translateY(${(-disp * CELL).toFixed(4)}em)`
+  }
+
+  // Every digit ticks ONE NUMBER AT A TIME: it rests on its value, then rolls quickly to
+  // the next only in the final CARRY window before it carries — no continuous gliding.
+  const render = (value) => {
+    for (let i = 0; i < n; i++) {
+      const scaled = value / places[i]
+      const d = ((Math.floor(scaled) % 10) + 10) % 10
+      const frac = scaled - Math.floor(scaled)
+      const roll = frac > 1 - CARRY ? (frac - (1 - CARRY)) / CARRY : 0
+      setReel(reels[i], d + roll)
+    }
   }
 
   return {
     finalStr,
-    reels,
-    reset() {
-      reels.forEach((r) => setY(r.reel, 0))
-    },
+    target,
+    smallestPlace: places[n - 1],
+    render,
     showFinal() {
-      reels.forEach((r) => setY(r.reel, r.digit))
+      render(target)
     },
   }
 }
 
 // ---- Dot placement -------------------------------------------------------------
-function gaussian() {
-  let u = 0
-  let w = 0
-  while (u === 0) u = Math.random()
-  while (w === 0) w = Math.random()
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * w)
-}
-
-function weightedHotspot() {
-  const total = HOTSPOTS.reduce((s, h) => s + h[2], 0)
-  let r = Math.random() * total
-  for (const h of HOTSPOTS) {
-    r -= h[2]
-    if (r <= 0) return h
-  }
-  return HOTSPOTS[0]
-}
-
-// A random interior point of a single state (sampled in its bbox until inside),
-// falling back to the centroid. Guarantees the dot lands on that state's land.
-function statePoint(geo, projection, f) {
-  const b = geo.geoBounds(f) // [[west, south], [east, north]]
-  for (let i = 0; i < 250; i++) {
-    const lng = b[0][0] + Math.random() * (b[1][0] - b[0][0])
-    const lat = b[0][1] + Math.random() * (b[1][1] - b[0][1])
-    if (geo.geoContains(f, [lng, lat])) return projection([lng, lat])
-  }
-  return projection(geo.geoCentroid(f))
-}
-
-// One guaranteed dot per state, then `extra` clustered dots — all kept on US land
-// via geoContains (rejects ocean, lakes and neighbouring countries).
-function makePoints(geo, projection, states, extra, scatter) {
+// `count` dots spread EVENLY across the continent: uniform rejection sampling over the
+// BBOX, kept only when the point lands on Americas land (geoContains rejects ocean/lakes,
+// so no dots in the water) — no city hotspots, so no country is over-clustered.
+function makePoints(geo, projection, americas, count) {
   const pts = []
-  states.features.forEach((f) => {
-    const p = statePoint(geo, projection, f)
-    if (p && !isNaN(p[0]) && !isNaN(p[1])) pts.push(p)
-  })
+  const onLand = (coord) => americas.some((f) => geo.geoContains(f, coord))
 
-  const target = pts.length + extra
   let guard = 0
-  while (pts.length < target && guard < extra * 100) {
+  while (pts.length < count && guard < count * 400) {
     guard++
-    const [lng, lat] = weightedHotspot()
-    const coord = [lng + gaussian() * scatter, lat + gaussian() * scatter]
-    if (!geo.geoContains(states, coord)) continue // on-land only — no water
-    const p = projection(coord)
-    if (!p) continue
+    const lng = BBOX.lng0 + Math.random() * (BBOX.lng1 - BBOX.lng0)
+    const lat = BBOX.lat0 + Math.random() * (BBOX.lat1 - BBOX.lat0)
+    if (!onLand([lng, lat])) continue // on-land only — no water
+    const p = projection([lng, lat])
+    if (!p || isNaN(p[0])) continue
     const [x, y] = p
     if (x < 4 || x > VIEW_W - 4 || y < 4 || y > VIEW_H - 4) continue
     pts.push([x, y])
@@ -355,7 +264,7 @@ function createDot(group, x, y) {
   halo.setAttribute('r', GLOW_R)
   const core = document.createElementNS(NS, 'circle')
   core.setAttribute('class', 'im-core')
-  core.setAttribute('r', '4')
+  core.setAttribute('r', CORE_R)
   g.appendChild(halo)
   g.appendChild(core)
   group.appendChild(g)
@@ -377,48 +286,37 @@ function startTwinkle(c) {
   })
 }
 
-// One timeline ties the odometer and the dots. Each reel rolls up to its final
-// digit and stops in a quick, overlapped left→right cascade; the dots reveal
-// across the same window so the last dot lands with the last digit.
+// The odometer never lands: it starts AT the target and rises forever, ticking up ONE
+// number at a time, super slowly (SECONDS_PER_STEP per last-digit step — it rests on each
+// number, then rolls quickly to the next). Dots fade in over DOTS_REVEAL (decoupled from
+// the counter). Driven by the GSAP ticker (pauses with the tab, so it never fast-forwards
+// after being backgrounded).
 function play(odo, circles) {
   const { gsap } = window
-  const reels = odo.reels
   gsap.killTweensOf(circles)
-  gsap.killTweensOf(reels.map((r) => r.reel))
   gsap.set(circles, { opacity: 0 })
-  odo.reset()
-
-  const tl = gsap.timeline()
-  const rollDur = COUNT_DURATION * ROLL_SPAN
-  const step =
-    reels.length > 1
-      ? Math.max(0, COUNT_DURATION - rollDur) / (reels.length - 1)
-      : 0
-  reels.forEach((r, i) => {
-    tl.to(
-      r.reel,
-      { yPercent: -r.digit * 10, duration: rollDur, ease: 'power2.out' },
-      i * step
-    )
-  })
 
   if (circles.length) {
-    const spread = Math.max(0.02, (COUNT_DURATION - DOT_FADE) / circles.length)
+    const spread = Math.max(0.02, (DOTS_REVEAL - DOT_FADE) / circles.length)
     const order = gsap.utils.shuffle(circles.map((_, i) => i))
     order.forEach((ci, k) => {
       const c = circles[ci]
-      tl.to(
-        c,
-        {
-          opacity: 1,
-          duration: DOT_FADE,
-          ease: 'sine.out',
-          onComplete: () => startTwinkle(c),
-        },
-        k * spread
-      )
+      gsap.to(c, {
+        opacity: 1,
+        duration: DOT_FADE,
+        ease: 'sine.out',
+        delay: k * spread,
+        onComplete: () => startTwinkle(c),
+      })
     })
   }
+
+  const riseRate = odo.smallestPlace / SECONDS_PER_STEP
+  const start = gsap.ticker.time
+  gsap.ticker.add(() => {
+    const value = odo.target + riseRate * (gsap.ticker.time - start)
+    odo.render(value)
+  })
 }
 
 // ---- Per-instance setup --------------------------------------------------------
@@ -437,10 +335,10 @@ async function setup(wrapper) {
 
   const target = parseFloat(wrapper.getAttribute('data-impact-target')) || 0
   const { odoHost, sr } = buildCounter(counterEl)
-  const odo = buildOdometer(odoHost, target, hasGSAP)
+  const odo = buildOdometer(odoHost, target)
   sr.textContent = odo.finalStr + '%'
 
-  const { neighborsG, landG, labelsG, dotsG } = buildStage(stage)
+  const { landG, labelsG, dotsG } = buildStage(stage)
 
   const addLabel = (x, y, text, cls) => {
     const t = document.createElementNS(NS, 'text')
@@ -454,60 +352,58 @@ async function setup(wrapper) {
   // Draw the map. Degrades to counter-only if the CDN load/parse fails.
   const circles = []
   try {
-    const { geo, states, neighbors } = await loadMap()
+    const { geo, countries } = await loadMap()
+    const americas = countries.filter((f) => isAmericas(geo, f))
 
-    // Frame the continental US (drop AK, HI + territories), but use plain
-    // geoAlbers (not geoAlbersUsa) so Canada + Mexico project too.
-    const continental = {
-      type: 'FeatureCollection',
-      features: states.features.filter((f) => !SKIP_FIPS.has(String(f.id))),
-    }
-    const projection = geo.geoAlbers().fitExtent(
-      [
-        [FRAME.padX, FRAME.padTop],
-        [VIEW_W - FRAME.padX, VIEW_H - FRAME.padBottom],
+    // Fit an equirectangular projection to the fixed BBOX (deterministic framing;
+    // Alaska/Hawaii + the high arctic fall outside and are clipped by the SVG).
+    const bboxPoly = {
+      type: 'Polygon',
+      coordinates: [
+        [
+          [BBOX.lng0, BBOX.lat1],
+          [BBOX.lng1, BBOX.lat1],
+          [BBOX.lng1, BBOX.lat0],
+          [BBOX.lng0, BBOX.lat0],
+          [BBOX.lng0, BBOX.lat1],
+        ],
       ],
-      continental
+    }
+    const projection = geo.geoEquirectangular().fitExtent(
+      [
+        [FRAME_PAD, FRAME_PAD],
+        [VIEW_W - FRAME_PAD, VIEW_H - FRAME_PAD],
+      ],
+      bboxPoly
     )
     const path = geo.geoPath(projection)
 
-    // Canada + Mexico behind (dark) — clipped to the stage by overflow.
-    neighbors.forEach((f) => {
-      const d = path(f)
-      if (!d) return
-      const p = document.createElementNS(NS, 'path')
-      p.setAttribute('d', d)
-      neighborsG.appendChild(p)
-    })
-
-    // US states (grey) + their initials.
-    continental.features.forEach((f) => {
+    // All American countries, uniform land style.
+    americas.forEach((f) => {
       const d = path(f)
       if (!d) return
       const p = document.createElementNS(NS, 'path')
       p.setAttribute('d', d)
       landG.appendChild(p)
-
-      const abbr = STATE_ABBR[f.properties && f.properties.name]
-      const c = path.centroid(f)
-      if (abbr && !isNaN(c[0]) && !isNaN(c[1]))
-        addLabel(c[0].toFixed(1), c[1].toFixed(1), abbr)
     })
 
-    // Country labels.
-    COUNTRIES.forEach(({ name, x, y }) => addLabel(x, y, name, 'im-country'))
+    // Country labels (projected anchors, on-view only).
+    COUNTRY_LABELS.forEach(({ name, lng, lat }) => {
+      const xy = projection([lng, lat])
+      if (!xy || isNaN(xy[0])) return
+      if (xy[0] < 0 || xy[0] > VIEW_W || xy[1] < 0 || xy[1] > VIEW_H) return
+      addLabel(xy[0].toFixed(1), xy[1].toFixed(1), name, 'im-country')
+    })
 
-    // Dots: one per state + clustered extras, all on US land.
-    makePoints(geo, projection, continental, DOT_EXTRA, SCATTER).forEach(
-      ([x, y]) => {
-        circles.push(createDot(dotsG, x, y))
-      }
-    )
+    // Dots: spread evenly across the continent, all on land (no water).
+    makePoints(geo, projection, americas, DOT_COUNT).forEach(([x, y]) => {
+      circles.push(createDot(dotsG, x, y))
+    })
   } catch (e) {
     console.warn('impact-map: map failed to load', e)
   }
 
-  // Static final state for reduced motion / no GSAP; otherwise play.
+  // Static state for reduced motion / no GSAP; otherwise play the perpetual counter.
   if (!hasGSAP || reduce) {
     odo.showFinal()
     circles.forEach((c) => {

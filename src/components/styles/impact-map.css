@@ -1,15 +1,15 @@
-/* ===== IMPACT-MAP · animated US map: odometer % synced with a clustered gold-dot reveal — paste into Webflow head ===== */
+/* ===== IMPACT-MAP · animated Americas map: perpetual odometer % synced with a clustered gold-dot reveal — paste into Webflow head ===== */
 
 [data-component='impact-map'] {
   /* — Tokens (Figma) — */
   --im-bg: #000000; /* frame fill: Black */
-  --im-land: #333333; /* state fill: 333333 */
+  --im-land: #333333; /* country fill: 333333 */
   --im-land-stroke: rgba(
     232,
     226,
     210,
     0.4
-  ); /* state borders: Beige, weight 0.1 */
+  ); /* country borders: Beige, weight 0.1 */
   --im-dot-glow: rgba(247, 201, 72, 0.5); /* dot drop shadow: gold @ 50% */
   --im-label: rgba(255, 255, 255, 0.3);
   --im-country: rgba(255, 255, 255, 0.4); /* country name labels */
@@ -24,7 +24,7 @@
 [data-impact-stage] {
   position: relative;
   width: 100%;
-  aspect-ratio: 960 / 600;
+  aspect-ratio: 960 / 600; /* landscape — the Americas sit centered, black margins at the sides */
   background: var(--im-bg);
   border-radius: 0.75rem;
   overflow: hidden;
@@ -36,8 +36,7 @@
 }
 
 /* — Map geometry — */
-/* Canada + Mexico + the US states share the exact same land style. */
-[data-impact-neighbors] path,
+/* Every American country shares the same uniform land style. */
 [data-impact-land] path {
   fill: var(--im-land);
   stroke: var(--im-land-stroke);
@@ -45,22 +44,18 @@
   stroke-linejoin: round;
 }
 
-/* State initials, sitting behind the dots — */
+/* Country name labels, sitting behind the dots — */
 [data-impact-labels] text {
   fill: var(--im-label);
   font-family: 'Inter', system-ui, sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
   text-anchor: middle;
   dominant-baseline: middle;
 }
-/* Country names — larger + a touch brighter than the state initials. */
 [data-impact-labels] .im-country {
   fill: var(--im-country);
-  font-size: 20px;
+  font-size: 9px;
   font-weight: 500;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
 }
 
 /* — Dots: each is a <g> (halo + core); GSAP fades the group in and twinkles it — */
