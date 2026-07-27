@@ -28,6 +28,11 @@
   color: var(--base--black, #15110c);
   border-left-color: var(--base--black, #15110c);
 }
+[data-component='blog-post'] .toc_link:focus-visible {
+  outline: 2px solid var(--base--gold, #c79a4b);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
 
 /* Indent per heading level (H3/H4 nested under their H2/H3). */
 [data-component='blog-post'] .toc_item.is-h3 > .toc_link {
@@ -45,7 +50,9 @@
 
 /* — Scroll target clearance — */
 /* Native anchor jumps (mobile / reduced-motion) land below the fixed nav.
-   Desktop smooth scroll already offsets via the global Lenis bridge. */
-[data-component='blog-post'] [data-toc-target] {
+   Desktop smooth scroll already offsets via the global Lenis bridge.
+   Unscoped on purpose — the extra targets (References, Supplemental files) live outside
+   the blog-post root, and the attribute is only ever set by toc.js. */
+[data-toc-target] {
   scroll-margin-top: 6rem;
 }

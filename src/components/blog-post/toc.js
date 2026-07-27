@@ -1,7 +1,8 @@
 /*
   Module: toc — loaded by the blog-post orchestrator (data-component="blog-post")
-  Table of contents built from the headings inside the article body: indexes the
-  summary blocks + h2/h3/h4, injects accordion links (own toc_* classes, styled in
+  Table of contents built from the article body: indexes the summary blocks + h2/h3/h4,
+  plus the out-of-body sections ([data-toc-extra] + the references block), injects
+  accordion links (own toc_* classes, styled in
   toc.css), drives a scrollspy .current + auto-expanding branch. Smooth scroll is the
   global Lenis anchor bridge (links are plain <a href="#id">).
   CSS → ./styles/toc.css (paste into Webflow head) · Docs → .claude/rules/components/toc.md
@@ -9,6 +10,8 @@
 
 const LEVELS = [2, 3, 4] // heading levels to index (h2/h3/h4)
 const SUMMARY_SELECTOR = '.content27_summary' // top-level pseudo-headings (Summary, Key points)
+const EXTRA_SELECTOR = '[data-toc-extra]' // sections outside the body (Supplemental files…)
+const REFERENCES_LABEL = 'References' // fallback label for the auto-indexed references block
 const ID_PREFIX = 'toc-'
 const ACTIVE = 'current' // class on the active link (matches the Webflow template)
 const SPY_GAP = 24 // px below the nav — the floor of the activation line
@@ -161,32 +164,99 @@ function markLenisPrevent(root, list) {
   }
 }
 
-// Walk the body in document order, collecting summary blocks + headings as flat items.
+// Walk the body (summary blocks + headings), then add the extra sections that live
+// outside it (Supplemental files, References…), and sort everything into document order.
 function indexContent(body) {
-  const used = new Set()
+  const usedIds = new Set()
+  const seen = new Set()
   const items = []
-  const nodes = body.querySelectorAll(
-    `${SUMMARY_SELECTOR}, ${HEADING_SELECTOR}`
-  )
 
-  nodes.forEach((el) => {
-    const isSummary = el.matches(SUMMARY_SELECTOR)
-    // A heading nested inside a summary block is already covered by the block.
-    if (!isSummary && el.closest(SUMMARY_SELECTOR)) return
-
-    const label = isSummary
-      ? (el.firstElementChild?.textContent || el.textContent || '').trim()
-      : el.textContent.trim()
-    if (!label) return
-
-    const level = isSummary ? LEVELS[0] : Number(el.tagName.slice(1))
-    el.id = el.id || uniqueId(label, used)
+  const push = (el, label, level) => {
+    if (!label || seen.has(el)) return
+    seen.add(el)
+    el.id = el.id || uniqueId(label, usedIds)
     el.setAttribute('data-toc-target', '')
-
     items.push({ id: el.id, label, level, target: el })
+  }
+
+  body
+    .querySelectorAll(`${SUMMARY_SELECTOR}, ${HEADING_SELECTOR}`)
+    .forEach((el) => {
+      const isSummary = el.matches(SUMMARY_SELECTOR)
+      // A heading nested inside a summary block is already covered by the block.
+      if (!isSummary && el.closest(SUMMARY_SELECTOR)) return
+
+      const label = isSummary
+        ? (el.firstElementChild?.textContent || el.textContent || '').trim()
+        : el.textContent.trim()
+
+      push(el, label, isSummary ? LEVELS[0] : Number(el.tagName.slice(1)))
+    })
+
+  extras(body).forEach((x) => push(x.target, x.label, x.level))
+
+  return items.sort(inDocumentOrder)
+}
+
+// Sections flagged with [data-toc-extra] (plus the references block, picked up with no
+// attribute). Document-scoped: these normally sit outside the article body/root.
+function extras(body) {
+  const out = []
+  const marked = [...document.querySelectorAll(EXTRA_SELECTOR)]
+
+  marked.forEach((el) => {
+    const heading = el.matches(HEADING_SELECTOR) ? el : findHeading(el)
+    const label = (
+      el.getAttribute('data-toc-label') ||
+      heading?.textContent ||
+      ''
+    ).trim()
+    if (!label) {
+      console.warn(
+        '[toc] extra with no heading or data-toc-label — skipping',
+        el
+      )
+      return
+    }
+    const asked = Number(el.getAttribute('data-toc-level'))
+    out.push({
+      target: el,
+      label,
+      level: LEVELS.includes(asked) ? asked : LEVELS[0],
+    })
   })
 
-  return items
+  // References: the block is already hooked for the references module, so index it for
+  // free — unless it's inside the body (its headings are indexed) or already marked.
+  const list = document.querySelector('[data-references-list]')
+  const covered = marked.some((el) => el.contains(list) || list?.contains(el))
+  if (list && !body.contains(list) && !covered) {
+    const box = list.parentElement || list
+    const heading = findHeading(box, list)
+    out.push({
+      target: heading || box,
+      label: heading?.textContent.trim() || REFERENCES_LABEL,
+      level: LEVELS[0],
+    })
+  }
+
+  return out
+}
+
+function findHeading(el, skip) {
+  return (
+    [...el.querySelectorAll('h1, h2, h3, h4')].find(
+      (h) => !skip || !skip.contains(h)
+    ) || null
+  )
+}
+
+function inDocumentOrder(a, b) {
+  if (a.target === b.target) return 0
+  return a.target.compareDocumentPosition(b.target) &
+    window.Node.DOCUMENT_POSITION_FOLLOWING
+    ? -1
+    : 1
 }
 
 function uniqueId(label, used) {

@@ -3,8 +3,8 @@
   Autoplay tabs — the active tab's dwell = its own VIDEO's duration (advances on the
   video's `ended`); the underline tracks the video playhead. Tabs with no video fall back
   to a text-scaled timer. On switch the incoming image wipes open (clip-path) while its
-  content de-blurs in. Starts on scroll-in, pauses on hover, restarts from the clicked tab.
-  Click / keyboard also switch.
+  content de-blurs in. Starts on scroll-in; on hover the tab HOLDS (won't advance) but the
+  video keeps playing in a loop; restarts from the clicked tab. Click / keyboard also switch.
   CSS → ./styles/tabs-imaging.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-imaging.md
 */
 
@@ -103,8 +103,9 @@ function setupTabs(root) {
   let onScreen = false
 
   // Prep each tab video: muted inline autoplay (autoplay-with-sound is blocked, so the
-  // video would never play and the tab would never advance), no loop so `ended` fires →
-  // advance. The tab's dwell = the video's own duration.
+  // video would never play and the tab would never advance). Loop off by default so
+  // `ended` fires → advance; `sync()` flips loop ON while hovered so the tab holds and the
+  // video keeps playing (a looping element never fires `ended`). Dwell = the video's duration.
   const endedHandlers = []
   parts.forEach((part, i) => {
     const v = part.video
@@ -168,14 +169,21 @@ function setupTabs(root) {
     })
   }
 
-  // Pause/resume the active clock (video, else the fallback tween) from on-screen +
-  // not-hovered + tab-visible.
+  // Gate the active clock. Off-screen / hidden tab always pauses. While hovered the tab is
+  // HELD (won't advance) but the video keeps playing in a LOOP — loop off fires `ended` →
+  // advance; loop on plays forever, no advance. The no-video fallback timer still pauses on
+  // hover (there's nothing to keep playing).
   const sync = () => {
-    const play = started && onScreen && !hover && !document.hidden
+    const visible = started && onScreen && !document.hidden
     if (activeVideo) {
-      play ? playVideo(activeVideo) : activeVideo.pause()
+      if (!visible) {
+        activeVideo.pause()
+      } else {
+        activeVideo.loop = hover // hover → loop (hold); else advance on `ended`
+        playVideo(activeVideo)
+      }
     } else if (progressTween) {
-      play ? progressTween.resume() : progressTween.pause()
+      visible && !hover ? progressTween.resume() : progressTween.pause()
     }
   }
 
@@ -346,7 +354,8 @@ function setupTabs(root) {
   }
   root.addEventListener('keydown', onKeydown)
 
-  // Hover pause / resume + tab-visibility gating (skipped under reduced motion).
+  // Hover hold (video keeps looping) / resume + tab-visibility gating (skipped under
+  // reduced motion).
   const onEnter = () => {
     hover = true
     sync()

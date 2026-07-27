@@ -3,7 +3,7 @@
   ONE shared looping video drives multiple text tabs. As the playhead crosses each tab's
   cue time (data-video-time, seconds), the incoming text de-blurs in and the active tab's
   underline fills across that segment. Video-driven (no timer): plays muted+inline on
-  scroll-in, loops, pauses off-screen / hidden tab / on hover. Click / keyboard seek the
+  scroll-in, loops, pauses off-screen / hidden tab. Click / keyboard seek the
   video to a segment. No video → text-scaled timer fallback.
   CSS → ./styles/tabs-architected.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-architected.md
 */
@@ -105,7 +105,6 @@ function setupTabs(root) {
   let isAnimating = false
   let started = false // autoplay kicked off (section reached)
   let onScreen = false
-  let hover = false
   let progressTween = null // fallback timer (no-video mode only)
 
   // Cue times (segment starts), seconds. Explicit from data-video-time, else evenly
@@ -143,8 +142,8 @@ function setupTabs(root) {
     if (p && typeof p.catch === 'function') p.catch(() => {})
   }
 
-  // Autoplay runs only while started + on-screen + tab-visible + not hovered.
-  const gated = () => started && onScreen && !document.hidden && !hover
+  // Autoplay runs only while started + on-screen + tab-visible.
+  const gated = () => started && onScreen && !document.hidden
 
   // Play/pause the active clock (video, else the fallback tween) from the gate.
   const sync = () => {
@@ -362,20 +361,10 @@ function setupTabs(root) {
   }
   root.addEventListener('keydown', onKeydown)
 
-  // Hover pause / resume + visibility + scroll-in start.
-  const onEnter = () => {
-    hover = true
-    sync()
-  }
-  const onLeave = () => {
-    hover = false
-    sync()
-  }
+  // Visibility + scroll-in start (no hover pause — the video keeps playing on hover).
   const onVisibility = () => sync()
   let io = null
   if (!reduceMotion.matches) {
-    root.addEventListener('mouseenter', onEnter)
-    root.addEventListener('mouseleave', onLeave)
     document.addEventListener('visibilitychange', onVisibility)
     io = new window.IntersectionObserver(
       (entries) => {
@@ -405,8 +394,6 @@ function setupTabs(root) {
       }
       if (io) io.disconnect()
       root.removeEventListener('keydown', onKeydown)
-      root.removeEventListener('mouseenter', onEnter)
-      root.removeEventListener('mouseleave', onLeave)
       document.removeEventListener('visibilitychange', onVisibility)
       links.forEach((link, i) => link.removeEventListener('click', onClick[i]))
     },
