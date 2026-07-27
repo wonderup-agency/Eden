@@ -1,0 +1,25 @@
+/* ===== RANDOM-ITEM · one random CMS item per list, re-rolled on reload — paste into Webflow head ===== */
+/* Pre-JS state only: keeps the FIRST item visible (crawlable, no CLS) and holds the
+   lists invisible for a beat so the swap to the random pick is never seen as a flash.
+   Once random-item.js adds .is-random both rules switch off and JS owns the display
+   inline — so nothing here fights it. Keep the fail-safe delay in sync with nothing
+   else: it's a pure safety net if the bundle never runs. */
+
+/* — Pre-JS: only the first item of each list — */
+[data-component='random-item']:not(.is-random)
+  .w-dyn-items
+  > .w-dyn-item:not(:first-child) {
+  display: none;
+}
+
+/* — Anti-flash gate (self-healing: reveals after 2s even if the JS never runs) — */
+[data-component='random-item']:not(.is-random) .w-dyn-list {
+  visibility: hidden;
+  animation: random-item-failsafe 0.01s linear 2s forwards;
+}
+
+@keyframes random-item-failsafe {
+  to {
+    visibility: visible;
+  }
+}

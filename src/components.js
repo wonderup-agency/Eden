@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='random-item']",
+    importFn: () => import('./components/random-item.js'),
+  },
+  {
     selector: "[data-component='impact-map']",
     importFn: () => import('./components/impact-map.js'),
   },
