@@ -50,15 +50,45 @@
   );
 }
 
-/* — Tab text: inactive grey, active black, always medium (500) — */
+/* — Tab text: inactive grey, active gradient (background-clip: text), weight normal — */
+[data-component='tabs-stats'] {
+  /* Stops spread across the full glyph run (no early hard stop) so the ramp actually reads. */
+  --tabs-stats-active-gradient: linear-gradient(
+    120deg,
+    #000000 0%,
+    #9e9e9e 100%
+  );
+}
+
 [data-component='tabs-stats'] [tabs-architected='link'],
 [data-component='tabs-stats'] [tabs-architected='link'] * {
   color: var(--base--grey, #666);
-  font-weight: 500;
+  font-weight: 400;
+}
+
+/* Active: gradient painted on the link box, clipped to its own + its children's glyphs. */
+[data-component='tabs-stats'] [tabs-architected='link'].is-active {
+  background-image: var(--tabs-stats-active-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
 }
 [data-component='tabs-stats'] [tabs-architected='link'].is-active,
-[data-component='tabs-stats'] [tabs-architected='link'].is-active * {
-  color: var(--base--black, #000);
+[data-component='tabs-stats']
+  [tabs-architected='link'].is-active
+  *:not(.tabs-architected_tab-link-underline):not(
+    .tabs-architected_tab-link-fill
+  ) {
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+}
+
+/* No background-clip: text support → plain black active text. */
+@supports not ((background-clip: text) or (-webkit-background-clip: text)) {
+  [data-component='tabs-stats'] [tabs-architected='link'].is-active,
+  [data-component='tabs-stats'] [tabs-architected='link'].is-active * {
+    color: var(--base--black, #000);
+    -webkit-text-fill-color: currentColor;
+  }
 }
 
 /* — Progress underline / track / fill (two states) — grey track under every tab

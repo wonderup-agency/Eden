@@ -1,0 +1,66 @@
+/* ===== CARD ARROW SWAP · hover a card → its text-button arrow swaps — paste into Webflow head ===== */
+
+/* Opt in with data-animate-arrow on ANY ancestor of the button (the card wrapper, the CMS
+   item, a column…). Standalone attribute on purpose — data-animate-card is read by another
+   script by exact value, so appending to it could break those animations.
+   On hover of that wrapper the arrow inside .button_text-icon slides out to the right while
+   a clone slides in from the left. The CARD is the trigger on purpose: full-card .item-link
+   overlays sit above the button, so the button's own :hover never fires.
+   Requires TWO identical arrow embeds inside .button_text-icon — the icon box clips both. */
+
+[data-animate-arrow] {
+  --arrow-time: 0.35s;
+  --arrow-ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --arrow-travel: 130%; /* negate to flip the direction (enter from the right) */
+}
+
+/* — Icon box: explicit square that clips both arrows —
+   The size is set here (not inherited from Webflow's .icon class) so both copies are
+   guaranteed identical: one in flow + one absolute would resolve their boxes differently
+   and the arrows would render at different sizes. */
+[data-animate-arrow] .button_text-icon {
+  --arrow-size: 1em; /* scales with the button text */
+  position: relative;
+  flex: none;
+  width: var(--arrow-size);
+  height: var(--arrow-size);
+  overflow: hidden;
+}
+
+/* BOTH arrows are absolute in the same box — same size, guaranteed */
+[data-animate-arrow] .button_text-icon > * {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform var(--arrow-time) var(--arrow-ease);
+}
+/* The SVG carries no width/height attrs, so it must be sized by its box */
+[data-animate-arrow] .button_text-icon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+[data-animate-arrow] .button_text-icon > *:first-child {
+  transform: translateX(0);
+}
+/* The clone waits just outside the box */
+[data-animate-arrow] .button_text-icon > *:nth-child(2) {
+  transform: translateX(calc(-1 * var(--arrow-travel)));
+}
+
+/* — Card hover: first arrow exits right, clone lands in place — */
+[data-animate-arrow]:hover .button_text-icon > *:first-child {
+  transform: translateX(var(--arrow-travel));
+}
+[data-animate-arrow]:hover .button_text-icon > *:nth-child(2) {
+  transform: translateX(0);
+}
+
+/* — Reduced motion — */
+@media (prefers-reduced-motion: reduce) {
+  [data-animate-arrow] .button_text-icon > * {
+    transition: none !important;
+  }
+}

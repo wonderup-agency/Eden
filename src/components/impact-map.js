@@ -1,6 +1,6 @@
 /*
   Component: impact-map · data-component="impact-map"
-  Perpetual odometer % (slow intro count, then rises forever) synced with a staggered,
+  Perpetual clock-derived odometer % (same for every visitor, never resets) synced with a staggered,
   twinkling gold-dot reveal across a map of ALL the Americas (Canada → Tierra del Fuego).
   Map geometry (d3-geo + topojson + world-atlas) is loaded on demand from CDN; the <svg>,
   gradients and dots are injected by JS, so Webflow only needs 3 elements + the head CSS.
@@ -12,9 +12,20 @@ const VIEW_H = 600 // landscape — the Americas sit centered (black margins at 
 const NS = 'http://www.w3.org/2000/svg'
 
 // Tuning — counter
-const SECONDS_PER_STEP = 6 // seconds the last digit rests on each number before ticking to the next (super slow, one at a time)
-const CARRY = 0.1 // fraction of a step spent rolling to the next number (lower = snappier tick)
+// The growth is authored in the honest unit: percentage POINTS gained per year. The visual
+// tick speed is a consequence of it and of how many decimals data-impact-target carries —
+// one extra decimal = a 10× faster tick at the same real growth. At 9 decimals, 0.005/year
+// ticks the last digit every ~6s. (Dev builds log the resulting tick.)
+const RISE_PER_YEAR = 0.005
+const YEAR = 31557600 // seconds in an average Gregorian year
+const CARRY = 0.1 // fraction of ONE last-digit step spent rolling over (lower = snappier tick)
 const DOTS_REVEAL = 6 // seconds over which the dots fade in on load (decoupled from the counter)
+
+// The counter is a pure function of the clock: value = target + RISE_PER_YEAR × (now − EPOCH).
+// No backend — every visitor sees the same number at the same instant and a reload never
+// resets it. Override per section with data-impact-epoch (ISO date).
+const EPOCH = '2026-07-28T00:00:00Z'
+const RISE_RATE = RISE_PER_YEAR / YEAR // percentage points per second
 
 // Tuning — dots
 const DOT_COUNT = 30 // total gold dots, spread evenly across the continent
@@ -210,24 +221,28 @@ function buildOdometer(host, target) {
 
   // Every digit ticks ONE NUMBER AT A TIME: it rests on its value, then rolls quickly to
   // the next only in the final CARRY window before it carries — no continuous gliding.
+  // The window is scaled by place value so it lasts the same WALL-CLOCK time on every
+  // digit (CARRY × one last-digit step). Using a flat fraction of each digit's own cycle
+  // instead would leave a high digit visibly stuck mid-roll for hours.
+  const smallest = places[n - 1]
+  const windows = places.map((p) => CARRY * (smallest / p))
+
   const render = (value) => {
     for (let i = 0; i < n; i++) {
       const scaled = value / places[i]
       const d = ((Math.floor(scaled) % 10) + 10) % 10
       const frac = scaled - Math.floor(scaled)
-      const roll = frac > 1 - CARRY ? (frac - (1 - CARRY)) / CARRY : 0
+      const w = windows[i]
+      const roll = frac > 1 - w ? (frac - (1 - w)) / w : 0
       setReel(reels[i], d + roll)
     }
   }
 
   return {
-    finalStr,
     target,
-    smallestPlace: places[n - 1],
+    smallestPlace: smallest,
+    format: (v) => formatNumber(v, decimals),
     render,
-    showFinal() {
-      render(target)
-    },
   }
 }
 
@@ -286,12 +301,25 @@ function startTwinkle(c) {
   })
 }
 
-// The odometer never lands: it starts AT the target and rises forever, ticking up ONE
-// number at a time, super slowly (SECONDS_PER_STEP per last-digit step — it rests on each
-// number, then rolls quickly to the next). Dots fade in over DOTS_REVEAL (decoupled from
-// the counter). Driven by the GSAP ticker (pauses with the tab, so it never fast-forwards
-// after being backgrounded).
-function play(odo, circles) {
+// Value at page load: the target plus everything accrued since EPOCH. This is what makes
+// the number survive reloads and keep climbing across days. Clamped at 0 so a visitor with
+// a clock set before the epoch never sees a value below the target.
+function valueNow(odo, epochAttr) {
+  const epochMs = Date.parse(epochAttr || EPOCH)
+  if (isNaN(epochMs)) return odo.target
+  const elapsed = Math.max(0, (Date.now() - epochMs) / 1000)
+  console.log(
+    `impact-map: +${RISE_PER_YEAR}/year → last digit ticks every ${(odo.smallestPlace / RISE_RATE).toFixed(1)}s`
+  )
+  return odo.target + RISE_RATE * elapsed
+}
+
+// The odometer never lands: it starts at the clock-derived value and rises forever at
+// RISE_RATE, ticking up ONE number at a time (it rests on each number, then rolls quickly
+// to the next). Dots fade in over DOTS_REVEAL (decoupled
+// from the counter). Driven by the GSAP ticker (pauses with the tab, so it never
+// fast-forwards after being backgrounded — the next load re-syncs from the clock anyway).
+function play(odo, circles, from) {
   const { gsap } = window
   gsap.killTweensOf(circles)
   gsap.set(circles, { opacity: 0 })
@@ -311,11 +339,9 @@ function play(odo, circles) {
     })
   }
 
-  const riseRate = odo.smallestPlace / SECONDS_PER_STEP
   const start = gsap.ticker.time
   gsap.ticker.add(() => {
-    const value = odo.target + riseRate * (gsap.ticker.time - start)
-    odo.render(value)
+    odo.render(from + RISE_RATE * (gsap.ticker.time - start))
   })
 }
 
@@ -336,7 +362,9 @@ async function setup(wrapper) {
   const target = parseFloat(wrapper.getAttribute('data-impact-target')) || 0
   const { odoHost, sr } = buildCounter(counterEl)
   const odo = buildOdometer(odoHost, target)
-  sr.textContent = odo.finalStr + '%'
+  // Clock-derived starting value — the same for every visitor, and never lower than the last load.
+  const current = valueNow(odo, wrapper.getAttribute('data-impact-epoch'))
+  sr.textContent = odo.format(current) + '%'
 
   const { landG, labelsG, dotsG } = buildStage(stage)
 
@@ -405,13 +433,13 @@ async function setup(wrapper) {
 
   // Static state for reduced motion / no GSAP; otherwise play the perpetual counter.
   if (!hasGSAP || reduce) {
-    odo.showFinal()
+    odo.render(current)
     circles.forEach((c) => {
       c.style.opacity = '1'
     })
     return
   }
-  play(odo, circles)
+  play(odo, circles, current)
 }
 
 /**
