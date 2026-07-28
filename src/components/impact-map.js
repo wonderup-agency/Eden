@@ -12,13 +12,16 @@ const VIEW_H = 600 // landscape — the Americas sit centered (black margins at 
 const NS = 'http://www.w3.org/2000/svg'
 
 // Tuning — counter
-// The growth is authored in the honest unit: percentage POINTS gained per year. The visual
-// tick speed is a consequence of it and of how many decimals data-impact-target carries —
-// one extra decimal = a 10× faster tick at the same real growth. At 9 decimals, 0.005/year
-// ticks the last digit every ~6s. (Dev builds log the resulting tick.)
+// Growth is authored in the honest unit: percentage POINTS gained per year. The visual tick
+// speed is set separately by DECIMALS — one extra decimal = a 10× faster tick at the SAME
+// real growth. Keeping them apart is the point: rhythm without inflating the figure.
+// At DECIMALS 10 / RISE_PER_YEAR 0.005 the last digit ticks every ~0.6s. DECIMALS moves in
+// 10× jumps, so RISE_PER_YEAR is the FINE speed knob — nudge it for small changes of pace,
+// keeping in mind it also inflates the figure. (Dev builds log the resulting tick.)
 const RISE_PER_YEAR = 0.005
+const DECIMALS = 10 // decimals shown — coarse speed knob (more = 10× faster, longer number)
 const YEAR = 31557600 // seconds in an average Gregorian year
-const CARRY = 0.1 // fraction of ONE last-digit step spent rolling over (lower = snappier tick)
+const CARRY = 0.25 // fraction of ONE last-digit step spent rolling over (lower = snappier)
 const DOTS_REVEAL = 6 // seconds over which the dots fade in on load (decoupled from the counter)
 
 // The counter is a pure function of the clock: value = target + RISE_PER_YEAR × (now − EPOCH).
@@ -176,7 +179,10 @@ const CELL = 1.3 // em — must match --odo-h in impact-map.css
 // higher digits stay crisp and only roll during the final CARRY window before they carry.
 function buildOdometer(host, target) {
   host.innerHTML = ''
-  const decimals = (String(target).split('.')[1] || '').length || 0
+  // Pad the authored figure out to DECIMALS so the extra reels (and the faster tick) come
+  // from code, not from retyping a long number into the Webflow attribute.
+  const authored = (String(target).split('.')[1] || '').length
+  const decimals = Math.max(DECIMALS, authored)
   const finalStr = formatNumber(target, decimals) // e.g. "0,239768"
   const intLen = finalStr.split(',')[0].length
   const digitsStr = finalStr.replace(',', '')

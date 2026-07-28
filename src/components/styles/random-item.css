@@ -1,14 +1,43 @@
-/* ===== RANDOM-ITEM · one random CMS item per list, re-rolled on reload — paste into Webflow head ===== */
-/* Pre-JS state only: keeps the FIRST item visible (crawlable, no CLS) and holds the
-   lists invisible for a beat so the swap to the random pick is never seen as a flash.
-   Once random-item.js adds .is-random both rules switch off and JS owns the display
-   inline — so nothing here fights it. Keep the fail-safe delay in sync with nothing
-   else: it's a pure safety net if the bundle never runs. */
+/* ===== RANDOM-ITEM · N random CMS items per list, re-rolled on reload — paste into Webflow head ===== */
+/* Pre-JS state only: keeps the FIRST data-random-count items visible (crawlable, no
+   CLS) and holds the lists invisible for a beat so the swap to the random picks is
+   never seen as a flash. Once random-item.js adds .is-random both rules switch off
+   and JS owns the display inline — so nothing here fights it. Keep the count rules
+   in sync with the values authors are allowed to use (1–8). */
 
-/* — Pre-JS: only the first item of each list — */
+/* — Pre-JS: first item only (no data-random-count anywhere on the list) — */
 [data-component='random-item']:not(.is-random)
-  .w-dyn-items
-  > .w-dyn-item:not(:first-child) {
+  .w-dyn-list:not([data-random-count])
+  .w-dyn-items:not([data-random-count])
+  > .w-dyn-item:nth-child(n + 2) {
+  display: none;
+}
+
+/* — Pre-JS: honour data-random-count (1–8), set on the list, its wrapper or the root — */
+[data-component='random-item']:not(.is-random)
+  [data-random-count='1']
+  .w-dyn-item:nth-child(n + 2),
+[data-component='random-item']:not(.is-random)
+  [data-random-count='2']
+  .w-dyn-item:nth-child(n + 3),
+[data-component='random-item']:not(.is-random)
+  [data-random-count='3']
+  .w-dyn-item:nth-child(n + 4),
+[data-component='random-item']:not(.is-random)
+  [data-random-count='4']
+  .w-dyn-item:nth-child(n + 5),
+[data-component='random-item']:not(.is-random)
+  [data-random-count='5']
+  .w-dyn-item:nth-child(n + 6),
+[data-component='random-item']:not(.is-random)
+  [data-random-count='6']
+  .w-dyn-item:nth-child(n + 7),
+[data-component='random-item']:not(.is-random)
+  [data-random-count='7']
+  .w-dyn-item:nth-child(n + 8),
+[data-component='random-item']:not(.is-random)
+  [data-random-count='8']
+  .w-dyn-item:nth-child(n + 9) {
   display: none;
 }
 
