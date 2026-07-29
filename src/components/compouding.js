@@ -74,6 +74,9 @@ const OVAL_PROCEDURAL = true
 // Flow tab overlay (tags): each fades at its own speed (desfasado) + staggered start.
 const TAG_FADE = 0.9
 const TAG_STAGGER = 0.18
+// Pills sit OUTSIDE the ring with this clearance (px) — centred on the perimeter they were
+// crossed by the dots. The oval's fit reserves the pill box + this gap (see cloudResize).
+const TAG_GAP = 14
 // Bar tab: the band slowly rotates around its long axis (diffuse-DNA).
 const BAR_HEIGHT = 0.32 // bar half-height = rotation radius (subtle)
 const BAR_TWIST = 0.4 // turns of twist across the bar (low = subtle, not literal DNA)
@@ -411,9 +414,17 @@ function setupRoot(root) {
     canvas.width = cssW * cdpr
     canvas.height = cssH * cdpr
     cctx.setTransform(cdpr, 0, 0, cdpr, 0, 0)
+    // The flow state fits into the stage MINUS the pill boxes, so the tags clear the ring
+    // (and the section text) instead of straddling it.
+    const res = tagReserve()
     for (let i = 0; i < stateExtX.length; i++) {
+      const rx = i === flowIndex ? res.x : 0
+      const ry = i === flowIndex ? res.y : 0
+      const halfW = Math.max(cssW * 0.5 - rx, cssW * 0.25)
+      const halfH = Math.max(cssH * 0.5 - ry, cssH * 0.25)
       stateScale[i] =
-        Math.min((cssW * 0.5) / stateExtX[i], (cssH * 0.5) / stateExtY[i]) * FIT
+        Math.min(halfW / stateExtX[i], halfH / stateExtY[i]) *
+        (i === flowIndex ? 1 : FIT)
     }
     cscale = stateScale[curState] || cssW * 0.5 * FIT
     scaleFrom = cscale
@@ -423,9 +434,27 @@ function setupRoot(root) {
     if (cloudReady) drawCloud()
   }
 
-  // Anchor the injected tag pills on the oval's real perimeter (its own semi-axes ×
-  // fit scale), so they sit ON the ring. Only items carrying data-pos are moved — an
-  // author-positioned overlay (no data-pos) is left where the Designer placed it.
+  // Room the pills need outside the ring (half the biggest box per axis + the gap), so
+  // cloudResize can shrink the oval by exactly that much. 0 when there are no data-pos
+  // pills (an author-positioned overlay keeps the full stage).
+  function tagReserve() {
+    let x = 0
+    let y = 0
+    overlayItems.forEach((el) => {
+      const pos = el.dataset && el.dataset.pos
+      if (!pos) return
+      if (pos === 'left' || pos === 'right')
+        x = Math.max(x, el.offsetWidth + TAG_GAP)
+      else y = Math.max(y, el.offsetHeight + TAG_GAP)
+    })
+    return { x, y }
+  }
+
+  // Anchor the injected tag pills just OUTSIDE the oval's real perimeter (its own
+  // semi-axes × fit scale), clear of the dots by TAG_GAP. Only items carrying data-pos
+  // are moved — an author-positioned overlay (no data-pos) is left where the Designer
+  // placed it. Pills are centred on the point set here (CSS translate(-50%, -50%)), so
+  // each offset is the gap plus half the pill's own box.
   function positionTags() {
     if (flowIndex < 0 || !stateScale.length) return
     const ex = stateExtX[flowIndex] || 1
@@ -438,8 +467,10 @@ function setupRoot(root) {
     overlayItems.forEach((el) => {
       const pos = el.dataset && el.dataset.pos
       if (!pos) return
-      const x = pos === 'left' ? cx - hw : pos === 'right' ? cx + hw : cx
-      const y = pos === 'top' ? cy - hh : pos === 'bottom' ? cy + hh : cy
+      const offX = hw + TAG_GAP + el.offsetWidth / 2
+      const offY = hh + TAG_GAP + el.offsetHeight / 2
+      const x = pos === 'left' ? cx - offX : pos === 'right' ? cx + offX : cx
+      const y = pos === 'top' ? cy - offY : pos === 'bottom' ? cy + offY : cy
       el.style.left = x + 'px'
       el.style.top = y + 'px'
     })
