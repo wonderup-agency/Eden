@@ -1,10 +1,15 @@
-/* ===== LOGO-WALL · testimonial reveal on hover — paste into Webflow head ===== */
+/* ===== LOGO-WALL · testimonial reveal on hover ===== */
 /* Only the testimonial reveal lives here — layout/sizing/roll are Webflow's. Don't add layout (it collapses the slot). */
 
 /* — Tokens — */
 [data-component='logo-wall'] {
-  --logo-wall-fade: 0.5s; /* testimonial show/hide transition — keep ~ LOGO_FADE (JS) */
+  --logo-wall-fade: 0.4s; /* testimonial show/hide transition — keep ~ LOGO_FADE (JS) */
   --logo-wall-blur: 12px; /* testimonial de-blur start amount */
+}
+
+/* — Visible count: cap the grid at 8 cells (the rest feed the JS rotation queue) — */
+[data-logo-wall-list] [data-logo-wall-item]:nth-child(n + 9) {
+  display: none;
 }
 
 /* — Testimonial overlay (hidden until JS adds .is-visible) — */

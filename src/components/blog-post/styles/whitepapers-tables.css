@@ -1,0 +1,53 @@
+/* ===== WHITEPAPERS TABLES · Rich Text tables (live-only, no JS module) ===== */
+/* The table is exported as an embed with a scroll wrapper:
+     <div data-rt-embed-type="true"><div class="wp-table"><table>…</table></div></div>
+   - .wp-table = scroll container + rounded frame
+   - <table>   = display:table (default), full width; scrolls only when it overflows
+   Scoped to .whitepaper_body (not the blog-post root) — these live on whitepapers.
+   Hooks → .claude/rules/components/blog-post.md */
+
+.whitepaper_body .wp-table {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 1.8rem 0;
+  border: 1px solid #e4e8ef;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.whitepaper_body .wp-table table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: max-content;
+  font-size: 0.82rem;
+}
+
+.whitepaper_body th,
+.whitepaper_body td {
+  border: 1px solid #e4e8ef;
+  padding: 0.45rem 0.7rem;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.whitepaper_body thead th {
+  background: #f6f8fb;
+  font-weight: 650;
+  color: #1a1d24;
+}
+
+.whitepaper_body tbody tr:nth-child(even) {
+  background: #fbfcfe;
+}
+
+.whitepaper_body .wp-figcaption {
+  padding: 0.5rem 0.8rem;
+  border: 1px solid #e4e8ef;
+  border-radius: 10px;
+  background: #f6f8fb;
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: #5b6472;
+  word-break: break-all;
+}

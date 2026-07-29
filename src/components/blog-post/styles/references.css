@@ -1,11 +1,11 @@
-/* ===== REFERENCES · citation cross-linking — paste into Webflow head ===== */
+/* ===== REFERENCES · citation cross-linking ===== */
 /* Styles the JS-injected pieces (number badge, back-link, cite anchors, highlights).
    The reference text + layout and the View/PubMed/Scholar link looks are free in the
    Designer (target .is-view / .is-pubmed / .is-scholar). Hooks → .claude/rules/components/references.md */
 
 /* — In-body citation markers (the <sup> numbers, now anchors) — */
 [data-references-body] .references_cite {
-  color: var(--base--gold, #c79a4b);
+  color: var(--base--black);
   text-decoration: none;
   cursor: pointer;
   scroll-margin-top: 6rem; /* clear the fixed nav when jumped to */

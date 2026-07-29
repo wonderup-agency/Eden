@@ -1,4 +1,4 @@
-/* ===== FIGURES · caption beside the image (blog-post) — paste into Webflow head ===== */
+/* ===== FIGURES · caption beside the image (blog-post) ===== */
 
 /* Each figure + its caption block are wrapped in .figure-aside by figures.js */
 [data-component='blog-post'] .figure-aside {

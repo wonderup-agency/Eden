@@ -1,4 +1,4 @@
-/* ===== RANDOM-ITEM · N random CMS items per list, re-rolled on reload — paste into Webflow head ===== */
+/* ===== RANDOM-ITEM · N random CMS items per list, re-rolled on reload ===== */
 /* Pre-JS state only: keeps the FIRST data-random-count items visible (crawlable, no
    CLS) and holds the lists invisible for a beat so the swap to the random picks is
    never seen as a flash. Once random-item.js adds .is-random both rules switch off

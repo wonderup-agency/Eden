@@ -1,4 +1,4 @@
-/* ===== TOC · article table of contents (accordion + scrollspy) — paste into Webflow head ===== */
+/* ===== TOC · article table of contents (accordion + scrollspy) ===== */
 /* Self-contained — the component injects its own toc_* markup (decoupled from the
    Finsweet/Relume content27 template), so the whole TOC look lives here. The label keeps
    the global .text-size-regular class for type sizing.

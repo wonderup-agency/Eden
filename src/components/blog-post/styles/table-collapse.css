@@ -1,4 +1,4 @@
-/* ===== TABLE-COLLAPSE · long article tables → show more/less — paste into Webflow head ===== */
+/* ===== TABLE-COLLAPSE · long article tables → show more/less ===== */
 /* The component wraps each long <table> in .table-collapse_wrap (clips to the fold),
    overlays a fade, and injects a .table-collapse_toggle button. Height is animated by GSAP.
    Hooks → .claude/rules/components/table-collapse.md */

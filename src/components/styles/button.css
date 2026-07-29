@@ -1,4 +1,4 @@
-/* ===== BUTTON · primary + secondary variants — paste into Webflow head ===== */
+/* ===== BUTTON · primary + secondary variants ===== */
 
 /* — Tokens + base — */
 .button_main-wrap {
@@ -210,4 +210,9 @@
     .button_main-element::after {
     background: var(--base--gold, #c79a4b);
   }
+}
+
+/* — Icon-first variant — opt in with data-button-icon="True" (icon before the label) — */
+[data-button-icon='True'] .button_main-element {
+  flex-direction: row-reverse;
 }

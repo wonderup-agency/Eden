@@ -1,0 +1,29 @@
+/* ===== CUSTOM · site-wide one-offs that belong to no component ===== */
+/* Small fixes that were authored straight into the Webflow head. Anything here that
+   grows into a real feature should move to its own file + doc. */
+
+/* The "Global / Styles" component is a code container — never render it. */
+.styles_component {
+  display: none;
+}
+
+/* Keep card links above their sibling decoration so the whole card stays clickable. */
+.item-link {
+  z-index: 1;
+}
+
+/* Comma + space between author names, none after the last. */
+.blog-post_authors-item:not(:last-child) [data-text-size='r']::after {
+  content: ', ';
+}
+
+/* Rich Text: bold runs and superscripts inherit the ink colour, not the body grey. */
+.text-rich-text p > strong,
+.text-rich-text sup {
+  color: var(--base--black);
+}
+
+/* Current nav/TOC item: the connector line spans the full item height. */
+.w-current .content27_border-line {
+  height: 100%;
+}

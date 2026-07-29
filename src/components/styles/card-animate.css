@@ -1,0 +1,18 @@
+/* ===== CARD-ANIMATE · hover transform on any card — head-only, no JS component ===== */
+/* Opt in with data-animate-card="<effect>" on the card and data-animate-item on the
+   part that moves. Only "scale-in" exists today; add more effects as sibling rules.
+   Hooks → .claude/rules/components/card-animate.md */
+
+[data-animate-card] [data-animate-item] {
+  transition:
+    transform 0.6s ease-in-out,
+    opacity 0.6s ease-in-out;
+  transform-origin: center;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  [data-animate-card='scale-in']:hover [data-animate-item] {
+    transform: scale(1.05);
+  }
+}

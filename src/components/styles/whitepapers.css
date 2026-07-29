@@ -1,0 +1,27 @@
+/* ===== WHITEPAPERS · filter + pagination underlines — head-only, no JS component ===== */
+/* Live-only styling for the whitepapers list chrome. The classes are Webflow's; the
+   active states come from Finsweet (.w--current) and the list's own .is-list-active.
+   Hooks → .claude/rules/components/whitepapers.md */
+
+/* — Category checkbox: underline grows when its filter is on — */
+.is-list-active .whitepapers_checkbox-underline {
+  width: 100%;
+}
+
+/* — Pagination: underline wipes in on the current page — */
+.whitepapers_page-button::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 0%;
+  height: 1px;
+  background: currentColor;
+  pointer-events: none;
+  transition: width 300ms ease-in-out;
+  transform-origin: 50% 50%;
+}
+
+.whitepapers_page-button.w--current::before {
+  width: 100%;
+}

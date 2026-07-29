@@ -36,13 +36,29 @@ try {
   const url = pkg.repository?.url || ''
   const match = url.match(/github\.com\/([^/]+\/[^/.]+)/)
   repoPath = match ? match[1] : null
-} catch {}
+} catch {
+  // Best effort: without package.json the CDN URL falls back to placeholders
+}
 
 const cdnBase = repoPath
   ? `https://cdn.jsdelivr.net/gh/${repoPath}`
   : `https://cdn.jsdelivr.net/gh/<owner>/<repo>`
 
-const cdnDist = `${cdnBase}@main/dist`
+// Production is pinned to an immutable commit SHA. Read the live one out of the
+// site-wide snippet so a page bundle can't end up on a different build than the
+// main one — `/deploy` re-pins both. Falls back to @main if it can't be read.
+let cdnRef = 'main'
+try {
+  const snippet = readFileSync('webflow-snippet.html', 'utf-8')
+  const pinned = snippet.match(
+    /cdn\.jsdelivr\.net\/gh\/[\w.-]+\/[\w.-]+@([\w.-]+)/
+  )
+  if (pinned) cdnRef = pinned[1]
+} catch {
+  // Best effort: without the snippet the page bundle tracks @main
+}
+
+const cdnDist = `${cdnBase}@${cdnRef}/dist`
 
 // Create page file
 const template = `/*
@@ -59,7 +75,7 @@ Add to Webflow → Page Settings → Custom Code → Before </head>:
     s.defer = true
     document.head.appendChild(s)
   })()
-<\/script>
+</script>
 */
 
 console.log('%c📄 [${name}] Page loaded', 'color: #a78bfa; font-weight: bold')

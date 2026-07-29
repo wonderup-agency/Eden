@@ -1,4 +1,4 @@
-/* ===== CARD ARROW SWAP · hover a card → its text-button arrow swaps — paste into Webflow head ===== */
+/* ===== CARD ARROW SWAP · hover a card → its text-button arrow swaps ===== */
 
 /* Opt in with data-animate-arrow on ANY ancestor of the button (the card wrapper, the CMS
    item, a column…). Standalone attribute on purpose — data-animate-card is read by another
@@ -9,7 +9,7 @@
    Requires TWO identical arrow embeds inside .button_text-icon — the icon box clips both. */
 
 [data-animate-arrow] {
-  --arrow-time: 0.35s;
+  --arrow-time: 0.6s;
   --arrow-ease: cubic-bezier(0.4, 0, 0.2, 1);
   --arrow-travel: 130%; /* negate to flip the direction (enter from the right) */
 }

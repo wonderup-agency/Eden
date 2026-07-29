@@ -25,4 +25,16 @@ export default [
       },
     },
   },
+  {
+    // Node-only tooling: scaffolding scripts and the CMS migration pipeline.
+    files: ['scripts/**/*.js', 'migration/**/*.js', '*.config.js'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        URL: 'readonly',
+        fetch: 'readonly',
+      },
+    },
+  },
 ]

@@ -1,3 +1,4 @@
+import './styles.js' // collects every component CSS into dist/styles.css
 import components from './components.js'
 
 function getComponentName(selector) {

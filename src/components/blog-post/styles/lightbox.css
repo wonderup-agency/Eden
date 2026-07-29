@@ -1,4 +1,4 @@
-/* ===== LIGHTBOX · article image figure viewer — paste into Webflow head ===== */
+/* ===== LIGHTBOX · article image figure viewer ===== */
 /* Only our custom UI lives here (clickable affordance + caption panel + custom buttons).
    PhotoSwipe's CORE css is loaded separately from the CDN <link> in the head — see the doc.
    Hooks → .claude/rules/components/lightbox.md */

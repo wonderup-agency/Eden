@@ -1,4 +1,4 @@
-/* ===== LOGOS-MARQUEE · CSS-only infinite logo scroll — paste into Webflow head ===== */
+/* ===== LOGOS-MARQUEE · CSS-only infinite logo scroll ===== */
 /* Two identical CMS lists animate in lockstep inside the clipped wrapper. No JS.
    Requires exactly TWO .logos_marquee-list-wrapper (duplicate the CMS list) so the
    loop is seamless. Each list carries a trailing gap so -100% lands seamlessly. */

@@ -1,4 +1,4 @@
-/* ===== NAV · glass-on-scroll morph (all breakpoints) — paste into Webflow head ===== */
+/* ===== NAV · glass-on-scroll morph (all breakpoints) ===== */
 /* Designer settings + hooks → nav.md. Keep --nav-morph in sync with FLIP_DURATION (nav.js).
    Set IN WEBFLOW: nav_component → Width 100% · nav_inner → Flex / Position Relative /
    Align Y Center · nav_logo → Don't shrink. --nav-rest-top is auto-set by nav.js. */
@@ -11,12 +11,7 @@
   --nav-float-top: 0.25rem; /* gap from the top when floating */
   --nav-float-pad-x: 1.25rem; /* inner side padding of the mobile pill so logo/menu aren't flush to the edge */
   --nav-center-gap: 2.5rem; /* item gap in the centered floating pill — lower = smaller */
-  --nav-glass: rgba(
-    255,
-    255,
-    255,
-    0.75
-  ); /* glass tint — raise/lower to taste */
+  --nav-glass: rgba(255, 255, 255, 1); /* glass tint — raise/lower to taste */
   --nav-menu-glass: rgba(
     255,
     255,
@@ -69,7 +64,7 @@
   [data-component='nav'] [data-nav-inner] {
     width: fit-content;
     margin: 0 auto 0 -1rem;
-    padding: 0.5rem 0.5rem;
+    padding: 0.75rem 0.75rem;
   }
   [data-component='nav'] [data-nav-inner].is-floating {
     margin: calc(var(--nav-float-top) - var(--nav-rest-top)) auto 0;
