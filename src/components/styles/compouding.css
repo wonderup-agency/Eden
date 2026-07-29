@@ -13,8 +13,12 @@
 }
 
 /* — Text messages (stacked, one shown at a time) — */
+/* align-items: start is load-bearing, not cosmetic: stacked grid items stretch to the row
+   height by default, so a stretched title would report the TALLEST tab's height and the
+   JS height-fit (fitMessages) could never measure the active tab on its own. */
 [data-component='compouding'] [data-paradigm-messages] {
   display: grid;
+  align-items: start;
 }
 [data-component='compouding'] [data-compunding='tab-title'] {
   grid-area: 1 / 1;

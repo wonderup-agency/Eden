@@ -32,6 +32,16 @@ const CONTENT_TO = {
 }
 // Outgoing text just fades out underneath the incoming reveal.
 const OUT_FADE = { autoAlpha: 0, duration: 0.4, ease: 'power2.out' }
+// Text column collapses onto the active panel — matched to CONTENT_TO so the resize and
+// the de-blur read as one motion, not two.
+const FIT_TWEEN = { duration: 0.9, ease: 'sine.out' }
+// Outgoing fill eases out instead of snapping full → empty in one frame (read as a glitch).
+const FILL_OUT = {
+  scaleX: 0,
+  duration: 0.35,
+  ease: 'power2.in',
+  overwrite: true,
+}
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
@@ -71,6 +81,9 @@ function setupTabs(root) {
   // bundle runs (Preview / published). In the Designer (no JS) they stay in normal flow,
   // one below the other, editable.
   root.classList.add('is-enhanced')
+
+  // The stacked text column — its height is tweened onto the active panel (see fitPanels).
+  const textWrap = root.querySelector('[tabs-architected="text-content"]')
 
   // The single shared video (hook on the <video> or its wrapper; `image` accepted for
   // back-compat with the original markup; else any video in root).
@@ -169,12 +182,26 @@ function setupTabs(root) {
     panel.setAttribute('aria-labelledby', linkId)
   })
 
-  // Active-only fills: every non-active tab stays empty (inactive).
+  // Active-only fills: every non-active tab empties out. Tweened, not set — a full bar
+  // snapping to empty in one frame read as a flicker on every switch.
   const setStaticFills = (index) => {
     bars.forEach((bar, k) => {
       if (!bar || k === index) return
-      gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+      gsap.to(bar, FILL_OUT)
     })
+  }
+
+  // Collapse the text column onto the active panel, so a short tab doesn't drag the tallest
+  // tab's leftover height around with it. Measured off the DOM (the CSS `align-items: start`
+  // keeps each stacked panel at its own content height, so a stretched grid item can't
+  // report the row height back) rather than counting lines — line-height math is unreliable
+  // in rich text. `immediate` skips the tween on load / resize, where there's no switch to
+  // ride. Mirrors compouding's fitMessages.
+  const fitPanels = (index, immediate) => {
+    if (!textWrap || !panels[index]) return
+    const h = panels[index].offsetHeight
+    if (immediate) gsap.set(textWrap, { height: h })
+    else gsap.to(textWrap, { height: h, ...FIT_TWEEN })
   }
 
   // De-blur the incoming text in (first tab uses this directly on start).
@@ -203,8 +230,13 @@ function setupTabs(root) {
     inLink.setAttribute('tabindex', '0')
 
     setStaticFills(index)
-    if (bars[index])
+    if (bars[index]) {
+      // Kill any FILL_OUT still easing this bar out (a switch back inside the 0.35s window)
+      // — otherwise that tween and the ticker's per-frame set fight over scaleX.
+      gsap.killTweensOf(bars[index])
       gsap.set(bars[index], { scaleX: 0, transformOrigin: 'left center' })
+    }
+    fitPanels(index)
 
     // Incoming overlays the outgoing (z-index) regardless of DOM order; it shows
     // instantly, its content de-blurs in while the outgoing fades out.
@@ -240,6 +272,7 @@ function setupTabs(root) {
       link.setAttribute('tabindex', on ? '0' : '-1')
     })
     activeIndex = index
+    fitPanels(index, true)
   }
 
   // rAF driver: switch the text when the playhead crosses a cue, and fill the active
@@ -267,6 +300,7 @@ function setupTabs(root) {
     setStaticFills(index)
     const bar = bars[index]
     if (!bar) return
+    gsap.killTweensOf(bar) // drop a FILL_OUT still running on this bar
     gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
     const gap = cueEnd(index) - cueStart(index)
     const dwell =
@@ -275,6 +309,7 @@ function setupTabs(root) {
       scaleX: 1,
       duration: dwell,
       ease: 'none',
+      overwrite: true,
       onComplete: () => {
         if (!isAnimating) {
           const next = (index + 1) % count
@@ -313,6 +348,10 @@ function setupTabs(root) {
     link.setAttribute('tabindex', i === 0 ? '0' : '-1')
   })
   activeIndex = 0
+
+  fitPanels(0, true) // no collapse animation on load
+  // Webfonts land after init and reflow the copy — re-measure once they're in.
+  document.fonts?.ready.then(() => fitPanels(activeIndex, true))
 
   // Prep the shared video: muted + inline (autoplay-with-sound is blocked), LOOP on so it
   // wraps back to the first text.
@@ -391,6 +430,10 @@ function setupTabs(root) {
   }
 
   return {
+    // Column width decides how the copy wraps, so the active panel's height moves with it.
+    refit() {
+      fitPanels(activeIndex, true)
+    },
     destroy() {
       if (progressTween) progressTween.kill()
       if (!reduceMotion.matches) gsap.ticker.remove(tick)
@@ -415,5 +458,11 @@ export default function (elements) {
     return
   }
 
-  elements.map(setupTabs).filter(Boolean)
+  const instances = elements.map(setupTabs).filter(Boolean)
+
+  return {
+    resize() {
+      instances.forEach((instance) => instance.refit())
+    },
+  }
 }

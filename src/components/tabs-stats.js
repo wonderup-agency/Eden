@@ -18,6 +18,13 @@ const ALPHA_MIN = 28 // min source alpha to count a pixel as "ink"
 const LUMA_MAX = 245 // opaque PNGs: count pixels darker than this
 const MORPH_DURATION = 1.25
 const MORPH_EASE = 'power2.inOut'
+// Outgoing underline fill eases out instead of snapping full → empty in one frame.
+const FILL_OUT = {
+  scaleX: 0,
+  duration: 0.35,
+  ease: 'power2.in',
+  overwrite: true,
+}
 const DOT_COLOR = '125,130,140' // #7d828c
 const FIT = 0.82 // half-stage fraction the cloud fills (1 = touches the edges)
 const DOT_RADIUS = 1.4
@@ -469,15 +476,13 @@ function setupTabs(root) {
     ensureLoop()
   }
 
-  // Active-only fills: every non-active tab stays empty (inactive); the active one is the
-  // animated progress bar. Only the active tab carries a filled underline.
+  // Active-only fills: every non-active tab empties out; the active one is the animated
+  // progress bar. Tweened, not set — a full bar snapping to empty in one frame read as a
+  // flicker on every switch (mirrors tabs-architected).
   const setStaticFills = (index) => {
     bars.forEach((bar, k) => {
       if (!bar || k === index) return
-      gsap.set(bar, {
-        scaleX: 0,
-        transformOrigin: 'left center',
-      })
+      gsap.to(bar, FILL_OUT)
     })
   }
 
@@ -495,11 +500,15 @@ function setupTabs(root) {
     setStaticFills(index)
     const bar = bars[index]
     if (!bar) return
+    // Kill any FILL_OUT still easing this bar out (rapid re-select) — otherwise both tweens
+    // write scaleX in the same frames.
+    gsap.killTweensOf(bar)
     gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
     progressTween = gsap.to(bar, {
       scaleX: 1,
       duration: autoplayDuration(links[index]),
       ease: 'none',
+      overwrite: true,
       onComplete: () => {
         if (!introActive) select((index + 1) % count)
       },

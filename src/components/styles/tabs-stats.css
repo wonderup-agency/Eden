@@ -60,6 +60,20 @@
   );
 }
 
+/* Stacked mobile layout: the link box goes from tall+narrow to wide+short, so a 120deg ramp
+   runs almost horizontally and the right half of the label lands on the light stop — it
+   reads as text cut off, not as a gradient. Vertical instead: dark number on top, softer
+   label below. Correct in the 3-column layout too (the number sits above the label there). */
+@media (max-width: 767px) {
+  [data-component='tabs-stats'] {
+    --tabs-stats-active-gradient: linear-gradient(
+      180deg,
+      #000000 0%,
+      #9e9e9e 100%
+    );
+  }
+}
+
 [data-component='tabs-stats'] [tabs-architected='link'],
 [data-component='tabs-stats'] [tabs-architected='link'] * {
   color: var(--base--grey, #666);

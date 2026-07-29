@@ -5,9 +5,13 @@
    column; only the active one shows (JS autoAlpha). The video stays put.
    Gated on .is-enhanced (added by JS at runtime) so in the Webflow Designer — where the
    bundle never runs — the blocks stay in normal flow, one below the other, editable. — */
+/* align-items: start is load-bearing, not cosmetic: stacked grid items stretch to the row
+   height by default, so a stretched panel would report the TALLEST tab's height and the JS
+   height-fit (fitPanels) could never measure the active panel on its own. */
 [data-component='tabs-architected'].is-enhanced
   [tabs-architected='text-content'] {
   display: grid;
+  align-items: start;
 }
 [data-component='tabs-architected'].is-enhanced
   .tabs-architected_tab-content-inner {
@@ -24,27 +28,20 @@
   object-fit: cover;
 }
 
-/* — Tab widths: size to content, don't share the row equally — */
-/* The Designer gives the links equal widths (flex-grow), which on a narrow screen leaves
-   a lot of dead space around short labels. flex: 0 1 auto lets each tab be as wide as its
-   own text and shrink if the row runs out of room. The underline still spans the link, so
-   the progress bar now measures the label instead of an arbitrary equal share.
-   Mobile only — on desktop the equal widths read as a deliberate rhythm. */
-@media (max-width: 767px) {
-  [data-component='tabs-architected'] .tabs-architected_tabs-links {
-    flex-wrap: wrap;
-  }
-  [data-component='tabs-architected'] [tabs-architected='link'] {
-    flex: 0 1 auto;
-    width: auto;
-  }
-}
+/* — Tab layout is the Designer's, at every breakpoint — */
+/* A mobile override used to live here forcing each link to size to its own text. It was
+   written for a horizontal row and fights the stacked mobile list now set in Webflow — and
+   since bundled CSS doesn't render in the Designer canvas, the two disagreed on screen.
+   Layout/sizing stay in Webflow; this file owns the track/fill and the text states only. */
 
 /* — Tab text: inactive grey, active black, always medium (500) — */
+/* The colour is transitioned: everything else on a switch animates, so a hard grey→black
+   snap on the label was the one step that read as a glitch. */
 [data-component='tabs-architected'] [tabs-architected='link'],
 [data-component='tabs-architected'] [tabs-architected='link'] * {
   color: var(--base--grey, #666);
   font-weight: 500;
+  transition: color 0.35s ease;
 }
 [data-component='tabs-architected'] [tabs-architected='link'].is-active,
 [data-component='tabs-architected'] [tabs-architected='link'].is-active * {
@@ -80,6 +77,10 @@
 
 /* — Reduced motion (no track/fill; keep the active underline full) — */
 @media (prefers-reduced-motion: reduce) {
+  [data-component='tabs-architected'] [tabs-architected='link'],
+  [data-component='tabs-architected'] [tabs-architected='link'] * {
+    transition: none;
+  }
   [data-component='tabs-architected']
     .tabs-architected_tab-link.is-active
     .tabs-architected_tab-link-underline {

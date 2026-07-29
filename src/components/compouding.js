@@ -85,16 +85,13 @@ const INTRO_HOLD = 0.8
 const INTRO_DURATION = 2.4
 const INTRO_STAGGER = 0.7
 
-// Tuning — figure lift on short tabs (desktop only)
-// Every tab-title shares grid cell 1/1, so the messages column is always as tall as the
-// LONGEST tab. A short (two-line) tab therefore renders its text plus the taller tabs'
-// leftover height before the figures — the gap this closes.
-const LIFT_RATIO = 0.5 // fraction of the measured slack the figures take up
-const LIFT_MAX = 64 // px ceiling, so it stays a nudge and never detaches from the text
-const LIFT_TWEEN = { duration: 0.6, ease: 'power2.out' }
+// Tuning — messages column fits the active tab
+// Every tab-title shares grid cell 1/1, so the column would otherwise always be as tall as
+// the LONGEST tab, leaving the shorter ones trailing that leftover height before the
+// figures. The column height is tweened to the active tab instead, in step with the text.
+const FIT_TWEEN = { duration: 1, ease: 'sine.out' } // matches REVEAL_TO so it reads as one motion
 
 const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
-const liftQuery = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
 
 // Outgoing tab: plain fade. The de-blur lives on the words, never the parent.
 const REVEAL_OUT = { autoAlpha: 0, duration: OUT_FADE }
@@ -958,31 +955,27 @@ function setupRoot(root) {
     sync()
   }
 
-  // Lift the figures into the slack a short tab leaves above them.
-  // Measured off the DOM rather than counting lines: reading the real leftover height
-  // adapts to any copy length and avoids line-height math, which is unreliable in rich
-  // text (mixed sizes, margins, wrapped inline markup).
-  // A transform, NOT a height change — the section must not reflow on an autoplay switch,
-  // which would shift everything below it while the user is mid-scroll. Transforms also
-  // leave the canvas buffer and the ResizeObserver alone (border-box size is unchanged),
-  // so the point cloud never re-renders and the tag pills ride along.
-  const liftVisuals = (i) => {
-    if (!visualsWrap || !messagesWrap) return
-    if (!liftQuery.matches) {
-      gsap.to(visualsWrap, { y: 0, ...LIFT_TWEEN })
-      return
-    }
-    const slack =
-      messagesWrap.getBoundingClientRect().height -
-      messages[i].getBoundingClientRect().height
-    const lift = Math.min(Math.max(slack, 0) * LIFT_RATIO, LIFT_MAX)
-    gsap.to(visualsWrap, { y: -lift, ...LIFT_TWEEN })
+  // Collapse the messages column onto the active tab, so a short tab doesn't drag the
+  // longest tab's leftover height around with it. Measured off the DOM (the CSS
+  // `align-items: start` keeps each stacked title at its own content height, so a stretched
+  // grid item can't report the row height back) rather than counting lines — line-height
+  // math is unreliable in rich text (mixed sizes, margins, wrapped inline markup).
+  // `immediate` skips the tween on load and on resize, where there is no switch to ride.
+  const fitMessages = (i, immediate) => {
+    if (!messagesWrap) return
+    const h = titles[i].offsetHeight
+    if (immediate) gsap.set(messagesWrap, { height: h })
+    else gsap.to(messagesWrap, { height: h, ...FIT_TWEEN })
   }
+
+  fitMessages(0, true) // no collapse animation on load
+  // Webfonts land after init and reflow the copy — re-measure once they're in.
+  document.fonts?.ready.then(() => fitMessages(index, true))
 
   function goTo(i) {
     index = i
     activate(i)
-    liftVisuals(i)
+    fitMessages(i)
     runProgress()
   }
 
@@ -1080,13 +1073,11 @@ function setupRoot(root) {
     bootCloud()
   }
 
-  liftQuery.addEventListener('change', () => liftVisuals(index))
-
   return {
     resize() {
       if (cloudOk) cloudResize()
-      // Column width drives how the copy wraps, so the slack changes with it.
-      liftVisuals(index)
+      // Column width drives how the copy wraps, so the active tab's height changes with it.
+      fitMessages(index, true)
     },
   }
 }
