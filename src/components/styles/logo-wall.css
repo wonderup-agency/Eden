@@ -15,6 +15,11 @@
 /* — Testimonial overlay (hidden until JS adds .is-visible) — */
 [data-component='logo-wall'] .logo-wall__logo {
   position: relative; /* positioning context for the overlay */
+  /* Clip the roll. The swap translates BOTH logos by 100% of the slot height (outgoing
+     0 → -100, incoming 100 → 0), so without this the moving logos paint outside the slot
+     — over the section below. overflow is safe here (Webflow sizes the slot, so nothing
+     collapses); it's the one non-layout rule this file needs. */
+  overflow: hidden;
 }
 
 [data-component='logo-wall'] .logo-wall_testimonial {
@@ -42,19 +47,22 @@
   filter: blur(0);
 }
 
-/* Keep the large testimonial image inside its slot. */
+/* Keep the large testimonial image inside its slot. height:auto alone let a tall image
+   grow past the slot and (before the clip above) bleed into the next section. */
 [data-component='logo-wall'] .logo-wall_testimonial-image {
   max-width: 100%;
+  max-height: 100%;
   height: auto;
+  object-fit: contain;
 }
 
 /* Logo hide during the swap is GSAP's job (LOGO_FADE) — a CSS transition here
    would fight its per-frame autoAlpha, so the instant hide lives in reduced-motion only. */
 
-/* Keyboard focus ring. */
+/* Keyboard focus ring — inset, because the slot now clips (an outward offset is cut off). */
 [data-component='logo-wall'] .logo-wall__logo:focus-visible {
   outline: 2px solid currentColor;
-  outline-offset: 4px;
+  outline-offset: -2px;
 }
 
 /* — Reduced motion (no fade; CSS owns the instant logo hide) — */

@@ -5,7 +5,7 @@
   accordion links (own toc_* classes, styled in
   toc.css), drives a scrollspy .current + auto-expanding branch. Smooth scroll is the
   global Lenis anchor bridge (links are plain <a href="#id">).
-  CSS → ./styles/toc.css (paste into Webflow head) · Docs → .claude/rules/components/toc.md
+  CSS → ./styles/toc.css (bundled via src/styles.js) · Docs → .claude/rules/components/toc.md
 */
 
 const LEVELS = [2, 3, 4] // heading levels to index (h2/h3/h4)

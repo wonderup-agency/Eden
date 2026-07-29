@@ -8,6 +8,7 @@
   --marquee-duration: 30s; /* full lap time — higher = slower */
   --marquee-gap: 4rem; /* space between logos (and between the two copies) */
   --marquee-logo-h: 2.5rem; /* logo height */
+  --marquee-logo-ar: 3 / 1; /* logo SLOT aspect — see the seam note below */
   --marquee-fade: 6rem; /* edge fade width; set to 0 to disable */
 }
 
@@ -56,9 +57,21 @@
   align-items: center;
 }
 
+/* Fixed-aspect SLOT, not width:auto — this is what keeps the loop seamless.
+   The animation is translateX(-100%) of each copy's OWN width, and the two copies are
+   flex siblings, so copy 2 only lands where copy 1 started if both measure exactly the
+   same. With width:auto the width is unknown until the image decodes, so during the
+   first lap the copies differ and the seam visibly jumps (worst on mobile, where the
+   load window is longest). A fixed aspect gives every logo a deterministic box before
+   it loads, so the widths match from frame one.
+   Trade-off: every logo now occupies the same slot width — wide marks shrink to fit and
+   narrow ones get side padding. object-fit keeps them undistorted. Retune with
+   --marquee-logo-ar, or drop back to width:auto if you'd rather have natural widths and
+   accept the first-lap jump. */
 .stats_bottom-logo {
   height: var(--marquee-logo-h);
   width: auto;
+  aspect-ratio: var(--marquee-logo-ar);
   object-fit: contain;
 }
 
@@ -71,6 +84,20 @@
 /* — Pause on hover — */
 .logos_marquee-wrapper:hover .logos_marquee-list-wrapper {
   animation-play-state: paused;
+}
+
+/* — Mobile — */
+/* --marquee-duration is a LAP time, not a speed: px/s = one copy's width / duration.
+   The track is the same width on every breakpoint, so the same 30s reads as sluggish on
+   a narrow screen where far fewer logos are on show at once. Shorter lap = faster crawl.
+   The fade also has to come down — 6rem on each edge of a ~23rem viewport leaves over
+   half the strip washed out. Both are tuning values: adjust on a real device. */
+@media (max-width: 767px) {
+  .logos_marquee-wrapper {
+    --marquee-duration: 18s;
+    --marquee-gap: 2.5rem;
+    --marquee-fade: 2rem;
+  }
 }
 
 /* — Reduced motion: freeze, no scroll — */

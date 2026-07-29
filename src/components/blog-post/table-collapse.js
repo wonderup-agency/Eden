@@ -3,7 +3,7 @@
   Collapses long article tables to the first few rows behind a "Show more" toggle
   (with a fade), auto-applied to every <table> in the article root. GSAP height anim
   when present, instant otherwise.
-  CSS → ./styles/table-collapse.css (paste into Webflow head) · Docs → .claude/rules/components/table-collapse.md
+  CSS → ./styles/table-collapse.css (bundled via src/styles.js) · Docs → .claude/rules/components/table-collapse.md
 */
 
 const VISIBLE_ROWS = 6 // data rows shown before the fold

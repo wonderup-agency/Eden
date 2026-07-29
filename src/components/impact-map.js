@@ -4,11 +4,38 @@
   twinkling gold-dot reveal across a map of ALL the Americas (Canada → Tierra del Fuego).
   Map geometry (d3-geo + topojson + world-atlas) is loaded on demand from CDN; the <svg>,
   gradients and dots are injected by JS, so Webflow only needs 3 elements + the head CSS.
-  CSS → ./styles/impact-map.css (paste into Webflow head) · Docs → .claude/rules/components/impact-map.md
+  CSS → ./styles/impact-map.css (bundled via src/styles.js) · Docs → .claude/rules/components/impact-map.md
 */
 
-const VIEW_W = 960
-const VIEW_H = 600 // landscape — the Americas sit centered (black margins at the sides)
+// Framing per breakpoint: viewBox + its own geographic window (bbox), frame pad and dot
+// scale. The desktop bbox is 107° wide × 130° tall (aspect ~0.82 — TALLER than wide), so
+// fitExtent is height-constrained: in the 960×600 landscape box the continent fills the
+// 600 height but only ~493 of the 960 width, leaving ~230 of black bar per side. That's the
+// intended desktop framing.
+// On mobile the width is whatever the phone gives (100%), so the ONLY way to draw the
+// continent bigger is to fit fewer degrees across it: the mobile bbox crops ~10° of empty
+// Pacific (lng0 -130 instead of -140, which also drops the Alaska sliver and Haida Gwaii)
+// and the viewBox is a taller portrait matched to that aspect — ~18% more pixels per degree
+// than the old 620×720 frame, with almost no black bar left. `dot` scales the halo/core so
+// the dots keep their desktop pixel size in the narrower viewBox.
+// Picked ONCE at init: changing it means re-projecting and re-sampling every dot, so a
+// rotate/resize across the breakpoint keeps the framing it loaded with (slightly
+// letterboxed, never broken). Keep the CSS aspect-ratio tokens in sync with both.
+const VIEW_DESKTOP = {
+  w: 960,
+  h: 600,
+  bbox: { lng0: -140, lng1: -33, lat0: -56, lat1: 74 },
+  pad: 10,
+  dot: 1,
+}
+const VIEW_MOBILE = {
+  w: 620,
+  h: 830,
+  bbox: { lng0: -130, lng1: -33, lat0: -56, lat1: 74 },
+  pad: 6,
+  dot: 1.5,
+}
+const VIEW_Q = '(max-width: 767px)'
 const NS = 'http://www.w3.org/2000/svg'
 
 // Tuning — counter
@@ -38,10 +65,9 @@ const CORE_R = 3 // dot core radius
 const TWINKLE_MIN = 0.45 // dimmest a lit dot drifts to
 const TWINKLE_SPEED = [0.9, 2.4] // seconds per half-pulse (random per cycle)
 
-// Geographic window shown. Fitting to this box (not to the raw feature bounds) keeps the
-// framing deterministic and crops Alaska/Hawaii + the high arctic; SVG overflow hides the rest.
-const BBOX = { lng0: -140, lng1: -33, lat0: -56, lat1: 74 }
-const FRAME_PAD = 10
+// The geographic window shown lives on each VIEW_* (`bbox` + `pad`) — fitting to that box
+// rather than to the raw feature bounds keeps the framing deterministic and crops
+// Alaska/Hawaii + the high arctic; SVG overflow hides the rest.
 
 // Dropped from the Americas centroid filter (geographically N. America but skews the frame).
 const EXCLUDE = new Set(['Greenland'])
@@ -140,9 +166,9 @@ function svgGroup(attr) {
   return g
 }
 
-function buildStage(stage) {
+function buildStage(stage, view) {
   const svg = document.createElementNS(NS, 'svg')
-  svg.setAttribute('viewBox', `0 0 ${VIEW_W} ${VIEW_H}`)
+  svg.setAttribute('viewBox', `0 0 ${view.w} ${view.h}`)
   svg.setAttribute('preserveAspectRatio', 'xMidYMid meet')
   svg.setAttribute('aria-hidden', 'true')
   svg.setAttribute('data-impact-svg', '')
@@ -254,38 +280,40 @@ function buildOdometer(host, target) {
 
 // ---- Dot placement -------------------------------------------------------------
 // `count` dots spread EVENLY across the continent: uniform rejection sampling over the
-// BBOX, kept only when the point lands on Americas land (geoContains rejects ocean/lakes,
-// so no dots in the water) — no city hotspots, so no country is over-clustered.
-function makePoints(geo, projection, americas, count) {
+// view's bbox, kept only when the point lands on Americas land (geoContains rejects
+// ocean/lakes, so no dots in the water) — no city hotspots, so no country is over-clustered.
+function makePoints(geo, projection, americas, count, view) {
   const pts = []
+  const bbox = view.bbox
   const onLand = (coord) => americas.some((f) => geo.geoContains(f, coord))
 
   let guard = 0
   while (pts.length < count && guard < count * 400) {
     guard++
-    const lng = BBOX.lng0 + Math.random() * (BBOX.lng1 - BBOX.lng0)
-    const lat = BBOX.lat0 + Math.random() * (BBOX.lat1 - BBOX.lat0)
+    const lng = bbox.lng0 + Math.random() * (bbox.lng1 - bbox.lng0)
+    const lat = bbox.lat0 + Math.random() * (bbox.lat1 - bbox.lat0)
     if (!onLand([lng, lat])) continue // on-land only — no water
     const p = projection([lng, lat])
     if (!p || isNaN(p[0])) continue
     const [x, y] = p
-    if (x < 4 || x > VIEW_W - 4 || y < 4 || y > VIEW_H - 4) continue
+    if (x < 4 || x > view.w - 4 || y < 4 || y > view.h - 4) continue
     pts.push([x, y])
   }
   return pts
 }
 
 // A dot is a <g> at (x,y): a soft halo + the bright core. GSAP animates the
-// group's opacity (fade in + twinkle).
-function createDot(group, x, y) {
+// group's opacity (fade in + twinkle). `scale` (view.dot) keeps the rendered pixel size
+// consistent across the two viewBox widths.
+function createDot(group, x, y, scale) {
   const g = document.createElementNS(NS, 'g')
   g.setAttribute('transform', `translate(${x.toFixed(1)},${y.toFixed(1)})`)
   const halo = document.createElementNS(NS, 'circle')
   halo.setAttribute('class', 'im-halo')
-  halo.setAttribute('r', GLOW_R)
+  halo.setAttribute('r', (GLOW_R * scale).toFixed(1))
   const core = document.createElementNS(NS, 'circle')
   core.setAttribute('class', 'im-core')
-  core.setAttribute('r', CORE_R)
+  core.setAttribute('r', (CORE_R * scale).toFixed(1))
   g.appendChild(halo)
   g.appendChild(core)
   group.appendChild(g)
@@ -372,7 +400,9 @@ async function setup(wrapper) {
   const current = valueNow(odo, wrapper.getAttribute('data-impact-epoch'))
   sr.textContent = odo.format(current) + '%'
 
-  const { landG, labelsG, dotsG } = buildStage(stage)
+  // Framing is chosen once, here — see the VIEW_* note at the top of the file.
+  const view = window.matchMedia(VIEW_Q).matches ? VIEW_MOBILE : VIEW_DESKTOP
+  const { landG, labelsG, dotsG } = buildStage(stage, view)
 
   const addLabel = (x, y, text, cls) => {
     const t = document.createElementNS(NS, 'text')
@@ -389,24 +419,25 @@ async function setup(wrapper) {
     const { geo, countries } = await loadMap()
     const americas = countries.filter((f) => isAmericas(geo, f))
 
-    // Fit an equirectangular projection to the fixed BBOX (deterministic framing;
+    // Fit an equirectangular projection to the view's fixed bbox (deterministic framing;
     // Alaska/Hawaii + the high arctic fall outside and are clipped by the SVG).
+    const bbox = view.bbox
     const bboxPoly = {
       type: 'Polygon',
       coordinates: [
         [
-          [BBOX.lng0, BBOX.lat1],
-          [BBOX.lng1, BBOX.lat1],
-          [BBOX.lng1, BBOX.lat0],
-          [BBOX.lng0, BBOX.lat0],
-          [BBOX.lng0, BBOX.lat1],
+          [bbox.lng0, bbox.lat1],
+          [bbox.lng1, bbox.lat1],
+          [bbox.lng1, bbox.lat0],
+          [bbox.lng0, bbox.lat0],
+          [bbox.lng0, bbox.lat1],
         ],
       ],
     }
     const projection = geo.geoEquirectangular().fitExtent(
       [
-        [FRAME_PAD, FRAME_PAD],
-        [VIEW_W - FRAME_PAD, VIEW_H - FRAME_PAD],
+        [view.pad, view.pad],
+        [view.w - view.pad, view.h - view.pad],
       ],
       bboxPoly
     )
@@ -425,13 +456,13 @@ async function setup(wrapper) {
     COUNTRY_LABELS.forEach(({ name, lng, lat }) => {
       const xy = projection([lng, lat])
       if (!xy || isNaN(xy[0])) return
-      if (xy[0] < 0 || xy[0] > VIEW_W || xy[1] < 0 || xy[1] > VIEW_H) return
+      if (xy[0] < 0 || xy[0] > view.w || xy[1] < 0 || xy[1] > view.h) return
       addLabel(xy[0].toFixed(1), xy[1].toFixed(1), name, 'im-country')
     })
 
     // Dots: spread evenly across the continent, all on land (no water).
-    makePoints(geo, projection, americas, DOT_COUNT).forEach(([x, y]) => {
-      circles.push(createDot(dotsG, x, y))
+    makePoints(geo, projection, americas, DOT_COUNT, view).forEach(([x, y]) => {
+      circles.push(createDot(dotsG, x, y, view.dot))
     })
   } catch (e) {
     console.warn('impact-map: map failed to load', e)

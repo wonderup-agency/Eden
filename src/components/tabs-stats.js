@@ -4,7 +4,7 @@
   on switch. Intro: dispersed cloud floats in → converges. Residual shimmer keeps it
   alive when idle; hover loosens it (desktop only). Autoplay underline advances tabs.
   Canvas 2D, no 3D lib. Fallback (no GSAP / reduced motion / CORS-tainted): static image.
-  CSS → ./styles/tabs-stats.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-stats.md
+  CSS → ./styles/tabs-stats.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-stats.md
 */
 
 const { gsap } = window

@@ -3,7 +3,7 @@
   Shows N random items per Webflow Collection List inside the root (N via
   data-random-count, default 1), re-rolled on every page load and never repeating
   the previous load's picks.
-  CSS → ./styles/random-item.css (paste into Webflow head) · Docs → .claude/rules/components/random-item.md
+  CSS → ./styles/random-item.css (bundled via src/styles.js) · Docs → .claude/rules/components/random-item.md
 */
 
 const LIST = '.w-dyn-items' // Webflow's rendered collection list

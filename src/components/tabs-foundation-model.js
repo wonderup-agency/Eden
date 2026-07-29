@@ -4,7 +4,7 @@
   text-scaled dwell (others stay empty/inactive), then advances; on switch the incoming image wipes
   open (clip-path) while its content de-blurs in. Starts on scroll-in, pauses on hover,
   restarts from the clicked tab. Click / keyboard also switch.
-  CSS → ./styles/tabs-foundation-model.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-foundation-model.md
+  CSS → ./styles/tabs-foundation-model.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-foundation-model.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
@@ -304,7 +304,13 @@ function setupTabs(root) {
           sync()
         }
       },
-      { threshold: 0.4 }
+      {
+        // threshold stays 0 + a negative rootMargin: intersectionRatio is capped at
+        // viewportHeight/elementHeight, so a section taller than ~2.5x the viewport
+        // (routine on mobile) never reaches a 0.4 threshold and this never fires.
+        threshold: 0,
+        rootMargin: '-25% 0px -25% 0px',
+      }
     )
     io.observe(root)
   }

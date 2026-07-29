@@ -2,7 +2,7 @@
   Component: scroll-morph · data-component="scroll-morph"
   Procedural dot-ring that assembles on scroll behind a single held line of text.
   Canvas 2D, no image sampled. Fallback (no GSAP / reduced motion): static stacked text.
-  CSS → ./styles/scroll-morph.css (paste into Webflow head) · Docs → .claude/rules/components/scroll-morph.md
+  CSS → ./styles/scroll-morph.css (bundled via src/styles.js) · Docs → .claude/rules/components/scroll-morph.md
 */
 
 const { gsap } = window

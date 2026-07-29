@@ -24,6 +24,22 @@
   object-fit: cover;
 }
 
+/* — Tab widths: size to content, don't share the row equally — */
+/* The Designer gives the links equal widths (flex-grow), which on a narrow screen leaves
+   a lot of dead space around short labels. flex: 0 1 auto lets each tab be as wide as its
+   own text and shrink if the row runs out of room. The underline still spans the link, so
+   the progress bar now measures the label instead of an arbitrary equal share.
+   Mobile only — on desktop the equal widths read as a deliberate rhythm. */
+@media (max-width: 767px) {
+  [data-component='tabs-architected'] .tabs-architected_tabs-links {
+    flex-wrap: wrap;
+  }
+  [data-component='tabs-architected'] [tabs-architected='link'] {
+    flex: 0 1 auto;
+    width: auto;
+  }
+}
+
 /* — Tab text: inactive grey, active black, always medium (500) — */
 [data-component='tabs-architected'] [tabs-architected='link'],
 [data-component='tabs-architected'] [tabs-architected='link'] * {

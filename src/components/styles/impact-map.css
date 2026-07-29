@@ -21,6 +21,8 @@
 }
 
 /* — Stage: reserves aspect-ratio so there is zero CLS while the SVG loads — */
+/* MUST match the viewBox impact-map.js picks for the same breakpoint (VIEW_DESKTOP /
+   VIEW_MOBILE) — a mismatch letterboxes the map inside its own stage. */
 [data-impact-stage] {
   position: relative;
   width: 100%;
@@ -28,6 +30,16 @@
   background: var(--im-bg);
   border-radius: 0.75rem;
   overflow: hidden;
+}
+
+/* Mobile: taller portrait frame matched to the mobile bbox's 97°×130° aspect (the Pacific
+   crop), so the continent is drawn ~18% larger per degree and there is barely any black bar
+   left. Labels get a small bump: they're in viewBox units, so at 620 wide they render ~35%
+   smaller in px than on the 960 desktop frame. */
+@media (max-width: 767px) {
+  [data-impact-stage] {
+    aspect-ratio: 620 / 830;
+  }
 }
 [data-impact-stage] svg {
   display: block;
@@ -56,6 +68,12 @@
   font-size: 9px;
   font-weight: 500;
   letter-spacing: 0.04em;
+}
+/* Mobile viewBox is 620 wide (vs 960), so the same font-size renders ~35% smaller in px. */
+@media (max-width: 767px) {
+  [data-impact-labels] .im-country {
+    font-size: 11px;
+  }
 }
 
 /* — Dots: each is a <g> (halo + core); GSAP fades the group in and twinkles it — */

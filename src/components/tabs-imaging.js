@@ -5,7 +5,7 @@
   to a text-scaled timer. On switch the incoming image wipes open (clip-path) while its
   content de-blurs in. Starts on scroll-in; on hover the tab HOLDS (won't advance) but the
   video keeps playing in a loop; restarts from the clicked tab. Click / keyboard also switch.
-  CSS → ./styles/tabs-imaging.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-imaging.md
+  CSS → ./styles/tabs-imaging.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-imaging.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
@@ -381,7 +381,13 @@ function setupTabs(root) {
           sync()
         }
       },
-      { threshold: 0.4 }
+      {
+        // threshold stays 0 + a negative rootMargin: intersectionRatio is capped at
+        // viewportHeight/elementHeight, so a section taller than ~2.5x the viewport
+        // (routine on mobile) never reaches a 0.4 threshold and this never fires.
+        threshold: 0,
+        rootMargin: '-25% 0px -25% 0px',
+      }
     )
     io.observe(root)
   }

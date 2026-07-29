@@ -5,7 +5,7 @@
   underline fills across that segment. Video-driven (no timer): plays muted+inline on
   scroll-in, loops, pauses off-screen / hidden tab. Click / keyboard seek the
   video to a segment. No video → text-scaled timer fallback.
-  CSS → ./styles/tabs-architected.css (paste into Webflow head) · Docs → .claude/rules/components/tabs-architected.md
+  CSS → ./styles/tabs-architected.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-architected.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
@@ -379,7 +379,13 @@ function setupTabs(root) {
           sync()
         }
       },
-      { threshold: 0.4 }
+      {
+        // threshold stays 0 + a negative rootMargin: intersectionRatio is capped at
+        // viewportHeight/elementHeight, so a section taller than ~2.5x the viewport
+        // (routine on mobile) never reaches a 0.4 threshold and this never fires.
+        threshold: 0,
+        rootMargin: '-25% 0px -25% 0px',
+      }
     )
     io.observe(root)
   }

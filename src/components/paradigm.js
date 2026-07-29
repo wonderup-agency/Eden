@@ -3,7 +3,7 @@
   Autoplay tabs (3): a per-number underline (grey track + black fill, active-only)
   fills as the active tab loads; the active text de-blurs per word and the visual
   crossfades on each switch.
-  CSS → ./styles/paradigm.css (paste into Webflow head) · Docs → .claude/rules/components/paradigm.md
+  CSS → ./styles/paradigm.css (bundled via src/styles.js) · Docs → .claude/rules/components/paradigm.md
 */
 
 import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
@@ -184,7 +184,13 @@ function setupRoot(root) {
       if (onScreen && !started) start()
       else sync()
     },
-    { threshold: 0.35 }
+    {
+      // threshold stays 0 + a negative rootMargin: intersectionRatio is capped at
+      // viewportHeight/elementHeight, so a section taller than ~2.5x the viewport
+      // (routine on mobile) never reaches a 0.4 threshold and this never fires.
+      threshold: 0,
+      rootMargin: '-25% 0px -25% 0px',
+    }
   )
   io.observe(root)
 

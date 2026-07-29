@@ -4,7 +4,7 @@
   (the author types the number at the start of each reference — that's the matching key),
   and wires bidirectional anchor links (cite ↔ reference) with "last-read" back-links.
   Scroll is delegated to the global anchor→Lenis bridge (global.js); this only owns matching + state.
-  CSS → ./styles/references.css (paste into Webflow head) · Docs → .claude/rules/components/references.md
+  CSS → ./styles/references.css (bundled via src/styles.js) · Docs → .claude/rules/components/references.md
 */
 
 const BACKLINK_LABEL = 'Go to Citation'

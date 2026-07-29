@@ -3,7 +3,7 @@
   Webflow renders each image caption as a .w-embed > .wp-figcaption that is the NEXT sibling
   of the <figure> (not inside it), so it stacks below. This pairs each figure with that caption
   block and wraps the pair in a flex row so the caption sits beside the image.
-  CSS → ./styles/figures.css (paste into Webflow head) · Docs → .claude/rules/components/figures.md
+  CSS → ./styles/figures.css (bundled via src/styles.js) · Docs → .claude/rules/components/figures.md
 */
 
 const WRAP_CLASS = 'figure-aside'
