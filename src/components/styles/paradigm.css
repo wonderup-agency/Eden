@@ -69,12 +69,35 @@
   background-color: var(--base--black, #000);
 }
 
-/* — Visuals (stacked, crossfaded) — */
+/* — Visuals (stacked, crossfaded in timer mode; a single asset in video mode) — */
 .tabs-paradigm_visual-wrapper {
   display: grid;
 }
 [data-paradigm-visual] {
   grid-area: 1 / 1;
+}
+
+/* — Shared video (one for all tabs; its playhead drives the text) — */
+
+/* A plain <video> (HTML element / Embed): its intrinsic ratio gives the box its height,
+   so the visual can't collapse. */
+[data-component='paradigm'] [data-paradigm-visual] > video,
+[data-component='paradigm']
+  [data-paradigm-video]:not(.w-background-video)
+  video,
+[data-component='paradigm'] video[data-paradigm-video] {
+  display: block;
+  width: 100%;
+  height: auto;
+  object-fit: cover;
+}
+
+/* A Webflow Background Video: keep Webflow's own absolute/cover layout, but ISOLATE the
+   wrapper. Webflow paints that <video> at z-index:-100 and .w-background-video (relative,
+   z-index auto) creates no stacking context — so the negative index escapes and any
+   ancestor background paints over the video. `isolation` keeps it local. */
+[data-component='paradigm'] [data-paradigm-visual] .w-background-video {
+  isolation: isolate;
 }
 
 /* — Fallback (no JS / reduced motion): show only the first / active tab — */
