@@ -1,9 +1,60 @@
-/* ===== RANDOM-ITEM · N random CMS items per list, re-rolled on reload ===== */
-/* Pre-JS state only: keeps the FIRST data-random-count items visible (crawlable, no
-   CLS) and holds the lists invisible for a beat so the swap to the random picks is
-   never seen as a flash. Once random-item.js adds .is-random both rules switch off
-   and JS owns the display inline — so nothing here fights it. Keep the count rules
-   in sync with the values authors are allowed to use (1–8). */
+/* ===== RANDOM-ITEM · random CMS items (pool of collections, or N per list) ===== */
+/* Gates + pre-JS state only. Two modes:
+   POOL — the source lists are display:none for good (data carriers: the JS copies their
+   fields into the static card slots, it never moves or shows them). The slots hold their
+   authored placeholder copy behind a visibility gate until JS swaps it, with the usual 2s
+   fail-safe so a dead bundle still shows the cards.
+   LEGACY — keeps the FIRST data-random-count items of each list visible (crawlable, no
+   CLS) behind the same gate, so the swap to the random picks is never seen. Once
+   random-item.js adds .is-random the gates switch off and JS owns the inline display —
+   so nothing here fights it. Keep the count rules in sync with the values authors are
+   allowed to use (1–8). */
+
+/* — Pool: source lists are data carriers, never rendered (also keeps their links out of
+     the tab order and the a11y tree — no inert/aria-hidden needed) — */
+[data-component='random-item'] [data-random-pool],
+[data-component='random-item'] .w-dyn-list[data-random-item] {
+  display: none;
+}
+
+/* — Pool: hold the card slots until JS has filled them (self-healing after 2s) — */
+[data-component='random-item']:not(.is-random) [data-random-slot] {
+  visibility: hidden;
+  animation: random-item-failsafe 0.01s linear 2s forwards;
+}
+
+/* — Pool: a slot with nothing left to show collapses (more slots than usable items) — */
+[data-component='random-item'] [data-random-slot].is-empty {
+  display: none;
+}
+
+/* — Pool: defensive line clamp. Any of the three collections can land in any card, and
+     their copy lengths are wildly different (a date vs. a 60-word summary), so an
+     unclamped card breaks the column alignment. Yields to the Client-First utilities:
+     set text-style-2lines / -3lines in the Designer and this rule steps aside. — */
+[data-component='random-item']
+  [data-random-slot]
+  [data-random-item='title']:not(.text-style-2lines):not(.text-style-3lines),
+[data-component='random-item']
+  [data-random-slot]
+  [data-random-item='subtitle']:not(.text-style-2lines):not(
+    .text-style-3lines
+  ) {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+[data-component='random-item']
+  [data-random-slot]
+  [data-random-item='subtitle']:not(.text-style-2lines):not(
+    .text-style-3lines
+  ) {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
 
 /* — Pre-JS: first item only (no data-random-count anywhere on the list) — */
 [data-component='random-item']:not(.is-random)
@@ -41,8 +92,9 @@
   display: none;
 }
 
-/* — Anti-flash gate (self-healing: reveals after 2s even if the JS never runs) — */
-[data-component='random-item']:not(.is-random) .w-dyn-list {
+/* — Legacy anti-flash gate (self-healing: reveals after 2s even if the JS never runs) — */
+[data-component='random-item']:not(.is-random)
+  .w-dyn-list:not([data-random-pool]):not([data-random-item]) {
   visibility: hidden;
   animation: random-item-failsafe 0.01s linear 2s forwards;
 }

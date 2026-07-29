@@ -10,6 +10,7 @@
   --nav-rest-top: 0px; /* auto-set by nav.js from nav_component's real padding-top */
   --nav-float-top: 0.25rem; /* gap from the top when floating */
   --nav-float-pad-x: 1.25rem; /* inner side padding of the mobile pill so logo/menu aren't flush to the edge */
+  --nav-float-logo-x: 0.75rem; /* logo nudge when floating — positive = right, negative = left (transform only, rest padding untouched) */
   --nav-center-gap: 2.5rem; /* item gap in the centered floating pill — lower = smaller */
   --nav-glass: rgba(255, 255, 255, 1); /* glass tint — raise/lower to taste */
   --nav-menu-glass: rgba(
@@ -50,13 +51,13 @@
   z-index: 1;
 }
 
-/* Logo shrink (transform-only) */
+/* Logo shrink + side nudge (transform-only, so no padding/layout change at rest) */
 [data-component='nav'] [data-nav-logo] {
   transform-origin: left center;
   transition: transform var(--nav-morph) var(--nav-ease);
 }
 [data-component='nav'] [data-nav-inner].is-floating [data-nav-logo] {
-  transform: scale(0.833);
+  transform: translateX(var(--nav-float-logo-x)) scale(0.833);
 }
 
 /* — Desktop (≥ 992px): hugs content edge-left at rest → centred when floating — */
