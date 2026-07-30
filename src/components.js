@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='reveal']",
+    importFn: () => import('./components/reveal.js'),
+  },
+  {
     selector: "[data-component='random-item']",
     importFn: () => import('./components/random-item.js'),
   },

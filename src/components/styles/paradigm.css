@@ -92,12 +92,19 @@
   object-fit: cover;
 }
 
-/* A Webflow Background Video: keep Webflow's own absolute/cover layout, but ISOLATE the
-   wrapper. Webflow paints that <video> at z-index:-100 and .w-background-video (relative,
-   z-index auto) creates no stacking context — so the negative index escapes and any
-   ancestor background paints over the video. `isolation` keeps it local. */
+/* A Webflow Background Video: keep Webflow's own absolute layout, but ISOLATE the wrapper.
+   Webflow paints that <video> at z-index:-100 and .w-background-video (relative, z-index
+   auto) creates no stacking context — so the negative index escapes and any ancestor
+   background paints over the video. `isolation` keeps it local. */
 [data-component='paradigm'] [data-paradigm-visual] .w-background-video {
   isolation: isolate;
+}
+/* …and show the whole frame. Webflow's `object-fit: cover` crops the video to fill the
+   wrapper, which reads as a heavy zoom whenever the wrapper's ratio differs from the
+   video's. `contain` fits it instead — give the wrapper the video's own aspect-ratio in the
+   Designer if you'd rather have no letterboxing. */
+[data-component='paradigm'] [data-paradigm-visual] .w-background-video > video {
+  object-fit: contain;
 }
 
 /* — Fallback (no JS / reduced motion): show only the first / active tab — */

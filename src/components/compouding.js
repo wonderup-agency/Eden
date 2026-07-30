@@ -1,16 +1,19 @@
 /*
   Component: compouding · data-component="compouding"
-  Paradigm chrome (underline + per-tab de-blur text + autoplay) with a tabs-stats-style
-  POINT-CLOUD for the visuals: each visual PNG is sampled to ~9.5k points and the cloud
-  WAVE-MORPHS between states on every switch (per-point staggered timing + a L→R sweep;
-  the oval draws AROUND as a loop). Special per-shape motion: the flow tab circulates
-  (loop), the bar tab slowly rotates around its long axis (diffuse-DNA). Plus intro
-  float-in, desynced shimmer, radial breathing, desktop hover-nebula. Falls back to an
-  image crossfade if the assets can't be sampled (CORS / load error).
+  Paradigm chrome (per-number underline + per-word de-blur + autoplay) with a PROCEDURAL
+  point cloud for the visuals: one parametric shape per tab (loop / lattice / flow /
+  spiral), each with its own perpetual motion, morphing along the incoming shape's own
+  curve on every switch. No PNG sampling — the source <img>s are the static fallback only.
   CSS → ./styles/compouding.css (bundled via src/styles.js) · Docs → .claude/rules/components/compouding.md
 */
 
 import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
+import {
+  SHAPE_ORDER,
+  TUNING,
+  makeShape,
+  mulberry32,
+} from '../utils/point-shapes.js'
 
 const { gsap } = window
 
@@ -32,21 +35,31 @@ function autoplayDuration(el) {
   return Math.min(AUTOPLAY_MAX, Math.max(AUTOPLAY_MIN, d))
 }
 
-// ---- Point cloud (visuals — sampled + wave-morphed) ----
-const TARGET_POINTS = 9500 // points per state — same for all, for a 1:1 morph
-const SAMPLE_MAX = 560 // longest edge the source PNG is sampled at
-const ALPHA_MIN = 28 // min source alpha to count a pixel as "ink"
-const LUMA_MAX = 245 // opaque PNGs: count pixels darker than this
-const DOT_COLOR = '140,145,152' // light slate grey (tuned for a light bg)
+// ---- Point cloud (procedural, evaluated per frame) ----
+const SHAPE_ATTR = 'data-compouding-shape' // loop | lattice | flow | spiral
+// Grain over weight: the reference graphics are MANY small light dots, not few heavy ones.
+// Halving the dot radius and doubling the count is what makes a shape read as fine grain.
+const TARGET_POINTS = 16000 // points per state — same for all, for a 1:1 morph
+const POINTS_MOBILE = 9000 // fewer points below 768px (evaluating 4 shapes per frame)
+const MOBILE_Q = '(max-width: 767px)'
+const DOT_COLOR = '138,142,149' // light slate grey (tuned for a light bg)
+// Sprite: alpha stays full out to this fraction of the radius, then falls off. Higher =
+// crisper dots (a fully soft dot smears any shape made of lines into fog).
+const DOT_HARD = 0.6
 const FIT = 0.8 // per-state: fraction of the stage each shape fills on its limiting axis
+// px kept clear on every side. The shimmer, breathing and hover push points OUTSIDE the
+// fitted box (~12% of the scale), so without this the cloud reaches the stage edge and
+// reads as touching whatever sits above the wrapper.
+const STAGE_PAD = 32
 // Varied dot sizes: mostly fine dots, a fraction a bit bigger (keep them slim).
-const BIG_DOT_CHANCE = 0.15
-const SMALL_R = [0.35, 0.9]
-const BIG_R = [1.1, 2.2]
-// Morph (the transition): per-point staggered "wave" — some particles arrive faster.
+const BIG_DOT_CHANCE = 0.12
+const SMALL_R = [0.3, 0.62]
+const BIG_R = [0.75, 1.3]
+// Morph (the transition): per-point staggered "wave" ordered by the TARGET shape's own
+// parametrization (see point-shapes.js `order`) — so each state builds along its curve.
 const MORPH_DURATION = 3.5
 const MORPH_EASE = 'power1.inOut'
-const MORPH_SPREAD = 0.55 // how far the per-point START is staggered along the sweep
+const MORPH_SPREAD = 0.55 // how far the per-point START is staggered along the order
 const MORPH_SPEED_VAR = 0.5 // per-point DURATION variance (faster/slower particles)
 const WAVE_RANDOM = 0.4 // blend the ordered sweep with per-point randomness (softer)
 // Hover nebula (desktop only — reads as jitter on tablet/below)
@@ -65,22 +78,22 @@ const DRIFT_FREQ_VAR = 0.4 // per-point drift-frequency variation → desynced s
 const BREATH_AMP = 0.03
 const BREATH_SPEED = 1.65
 const BREATH_RIPPLE = 2.2
-// Flow tab (oval): dots circulate along the ring (loop). Decoupled, slow. rad/frame.
-const FLOW_SPEED = 0.003
-// The oval PNG has the tag pills baked in → generate a clean dot ring procedurally for
-// the flow state instead of sampling it (the tags come from the HTML overlay). Set false
-// once a tags-free oval PNG is provided.
-const OVAL_PROCEDURAL = true
-// Flow tab overlay (tags): each fades at its own speed (desfasado) + staggered start.
-const TAG_FADE = 0.9
-const TAG_STAGGER = 0.18
-// Pills sit OUTSIDE the ring with this clearance (px) — centred on the perimeter they were
-// crossed by the dots. The oval's fit reserves the pill box + this gap (see cloudResize).
-const TAG_GAP = 14
-// Bar tab: the band slowly rotates around its long axis (diffuse-DNA).
-const BAR_HEIGHT = 0.32 // bar half-height = rotation radius (subtle)
-const BAR_TWIST = 0.4 // turns of twist across the bar (low = subtle, not literal DNA)
-const BAR_SPEED = 0.12 // rotation speed (decoupled → stays slow)
+// Flow tab: gold endpoint nodes drawn on canvas + the two HTML endpoint labels.
+const ENDPOINT_ATTR = 'data-compouding-endpoint' // start | end
+const START_ATTR = 'data-compouding-startpoint' // accepted alias for the start label
+const UNIT_SHIM = [1, 1] // fallback shimmer anisotropy
+const ALPHA_SKIP = 0.015 // below this a dot is invisible — skip the draw, not the physics
+const NODE_CORE_R = 4.5 // px
+const NODE_GLOW_R = 15 // px (halo)
+const NODE_PULSE = 1.5 // rad/s
+const LABEL_GAP = 16 // px between a lens tip and its label
+const LABEL_FADE = 0.75
+const LABEL_STAGGER = 0.16
+// The nodes + labels belong to the lens, so they must not show while the cloud is still the
+// previous shape — they'd sit on top of it. Windows of the morph progress: in late, out early.
+const NODE_IN = 0.55
+const NODE_OUT = 0.3
+const LABEL_IN = 0.6 // fraction of the morph waited before the labels fade in
 // Intro (float in → assemble): gentle so the load assembly never lurches.
 const INTRO_SCATTER = 0.6
 const INTRO_FADE = 0.6
@@ -99,152 +112,40 @@ const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
 // Outgoing tab: plain fade. The de-blur lives on the words, never the parent.
 const REVEAL_OUT = { autoAlpha: 0, duration: OUT_FADE }
 
-// Deterministic RNG so the subsample is stable across reloads.
-function mulberry32(seed) {
-  return function () {
-    seed |= 0
-    seed = (seed + 0x6d2b79f5) | 0
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-// ---- Point-cloud sampling (verbatim from tabs-stats) ----
-function loadImage(src) {
-  return new Promise((resolve) => {
-    const img = new window.Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = () => resolve(null)
-    img.src = src
+// The endpoint labels are authored in Webflow, where the attribute VALUE is the easiest
+// thing to get wrong (a city name instead of start/end). So: accept start|end in any case,
+// accept the -startpoint alias, and fall back to DOM order for whatever is left — then
+// rewrite the canonical value, since the CSS and positionEndpoints() key off it.
+function resolveEndpoints(root, visualsWrap) {
+  if (!visualsWrap) return []
+  const found = gsap.utils.toArray(
+    root.querySelectorAll(`[${ENDPOINT_ATTR}], [${START_ATTR}]`)
+  )
+  const sides = found.map((el) => {
+    if (el.hasAttribute(START_ATTR)) return 'start'
+    const v = (el.getAttribute(ENDPOINT_ATTR) || '').trim().toLowerCase()
+    if (v === 'start' || v === 'from') return 'start'
+    if (v === 'end' || v === 'to') return 'end'
+    return null
   })
-}
-
-// Sample an image's "ink" pixels into n points (x/y/alpha + bbox). Throws if CORS-tainted.
-function sampleImage(img, n, rng) {
-  const scale = SAMPLE_MAX / Math.max(img.width, img.height)
-  const w = Math.max(1, Math.round(img.width * scale))
-  const h = Math.max(1, Math.round(img.height * scale))
-  const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(img, 0, 0, w, h)
-  const data = ctx.getImageData(0, 0, w, h).data // throws if tainted
-
-  const cand = []
-  for (let py = 0; py < h; py++) {
-    for (let px = 0; px < w; px++) {
-      const i = (py * w + px) * 4
-      const alpha = data[i + 3]
-      if (alpha < ALPHA_MIN) continue
-      const luma = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
-      const isInk = alpha > 200 ? luma < LUMA_MAX : true
-      if (!isInk) continue
-      const intensity = Math.min(1, (alpha / 255) * (1 - luma / 255) * 2 + 0.25)
-      cand.push(px, py, intensity)
-    }
-  }
-
-  const x = new Float32Array(n)
-  const y = new Float32Array(n)
-  const a = new Float32Array(n)
-  const m = cand.length / 3
-  if (m === 0) return { x, y, a, bbox: { minX: 0, minY: 0, maxX: w, maxY: h } }
-
-  const order = new Uint32Array(m)
-  for (let i = 0; i < m; i++) order[i] = i
-  for (let i = m - 1; i > 0; i--) {
-    const j = (rng() * (i + 1)) | 0
-    const t = order[i]
-    order[i] = order[j]
-    order[j] = t
-  }
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  const JIT = 1.2
-  for (let k = 0; k < n; k++) {
-    const ci = order[k % m] * 3
-    let sx = cand[ci]
-    let sy = cand[ci + 1]
-    if (k >= m) {
-      sx += (rng() - 0.5) * 2 * JIT
-      sy += (rng() - 0.5) * 2 * JIT
-    }
-    x[k] = sx
-    y[k] = sy
-    a[k] = cand[ci + 2]
-    if (sx < minX) minX = sx
-    if (sx > maxX) maxX = sx
-    if (sy < minY) minY = sy
-    if (sy > maxY) maxY = sy
-  }
-  return { x, y, a, bbox: { minX, minY, maxX, maxY } }
-}
-
-// Clean elliptical dot ring for the flow/oval state — used instead of sampling the
-// oval PNG (which has the tag pills baked in). Same {x,y,a,bbox} contract as sampleImage.
-function proceduralRing(n, rng) {
-  const S = SAMPLE_MAX
-  const cx = S / 2
-  const cy = S / 2
-  const RX = S * 0.46
-  const RY = S * 0.3
-  const band = S * 0.035 // ring thickness
-  const x = new Float32Array(n)
-  const y = new Float32Array(n)
-  const a = new Float32Array(n)
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  for (let i = 0; i < n; i++) {
-    const ang = rng() * Math.PI * 2
-    const o = (rng() - 0.5) * 2 * band
-    const sx = cx + Math.cos(ang) * (RX + o)
-    const sy = cy + Math.sin(ang) * (RY + o)
-    x[i] = sx
-    y[i] = sy
-    a[i] = 0.55 + 0.45 * rng()
-    if (sx < minX) minX = sx
-    if (sx > maxX) maxX = sx
-    if (sy < minY) minY = sy
-    if (sy > maxY) maxY = sy
-  }
-  return { x, y, a, bbox: { minX, minY, maxX, maxY } }
-}
-
-// Flow-tab labels — injected as HTML pills when no [data-compouding-overlay] exists.
-const TAGS = [
-  { label: 'Feedback →', pos: 'top' },
-  { label: 'Deployment ↑', pos: 'left' },
-  { label: 'Research ↓', pos: 'right' },
-  { label: '← Model', pos: 'bottom' },
-]
-
-// Append a pill per TAG into a container (positioned later on the oval ring by JS).
-function fillTags(container) {
-  TAGS.forEach((t) => {
-    const el = document.createElement('span')
-    el.className = 'tabs-compouding_tag'
-    el.dataset.pos = t.pos
-    el.textContent = t.label
-    container.appendChild(el)
+  found.forEach((el, i) => {
+    if (!sides[i]) sides[i] = sides.includes('start') ? 'end' : 'start'
   })
-}
-
-// Build the flow-tab tags overlay (a pill per TAG).
-function injectTags(parent) {
-  const wrap = document.createElement('div')
-  wrap.className = 'tabs-compouding_tags'
-  wrap.setAttribute('data-compouding-overlay', '')
-  wrap.setAttribute('aria-hidden', 'true')
-  fillTags(wrap)
-  parent.appendChild(wrap)
-  return wrap
+  if (found.length > 2)
+    console.warn(
+      `[compouding] ${found.length} endpoint labels — only the first start + end are used`
+    )
+  // start first, so the fade-in stagger always runs origin → destination.
+  const out = []
+  ;['start', 'end'].forEach((side) => {
+    const el = found[sides.indexOf(side)]
+    if (!el) return
+    el.setAttribute(ENDPOINT_ATTR, side)
+    el.removeAttribute(START_ATTR)
+    if (el.parentElement !== visualsWrap) visualsWrap.appendChild(el)
+    out.push(el)
+  })
+  return out
 }
 
 function setupRoot(root) {
@@ -296,52 +197,52 @@ function setupRoot(root) {
   gsap.set(bars, { scaleX: 0, transformOrigin: 'left center' })
 
   // ===================== Point-cloud visuals =====================
-  const cloudImgs = visuals
-    .slice(0, count)
-    .map((v) => v.querySelector('img') || (v.tagName === 'IMG' ? v : null))
-  const cloudEnabled = !!(visualsWrap && cloudImgs.every(Boolean))
-  // data-compouding-flow → the "loop" tab: its dots CIRCULATE along the oval, and an
-  // optional [data-compouding-overlay] (an <img> with tags, or HTML pills) fades in.
-  // data-compouding-bar → the "bar" tab: the band slowly rotates around its long axis.
-  const flowIndex = visuals
-    .slice(0, count)
-    .findIndex((v) => v.hasAttribute('data-compouding-flow'))
-  const barIndex = visuals
-    .slice(0, count)
-    .findIndex((v) => v.hasAttribute('data-compouding-bar'))
-  // Flow-tab overlay (canvas mode + a flow tab only). Inject the TAGS pills when there's
-  // no author overlay; if an author overlay exists but is EMPTY, fill it with the pills
-  // (so a leftover empty [data-compouding-overlay] div doesn't silently suppress them).
-  let overlayEl = root.querySelector('[data-compouding-overlay]')
-  if (cloudEnabled && flowIndex >= 0 && visualsWrap) {
-    if (!overlayEl) overlayEl = injectTags(visualsWrap)
-    else if (!overlayEl.children.length) fillTags(overlayEl)
-  }
-  // Tag items: the overlay's element children if any (stagger them), else the element.
-  const overlayItems = overlayEl
-    ? overlayEl.children.length
-      ? Array.from(overlayEl.children)
-      : [overlayEl]
-    : []
-  if (overlayItems.length) gsap.set(overlayItems, { autoAlpha: 0 })
+  const cloudEnabled = !!visualsWrap
+  // Which procedural shape each tab shows. Falls back to SHAPE_ORDER by index.
+  const shapeKinds = visuals.slice(0, count).map((v, i) => {
+    const raw = (v.getAttribute(SHAPE_ATTR) || '').trim()
+    if (SHAPE_ORDER.includes(raw)) return raw
+    const fallback = SHAPE_ORDER[i % SHAPE_ORDER.length]
+    console.warn(
+      `[compouding] visual ${i}: ${
+        raw ? `unknown ${SHAPE_ATTR}="${raw}"` : `no ${SHAPE_ATTR}`
+      } — using "${fallback}"`
+    )
+    return fallback
+  })
+  const flowIndex = shapeKinds.indexOf('flow')
 
-  let cloudOk = false // sampling succeeded → canvas drives the visuals
-  let cloudFailed = false // sampling bailed (CORS / load) → image crossfade
+  // Flow endpoint labels (São Paulo / Texas): real text in the DOM. Moved onto the visual
+  // wrapper so JS can anchor them to the lens tips (and so .is-canvas can't hide them
+  // along with the source visuals).
+  const endpoints = resolveEndpoints(root, visualsWrap)
+  if (endpoints.length) gsap.set(endpoints, { autoAlpha: 0 })
+
+  let cloudOk = false // procedural cloud is live → canvas drives the visuals
   let canvas = null
   let cctx = null
   let sprite = null
-  const N = TARGET_POINTS
+  let nodeSprite = null
+  const N = window.matchMedia(MOBILE_Q).matches ? POINTS_MOBILE : TARGET_POINTS
   let states = null
-  const fromX = new Float32Array(N)
-  const fromY = new Float32Array(N)
-  const fromA = new Float32Array(N)
+  const sbuf = new Float32Array(4) // shared sample output — no per-point allocation
+  const fbuf = new Float32Array(4) // ditto, for the outgoing shape during a morph
+  // Per-point residual at the instant of a switch: painted frame − the outgoing shape's LIVE
+  // position. It decays as the point migrates, which is what lets the morph start
+  // frame-exact without freezing the outgoing shape (see morphTo).
+  const resX = new Float32Array(N)
+  const resY = new Float32Array(N)
+  const resA = new Float32Array(N)
+  // Positions of the last painted frame — what the residual above is measured against.
+  const curX = new Float32Array(N)
+  const curY = new Float32Array(N)
+  const curA = new Float32Array(N)
   let toState = null
+  let fromState = null // the outgoing shape, sampled LIVE while a morph runs
   const morph = { t: 1 }
-  let morphing = false
   let cloudReady = false
   let introduced = false
   let introActive = false
-  let introTarget = 0
   let pendingGo = null
   let looping = false
   // per-point buffers
@@ -355,21 +256,16 @@ function setupRoot(root) {
   const introDelay = new Float32Array(N)
   const driftPhase = new Float32Array(N)
   const driftFreq = new Float32Array(N) // per-point shimmer frequency → desynced
-  const mProj = new Float32Array(N) // per-point sweep projection (0..1, per target)
+  const mProj = new Float32Array(N) // per-point morph order (0..1, from the target shape)
   const waveJit = new Float32Array(N) // per-point random blended into the wave delay
   const mRand = new Float32Array(N) // per-point random → morph speed variance
-  const barCross = new Float32Array(N) // per-point cross coord in the bar (-1..1)
   const introProg = { v: 0 }
   const introFade = { v: 0 }
   let hovActive = false
   let mx = 0
   let my = 0
-  let flowActive = false // on the flow tab → dots circulate along the oval
-  let flowAngle = 0 // accumulated flow rotation (ellipse-space)
-  let flowAX = 1 // flow state's half-extent x (ellipse semi-axis)
-  let flowAY = 1
-  let barFrom = false // bar is the morph's source → ease its rotation OUT
-  let barTo = false // bar is the morph's target → ease it IN
+  let flowFrom = false // flow is the morph's source → fade its nodes OUT
+  let flowTo = false // flow is the morph's target → fade them IN
   let cssW = 0
   let cssH = 0
   let cscale = 0 // resting scale of the current state (per-state fit)
@@ -378,8 +274,6 @@ function setupRoot(root) {
   let coverX = 1
   let coverY = 1
   let cdpr = 1
-  const stateExtX = [] // per-state normalized half-width (longer axis = 1)
-  const stateExtY = [] // per-state normalized half-height
   const stateScale = [] // per-state fit scale (min of width/height fit × FIT)
 
   function makeSprite() {
@@ -388,11 +282,28 @@ function setupRoot(root) {
     const c = s.getContext('2d')
     const g = c.createRadialGradient(8, 8, 0, 8, 8, 8)
     g.addColorStop(0, `rgba(${DOT_COLOR},1)`)
-    g.addColorStop(0.5, `rgba(${DOT_COLOR},0.8)`)
+    g.addColorStop(DOT_HARD, `rgba(${DOT_COLOR},1)`)
     g.addColorStop(1, `rgba(${DOT_COLOR},0)`)
     c.fillStyle = g
     c.beginPath()
     c.arc(8, 8, 8, 0, Math.PI * 2)
+    c.fill()
+    return s
+  }
+
+  // Gold endpoint node: hot-white core inside a warm halo (same language as impact-map).
+  function makeNodeSprite() {
+    const s = document.createElement('canvas')
+    s.width = s.height = 64
+    const c = s.getContext('2d')
+    const g = c.createRadialGradient(32, 32, 0, 32, 32, 32)
+    g.addColorStop(0, 'rgba(255,255,255,1)')
+    g.addColorStop(0.18, 'rgba(255,236,190,1)')
+    g.addColorStop(0.42, 'rgba(230,168,74,0.55)')
+    g.addColorStop(1, 'rgba(230,168,74,0)')
+    c.fillStyle = g
+    c.beginPath()
+    c.arc(32, 32, 32, 0, Math.PI * 2)
     c.fill()
     return s
   }
@@ -407,128 +318,68 @@ function setupRoot(root) {
   }
 
   function cloudResize() {
-    if (!visualsWrap) return
-    cssW = visualsWrap.clientWidth
-    cssH = visualsWrap.clientHeight
-    cdpr = Math.min(window.devicePixelRatio || 1, 2)
-    canvas.width = cssW * cdpr
-    canvas.height = cssH * cdpr
-    cctx.setTransform(cdpr, 0, 0, cdpr, 0, 0)
-    // The flow state fits into the stage MINUS the pill boxes, so the tags clear the ring
-    // (and the section text) instead of straddling it.
-    const res = tagReserve()
-    for (let i = 0; i < stateExtX.length; i++) {
+    if (!visualsWrap || !canvas) return
+    const w = visualsWrap.clientWidth
+    const h = visualsWrap.clientHeight
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    // Assigning canvas.width re-allocates (and clears) the whole backing store, so only do
+    // it when the stage really changed — the ResizeObserver fires on no-op layouts too.
+    if (w !== cssW || h !== cssH || dpr !== cdpr) {
+      cssW = w
+      cssH = h
+      cdpr = dpr
+      canvas.width = cssW * cdpr
+      canvas.height = cssH * cdpr
+      cctx.setTransform(cdpr, 0, 0, cdpr, 0, 0)
+    }
+    // The flow state fits into the stage MINUS its endpoint labels + node halos, so the
+    // labels can never be pushed off the stage (or over the section copy).
+    const res = endpointReserve()
+    for (let i = 0; i < states.length; i++) {
       const rx = i === flowIndex ? res.x : 0
       const ry = i === flowIndex ? res.y : 0
-      const halfW = Math.max(cssW * 0.5 - rx, cssW * 0.25)
-      const halfH = Math.max(cssH * 0.5 - ry, cssH * 0.25)
+      const halfW = Math.max(cssW * 0.5 - rx - STAGE_PAD, cssW * 0.25)
+      const halfH = Math.max(cssH * 0.5 - ry - STAGE_PAD, cssH * 0.25)
       stateScale[i] =
-        Math.min(halfW / stateExtX[i], halfH / stateExtY[i]) *
-        (i === flowIndex ? 1 : FIT)
+        Math.min(halfW / states[i].extX, halfH / states[i].extY) *
+        FIT *
+        (TUNING[states[i].kind]?.fill ?? 1) // per-shape stage fill
     }
     cscale = stateScale[curState] || cssW * 0.5 * FIT
     scaleFrom = cscale
     coverX = cscale ? (cssW * 0.5) / cscale : 1
     coverY = cscale ? (cssH * 0.5) / cscale : 1
-    positionTags()
+    positionEndpoints()
     if (cloudReady) drawCloud()
   }
 
-  // Room the pills need outside the ring (half the biggest box per axis + the gap), so
-  // cloudResize can shrink the oval by exactly that much. 0 when there are no data-pos
-  // pills (an author-positioned overlay keeps the full stage).
-  function tagReserve() {
+  // Room the flow tab needs outside the lens: the widest label + the gap + the node halo.
+  function endpointReserve() {
     let x = 0
-    let y = 0
-    overlayItems.forEach((el) => {
-      const pos = el.dataset && el.dataset.pos
-      if (!pos) return
-      if (pos === 'left' || pos === 'right')
-        x = Math.max(x, el.offsetWidth + TAG_GAP)
-      else y = Math.max(y, el.offsetHeight + TAG_GAP)
+    endpoints.forEach((el) => {
+      x = Math.max(x, el.offsetWidth + LABEL_GAP + NODE_GLOW_R)
     })
-    return { x, y }
+    return { x, y: endpoints.length ? NODE_GLOW_R : 0 }
   }
 
-  // Anchor the injected tag pills just OUTSIDE the oval's real perimeter (its own
-  // semi-axes × fit scale), clear of the dots by TAG_GAP. Only items carrying data-pos
-  // are moved — an author-positioned overlay (no data-pos) is left where the Designer
-  // placed it. Pills are centred on the point set here (CSS translate(-50%, -50%)), so
-  // each offset is the gap plus half the pill's own box.
-  function positionTags() {
-    if (flowIndex < 0 || !stateScale.length) return
-    const ex = stateExtX[flowIndex] || 1
-    const ey = stateExtY[flowIndex] || 1
+  // Anchor each label just outside its lens tip. `start` sits left of it, `end` right of it
+  // (the CSS translates them off their anchor point accordingly). The gap is measured from
+  // the OUTER EDGE OF THE NODE HALO, not the tip: the halo reaches NODE_GLOW_R past the tip,
+  // so a gap measured from the tip alone puts the text right on top of the glow.
+  function positionEndpoints() {
+    if (flowIndex < 0 || !endpoints.length || !states) return
     const sc = stateScale[flowIndex] || cscale
+    const off = states[flowIndex].extX * sc + NODE_GLOW_R + LABEL_GAP
     const cx = cssW / 2
     const cy = cssH / 2
-    const hw = ex * sc
-    const hh = ey * sc
-    overlayItems.forEach((el) => {
-      const pos = el.dataset && el.dataset.pos
-      if (!pos) return
-      const offX = hw + TAG_GAP + el.offsetWidth / 2
-      const offY = hh + TAG_GAP + el.offsetHeight / 2
-      const x = pos === 'left' ? cx - offX : pos === 'right' ? cx + offX : cx
-      const y = pos === 'top' ? cy - offY : pos === 'bottom' ? cy + offY : cy
-      el.style.left = x + 'px'
-      el.style.top = y + 'px'
+    endpoints.forEach((el) => {
+      const isEnd = el.getAttribute(ENDPOINT_ATTR) === 'end'
+      el.style.left = (isEnd ? cx + off : cx - off) + 'px'
+      el.style.top = cy + 'px'
     })
   }
 
-  // Principal axis (largest covariance eigenvector) → the shape's long axis.
-  function principalAxis(s) {
-    let mxx = 0
-    let myy = 0
-    let mxy = 0
-    for (let i = 0; i < N; i++) {
-      const x = s.x[i]
-      const y = s.y[i]
-      mxx += x * x
-      myy += y * y
-      mxy += x * y
-    }
-    const tr = mxx + myy
-    const det = mxx * myy - mxy * mxy
-    const l = tr / 2 + Math.sqrt(Math.max(0, (tr * tr) / 4 - det))
-    let ax = l - myy
-    let ay = mxy
-    if (Math.abs(ax) + Math.abs(ay) < 1e-6) {
-      ax = 1
-      ay = 0
-    }
-    const nrm = Math.hypot(ax, ay)
-    return [ax / nrm, ay / nrm]
-  }
-
-  // Per-point sweep projection for the wave morph. Oval: sweep AROUND the ring (by
-  // angle) so it "draws the loop". Others: project onto the principal axis oriented
-  // rightward (and down) → every morph reads as a L→R cascade.
-  function computeWave(next) {
-    const s = states[next]
-    if (next === flowIndex) {
-      for (let i = 0; i < N; i++)
-        mProj[i] = (Math.atan2(s.y[i], s.x[i]) + Math.PI) / (2 * Math.PI)
-      return
-    }
-    let [ax, ay] = principalAxis(s)
-    if (ax < 0 || (Math.abs(ax) < 1e-6 && ay < 0)) {
-      ax = -ax
-      ay = -ay
-    }
-    let min = Infinity
-    let max = -Infinity
-    for (let i = 0; i < N; i++) {
-      const p = s.x[i] * ax + s.y[i] * ay
-      if (p < min) min = p
-      if (p > max) max = p
-    }
-    const span = max - min || 1
-    for (let i = 0; i < N; i++)
-      mProj[i] = (s.x[i] * ax + s.y[i] * ay - min) / span
-  }
-
-  // Per-point local morph progress at global t: staggered START (sweep ⊕ randomness)
+  // Per-point local morph progress at global t: staggered START (target order ⊕ randomness)
   // + per-point DURATION (speed variance). All points reach 1 by t = 1. Smoothstepped.
   function waveLP(i, t) {
     const spreadClamp = MORPH_SPREAD < 0.9 ? MORPH_SPREAD : 0.9
@@ -541,91 +392,131 @@ function setupRoot(root) {
     return lp * lp * (3 - 2 * lp)
   }
 
+  // Smoothstep window — 0 below a, 1 above b.
+  function win(x, a, b) {
+    let p = (x - a) / (b - a)
+    p = p < 0 ? 0 : p > 1 ? 1 : p
+    return p * p * (3 - 2 * p)
+  }
+
+  // Gold nodes at the lens tips — only on the flow tab. They fade in LATE and out EARLY
+  // (NODE_IN / NODE_OUT) so they never sit on a cloud that isn't the lens yet.
+  function drawNodes(now, t) {
+    if (flowIndex < 0) return
+    const amt = flowTo
+      ? win(t, NODE_IN, 1)
+      : flowFrom
+        ? 1 - win(t, 0, NODE_OUT)
+        : 0
+    if (amt < 0.002) return
+    // Pinned to the LENS's own scale, not the interpolated one: the endpoint labels are
+    // positioned at that scale, so anything else drifts the node off its label mid-morph.
+    const hw = states[flowIndex].extX * (stateScale[flowIndex] || cscale)
+    const cy = cssH / 2
+    const cx = cssW / 2
+    const pulse = 0.86 + 0.14 * Math.sin(now * NODE_PULSE)
+    const glow = NODE_GLOW_R * (0.9 + 0.1 * pulse)
+    cctx.globalAlpha = amt * pulse
+    for (let k = 0; k < 2; k++) {
+      const sx = k ? cx + hw : cx - hw
+      cctx.drawImage(nodeSprite, sx - glow, cy - glow, glow * 2, glow * 2)
+      cctx.drawImage(
+        nodeSprite,
+        sx - NODE_CORE_R,
+        cy - NODE_CORE_R,
+        NODE_CORE_R * 2,
+        NODE_CORE_R * 2
+      )
+    }
+    cctx.globalAlpha = 1
+  }
+
   function drawCloud() {
     cctx.clearRect(0, 0, cssW, cssH)
     if (!cloudReady) return
     const cx = cssW / 2
     const cy = cssH / 2
     const now = window.performance.now() * 0.001
-
-    if (introActive) {
-      const sTarget = states[introTarget]
-      const p = introProg.v
-      const span = 1 + INTRO_STAGGER
-      const covX = coverX * INTRO_SCATTER
-      const covY = coverY * INTRO_SCATTER
-      for (let i = 0; i < N; i++) {
-        let pp = p * span - introDelay[i]
-        pp = pp < 0 ? 0 : pp > 1 ? 1 : pp
-        pp = pp * pp * (3 - 2 * pp)
-        const driftAmp =
-          (SHIMMER_FLOOR + (1 - SHIMMER_FLOOR) * (1 - pp)) * DRIFT
-        const ph = now * DRIFT_SPEED * driftFreq[i] + driftPhase[i]
-        const fx = Math.cos(ph) * dispX[i] * driftAmp
-        const fy = Math.sin(ph) * dispY[i] * driftAmp
-        const dx = startX[i] * covX
-        const dy = startY[i] * covY
-        const bx = dx + (sTarget.x[i] - dx) * pp + fx
-        const by = dy + (sTarget.y[i] - dy) * pp + fy
-        const r = pointR[i]
-        cctx.globalAlpha = sTarget.a[i] * introFade.v
-        cctx.drawImage(
-          sprite,
-          cx + bx * cscale - r,
-          cy + by * cscale - r,
-          r * 2,
-          r * 2
-        )
-      }
-      cctx.globalAlpha = 1
-      return
-    }
-
-    const t = morph.t
-    const tx = toState.x
-    const ty = toState.y
-    const ta = toState.a
-    const rscale = scaleFrom + (cscale - scaleFrom) * t // interpolated per-state scale
+    // Intro / morph / idle share ONE loop on purpose: anything a phase doesn't share becomes
+    // a snap when the phase flips (the shimmer anisotropy and the breathing used to appear
+    // out of nowhere the instant the intro ended).
+    const t = introActive ? 1 : morph.t
+    const morphing = !introActive && t < 1
+    const rscale = introActive ? cscale : scaleFrom + (cscale - scaleFrom) * t // interpolated per-state scale
     const R2 = HOVER_RADIUS * HOVER_RADIUS
-    const driftAmp = SHIMMER_FLOOR * DRIFT
-    // Flow circulation starts only once the loop has formed (after the morph settles).
-    if (flowActive && !morphing) flowAngle += FLOW_SPEED
-    const cosF = Math.cos(flowAngle)
-    const sinF = Math.sin(flowAngle)
-    const barTwist = BAR_TWIST * Math.PI
-    const barRot = now * BAR_SPEED
-    // Bar envelope: eases the rotation+shading IN (target) / OUT (source) → no flash.
-    const barAmt = barTo ? t : barFrom ? 1 - t : 0
+    // Per-shape, per-axis shimmer: on the line-based shapes it runs ALONG the line, so it
+    // can't smear two streamlines into one another. Interpolated across a morph so neither
+    // shape's grain snaps in. Read once per frame, not per point.
+    const shTo = TUNING[toState.kind]?.shim || UNIT_SHIM
+    const shFrom = morphing ? TUNING[fromState.kind]?.shim || UNIT_SHIM : shTo
+    // Interpolated PER POINT below (by its own migration progress, not the global t): a point
+    // that already reached the lens has to shimmer along the lens, or the arrived lines read
+    // smeared while the rest of the cloud is still in transit.
+    const driftAmpX = SHIMMER_FLOOR * DRIFT * shFrom[0]
+    const driftAmpY = SHIMMER_FLOOR * DRIFT * shFrom[1]
+    const driftDX = SHIMMER_FLOOR * DRIFT * (shTo[0] - shFrom[0])
+    const driftDY = SHIMMER_FLOOR * DRIFT * (shTo[1] - shFrom[1])
+    // Radial breathing is per shape (`pulse`): flow keeps it at 0 because its lens is pinned
+    // to two labelled endpoints, and a pulse there reads as the cities drifting.
+    const puTo = BREATH_AMP * (TUNING[toState.kind]?.pulse ?? 1)
+    const puFrom = morphing
+      ? BREATH_AMP * (TUNING[fromState.kind]?.pulse ?? 1)
+      : puTo
+    const puDelta = puTo - puFrom
+    const fade = introActive ? introFade.v : 1
+    const ispan = 1 + INTRO_STAGGER
+    const icovX = coverX * INTRO_SCATTER
+    const icovY = coverY * INTRO_SCATTER
 
     for (let i = 0; i < N; i++) {
-      const lp = waveLP(i, t)
-      const ph = now * DRIFT_SPEED * driftFreq[i] + driftPhase[i]
-      const fx = Math.cos(ph) * dispX[i] * driftAmp
-      const fy = Math.sin(ph) * dispY[i] * driftAmp
-      let bx = fromX[i] + (tx[i] - fromX[i]) * lp + fx
-      let by = fromY[i] + (ty[i] - fromY[i]) * lp + fy
-      const dd = Math.sqrt(bx * bx + by * by)
-      const breath =
-        1 + Math.sin(now * BREATH_SPEED - dd * BREATH_RIPPLE) * BREATH_AMP
-      bx *= breath
-      by *= breath
-      let depthA = 1
-      let depthR = 1
-      if (barAmt > 0) {
-        // band rotates around its long axis: cross coord → cos(angle) on screen,
-        // sin(angle) as depth (front brighter/bigger). barTwist adds a gentle ribbon.
-        const angle = barRot + bx * barTwist
-        const yb = barCross[i] * BAR_HEIGHT * Math.cos(angle)
-        by += (yb - by) * barAmt
-        const dn = barCross[i] * Math.sin(angle) * 0.5 + 0.5
-        depthA = 1 + (0.4 + 0.6 * dn - 1) * barAmt
-        depthR = 1 + (0.7 + 0.5 * dn - 1) * barAmt
+      // The target is evaluated LIVE, so the incoming shape is already in motion while it
+      // assembles — nothing jumps when the morph lands.
+      toState.sample(i, now, sbuf)
+      let bx = sbuf[0]
+      let by = sbuf[1]
+      let al = sbuf[2]
+      let rm = sbuf[3]
+      let amp = 1 // shimmer multiplier — wider while the intro cloud is still dispersed
+      let lpv = 1 // this point's migration progress (1 = fully on the target shape)
+      if (introActive) {
+        let pp = introProg.v * ispan - introDelay[i]
+        pp = pp < 0 ? 0 : pp > 1 ? 1 : pp
+        pp = pp * pp * (3 - 2 * pp)
+        const dx = startX[i] * icovX
+        const dy = startY[i] * icovY
+        bx = dx + (bx - dx) * pp
+        by = dy + (by - dy) * pp
+        amp = 1 + (1 / SHIMMER_FLOOR - 1) * (1 - pp)
+      } else if (morphing) {
+        const lp = waveLP(i, t)
+        lpv = lp
+        // The OUTGOING shape is sampled live too. Baking it as a frozen snapshot left every
+        // point that hadn't started its migration standing still — up to MORPH_SPREAD of the
+        // duration — which read as the section pausing on every switch. The residual keeps
+        // the hand-off frame-exact even when a switch interrupts another morph.
+        fromState.sample(i, now, fbuf)
+        const k = 1 - lp
+        const fx = fbuf[0] + resX[i] * k
+        const fy = fbuf[1] + resY[i] * k
+        const fa = fbuf[2] + resA[i] * k
+        bx = fx + (bx - fx) * lp
+        by = fy + (by - fy) * lp
+        al = fa + (al - fa) * lp
+        rm = fbuf[3] + (rm - fbuf[3]) * lp
       }
-      if (flowActive) {
-        const nx = bx / flowAX
-        const ny = by / flowAY
-        bx = (nx * cosF - ny * sinF) * flowAX
-        by = (nx * sinF + ny * cosF) * flowAY
+      curX[i] = bx
+      curY[i] = by
+      curA[i] = al
+      const ph = now * DRIFT_SPEED * driftFreq[i] + driftPhase[i]
+      bx += Math.cos(ph) * dispX[i] * (driftAmpX + driftDX * lpv) * amp
+      by += Math.sin(ph) * dispY[i] * (driftAmpY + driftDY * lpv) * amp
+      const pu = puFrom + puDelta * lpv
+      if (pu !== 0) {
+        const dd = Math.sqrt(bx * bx + by * by)
+        const breath =
+          1 + Math.sin(now * BREATH_SPEED - dd * BREATH_RIPPLE) * pu
+        bx *= breath
+        by *= breath
       }
       let txo = 0
       let tyo = 0
@@ -649,13 +540,16 @@ function setupRoot(root) {
       }
       offX[i] += (txo - offX[i]) * HOVER_EASE
       offY[i] += (tyo - offY[i]) * HOVER_EASE
+      al *= fade
+      if (al < ALPHA_SKIP) continue // invisible: the draw is the expensive half of the frame
       const sx = cx + (bx + offX[i]) * rscale
       const sy = cy + (by + offY[i]) * rscale
-      const r = pointR[i] * (1 + glow * 0.7) * depthR
-      cctx.globalAlpha = (fromA[i] + (ta[i] - fromA[i]) * lp) * depthA
+      const r = pointR[i] * rm * (1 + glow * 0.7)
+      cctx.globalAlpha = al > 1 ? 1 : al
       cctx.drawImage(sprite, sx - r, sy - r, r * 2, r * 2)
     }
     cctx.globalAlpha = 1
+    drawNodes(now, t)
   }
 
   function cloudLoop() {
@@ -671,57 +565,48 @@ function setupRoot(root) {
   }
 
   function morphTo(next) {
-    const t = morph.t
-    const tx = toState.x
-    const ty = toState.y
-    const ta = toState.a
-    // Leaving the flow tab: bake the current circulation so it doesn't snap back.
-    const cosF = flowActive ? Math.cos(flowAngle) : 1
-    const sinF = flowActive ? Math.sin(flowAngle) : 0
-    for (let i = 0; i < N; i++) {
-      const lp = waveLP(i, t)
-      let sx = fromX[i] + (tx[i] - fromX[i]) * lp
-      let sy = fromY[i] + (ty[i] - fromY[i]) * lp
-      if (flowActive) {
-        const nx = sx / flowAX
-        const ny = sy / flowAY
-        sx = (nx * cosF - ny * sinF) * flowAX
-        sy = (nx * sinF + ny * cosF) * flowAY
-      }
-      fromX[i] = sx
-      fromY[i] = sy
-      fromA[i] = fromA[i] + (ta[i] - fromA[i]) * lp
+    // A switch during the intro cuts it short: cur* already holds the frame on screen, so
+    // the morph picks up from there (letting the intro finish would reset toState).
+    if (introActive) {
+      gsap.killTweensOf([introProg, introFade])
+      introActive = false
+      introFade.v = 1
     }
-    barFrom = curState === barIndex // ease the bar rotation OUT as we leave it
-    barTo = next === barIndex // ease it IN as we arrive
+    // Keep the outgoing shape LIVE as the morph's origin and store only the difference from
+    // the frame on screen. That way leaving a moving state neither rewinds (the residual is
+    // frame-exact) nor freezes (the shape keeps flowing under the migration).
+    const now = window.performance.now() * 0.001
+    fromState = toState
+    for (let i = 0; i < N; i++) {
+      fromState.sample(i, now, fbuf)
+      resX[i] = curX[i] - fbuf[0]
+      resY[i] = curY[i] - fbuf[1]
+      resA[i] = curA[i] - fbuf[2]
+    }
+    scaleFrom = scaleFrom + (cscale - scaleFrom) * morph.t
+    flowFrom = curState === flowIndex
+    flowTo = next === flowIndex
     toState = states[next]
+    curState = next
     // Morph the scale from the current state's fit to the next one's (interpolated in
     // drawCloud), so the shape grows/shrinks to its own size as it changes.
-    scaleFrom = cscale
-    curState = next
     cscale = stateScale[next] || cscale
     coverX = cscale ? (cssW * 0.5) / cscale : 1
     coverY = cscale ? (cssH * 0.5) / cscale : 1
-    computeWave(next)
+    mProj.set(states[next].order) // the target's own parametric order drives the sweep
     morph.t = 0
-    morphing = true
     gsap.killTweensOf(morph)
-    gsap.to(morph, {
-      t: 1,
-      duration: MORPH_DURATION,
-      ease: MORPH_EASE,
-      onComplete: () => {
-        morphing = false
-      },
-    })
+    gsap.to(morph, { t: 1, duration: MORPH_DURATION, ease: MORPH_EASE })
     ensureCloudLoop()
   }
 
   function runIntro(target) {
-    introTarget = target
     toState = states[target]
+    fromState = states[target]
     setStateScale(target) // intro draws at the target state's own scale
-    computeWave(target)
+    mProj.set(states[target].order)
+    flowTo = target === flowIndex
+    flowFrom = false
     introActive = true
     introProg.v = 0
     introFade.v = 0
@@ -739,18 +624,14 @@ function setupRoot(root) {
 
   function finishIntro(target) {
     introActive = false
-    const s = states[target]
-    fromX.set(s.x)
-    fromY.set(s.y)
-    fromA.set(s.a)
-    toState = s
+    toState = states[target]
     setStateScale(target)
-    morph.t = 1
+    morph.t = 1 // lp = 1 everywhere → the next frame bakes the shape into cur*
     drawCloud()
   }
 
-  // Tell the cloud which tab is active. Defers until sampled; the first call plays the
-  // intro converging onto that state, subsequent calls morph.
+  // Tell the cloud which tab is active. The first call plays the intro converging onto
+  // that state, subsequent calls morph.
   function cloudGo(i) {
     if (!cloudOk) return
     if (!cloudReady) {
@@ -765,95 +646,22 @@ function setupRoot(root) {
     }
   }
 
-  async function bootCloud() {
+  function bootCloud() {
     canvas = document.createElement('canvas')
     canvas.className = 'tabs-compouding_pointcloud'
     canvas.setAttribute('aria-hidden', 'true')
     visualsWrap.appendChild(canvas)
     cctx = canvas.getContext('2d')
     sprite = makeSprite()
-    cloudResize()
-    // Re-measure on ANY wrapper size change (not just width) so the canvas buffer
-    // keeps the stage's aspect — otherwise it stretches and the circle reads as an oval.
-    if (window.ResizeObserver) {
-      new window.ResizeObserver(() => cloudResize()).observe(visualsWrap)
-    }
+    nodeSprite = makeNodeSprite()
 
-    const srcs = cloudImgs.map((im) => im.currentSrc || im.src)
-    const loaded = await Promise.all(srcs.map(loadImage))
-    const firstOk = loaded.find(Boolean)
-    if (!firstOk) {
-      console.warn(
-        '[compouding] no visual images loaded — image crossfade fallback'
-      )
-      canvas.remove()
-      cloudFailed = true
-      crossfadeVisuals(index)
-      return
-    }
-    for (let i = 0; i < loaded.length; i++) if (!loaded[i]) loaded[i] = firstOk
-
-    let raw
-    try {
-      raw = loaded.map((im, i) => sampleImage(im, N, mulberry32(1000 + i)))
-    } catch (err) {
-      console.warn(
-        '[compouding] could not sample visuals (CORS?) — image crossfade fallback',
-        err
-      )
-      canvas.remove()
-      cloudFailed = true
-      crossfadeVisuals(index)
-      return
-    }
-
-    // The oval PNG has tags baked in → swap a clean procedural ring for the flow state.
-    if (OVAL_PROCEDURAL && flowIndex >= 0)
-      raw[flowIndex] = proceduralRing(N, mulberry32(1000 + flowIndex))
-
-    // Per-state fit: normalize EACH state to its own max half-extent (longer axis → 1),
-    // centered on its own bbox, and record its normalized half-extents.
-    states = raw.map((r) => {
-      const cxp = (r.bbox.minX + r.bbox.maxX) / 2
-      const cyp = (r.bbox.minY + r.bbox.maxY) / 2
-      const hw = (r.bbox.maxX - r.bbox.minX) / 2
-      const hh = (r.bbox.maxY - r.bbox.minY) / 2
-      const half = Math.max(hw, hh) || 1
-      const ni = 1 / half
-      const x = new Float32Array(N)
-      const y = new Float32Array(N)
-      for (let k = 0; k < N; k++) {
-        x[k] = (r.x[k] - cxp) * ni
-        y[k] = (r.y[k] - cyp) * ni
-      }
-      stateExtX.push(hw / half || 1)
-      stateExtY.push(hh / half || 1)
-      return { x, y, a: r.a }
-    })
-
-    // Flow state's own semi-axes (for the ellipse-space circulation).
-    if (flowIndex >= 0) {
-      const s = states[flowIndex]
-      let ax = 0
-      let ay = 0
-      for (let k = 0; k < N; k++) {
-        const vx = Math.abs(s.x[k])
-        const vy = Math.abs(s.y[k])
-        if (vx > ax) ax = vx
-        if (vy > ay) ay = vy
-      }
-      flowAX = ax || 1
-      flowAY = ay || 1
-    }
-    cloudResize()
-
+    states = shapeKinds.map((kind, i) =>
+      makeShape(kind, N, mulberry32(1000 + i))
+    )
     toState = states[0]
-    fromX.set(states[0].x)
-    fromY.set(states[0].y)
-    fromA.set(states[0].a)
     morph.t = 1
+    mProj.set(states[0].order)
 
-    const barExtY = barIndex >= 0 ? stateExtY[barIndex] || 1 : 1
     const frng = mulberry32(7)
     for (let i = 0; i < N; i++) {
       const ang = frng() * Math.PI * 2
@@ -867,25 +675,40 @@ function setupRoot(root) {
       driftFreq[i] = 1 + (frng() - 0.5) * 2 * DRIFT_FREQ_VAR
       waveJit[i] = frng()
       mRand[i] = frng()
-      // bar rotation radius = the point's normalized cross position within the bar
-      const bc = barIndex >= 0 ? states[barIndex].y[i] / barExtY : 0
-      barCross[i] = bc < -1 ? -1 : bc > 1 ? 1 : bc
       pointR[i] =
         frng() < BIG_DOT_CHANCE
           ? BIG_R[0] + frng() * (BIG_R[1] - BIG_R[0])
           : SMALL_R[0] + frng() * (SMALL_R[1] - SMALL_R[0])
     }
 
+    // .is-canvas BEFORE the first measure: it makes the endpoint labels absolute, and
+    // cloudResize() reserves room for them from their offsetWidth — measured in normal flow
+    // a label reports the whole stage width, so the flow lens got fitted into a quarter of
+    // the stage and then jumped to its real size on the first resize.
+    root.classList.add('is-canvas') // CSS hides the source imgs, shows the canvas
+    cloudResize()
+    // Re-measure on ANY wrapper size change (not just width) so the canvas buffer
+    // keeps the stage's aspect — otherwise it stretches and the shapes skew.
+    if (window.ResizeObserver) {
+      new window.ResizeObserver(() => cloudResize()).observe(visualsWrap)
+    }
+
+    fromState = states[0]
+    for (let i = 0; i < N; i++) {
+      states[0].sample(i, 0, sbuf)
+      curX[i] = sbuf[0]
+      curY[i] = sbuf[1]
+      curA[i] = sbuf[2]
+    }
+
     cloudOk = true
     cloudReady = true
-    root.classList.add('is-canvas') // CSS hides the source imgs, shows the canvas
-    // Run whatever tab was requested while sampling was in flight.
     if (pendingGo != null) cloudGo(pendingGo)
     else if (onScreen) cloudGo(index)
-    updateFlowTab(index) // start flow + overlay if we booted onto the flow tab
+    updateFlowLabels(index) // show the labels if we booted onto the flow tab
   }
 
-  // Crossfade fallback (cloud disabled / failed): the original paradigm behaviour.
+  // Crossfade fallback (no visual wrapper → no canvas): the original paradigm behaviour.
   function crossfadeVisuals(i) {
     visuals.forEach((v, k) =>
       gsap.to(v, {
@@ -896,27 +719,27 @@ function setupRoot(root) {
     )
   }
 
-  // Canvas mode only. On the flow tab the dots circulate along the oval and the overlay
-  // tags fade in (slower, each at its own speed). Off it, flow stops + overlay fades out.
-  function updateFlowTab(i) {
-    if (!cloudOk) return
-    const wasFlow = flowActive
-    flowActive = i === flowIndex
-    if (flowActive && !wasFlow) flowAngle = 0 // start the loop fresh → no spin during the morph
-    if (!overlayItems.length) return
-    gsap.killTweensOf(overlayItems)
-    if (flowActive) {
-      // each tag fades at its OWN speed (desfasado) + staggered start
-      overlayItems.forEach((el, k) =>
+  // Endpoint labels fade in only on the flow tab, each at its own speed (staggered) — and
+  // only once the cloud has become the lens (they're anchored to its tips, so showing them
+  // earlier parks them on whatever shape is still morphing away).
+  function updateFlowLabels(i) {
+    if (!cloudOk || flowIndex < 0 || !endpoints.length) return
+    gsap.killTweensOf(endpoints)
+    if (i === flowIndex) {
+      positionEndpoints()
+      const wait = introActive
+        ? INTRO_HOLD + INTRO_DURATION * 0.8
+        : MORPH_DURATION * LABEL_IN
+      endpoints.forEach((el, k) =>
         gsap.to(el, {
           autoAlpha: 1,
-          duration: TAG_FADE * (0.7 + k * 0.45),
+          duration: LABEL_FADE * (0.85 + k * 0.35),
           ease: 'power2.out',
-          delay: 0.5 + k * TAG_STAGGER,
+          delay: wait + k * LABEL_STAGGER,
         })
       )
     } else {
-      gsap.to(overlayItems, { autoAlpha: 0, duration: 0.3, ease: 'sine.out' })
+      gsap.to(endpoints, { autoAlpha: 0, duration: 0.3, ease: 'sine.out' })
     }
   }
 
@@ -947,12 +770,10 @@ function setupRoot(root) {
     gsap.set(wordsByTab[i], REVEAL_FROM)
     gsap.to(wordsByTab[i], REVEAL_TO)
 
-    // Visuals: point-cloud morph if the cloud is live (or still sampling), else image
-    // crossfade. cloudGo runs BEFORE updateFlowTab so the morph snapshot reads the
-    // OUTGOING tab's flow flag (bakes its circulation, no jump).
-    if (cloudEnabled && !cloudFailed) {
+    // Visuals: point-cloud morph when the canvas is live, else image crossfade.
+    if (cloudEnabled) {
       cloudGo(i)
-      updateFlowTab(i)
+      updateFlowLabels(i)
     } else {
       crossfadeVisuals(i)
     }

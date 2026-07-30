@@ -77,6 +77,22 @@
   grid-area: 1 / 1;
 }
 
+/* Pre-JS gate: the fallback <img>s are only the no-JS / reduced-motion state and the cloud
+   replaces them, so keep their box (the canvas is sized from it — hiding them with `display`
+   would collapse the stage) but never paint them. Without this the PNGs flash on every load,
+   until the bundle enhances. Same 2s fail-safe as random-item: if the bundle never lands,
+   they reveal themselves, so a dead bundle still shows a picture instead of a blank box. */
+[data-component='compouding']:not(.is-enhanced):not(.is-static)
+  [data-paradigm-visual] {
+  visibility: hidden;
+  animation: compouding-failsafe 0.01s linear 2s forwards;
+}
+@keyframes compouding-failsafe {
+  to {
+    visibility: visible;
+  }
+}
+
 /* Canvas mode: the cloud owns the stage; source images are hidden but keep their
    layout height so the wrapper doesn't collapse (canvas is sized to it). The cloud
    represents every state, so the source <img>s never show. */
@@ -96,32 +112,20 @@
   pointer-events: auto; /* hover nebula needs the cursor over the canvas */
 }
 
-/* Flow-tab overlay — sits above the canvas; JS fades it in only while the flow tab is
-   active. An author-provided [data-compouding-overlay] is positioned in Webflow; if
-   absent the component INJECTS the tags (.tabs-compouding_tags) and positions each pill
-   on the oval ring via JS. pointer-events off so the cursor still reaches the dots. */
-[data-component='compouding'] [data-compouding-overlay] {
+/* — Flow-tab endpoint labels (São Paulo / Texas) — real text in the DOM. In canvas mode
+   the JS moves them onto the visual wrapper and sets left/top from the lens tips; the
+   translate below parks each one OUTSIDE its tip. They only fade in on the flow tab.
+   Without the canvas (no JS / reduced motion) they stay in normal flow inside their
+   visual, next to the fallback image. */
+[data-component='compouding'].is-canvas [data-compouding-endpoint] {
+  position: absolute;
   z-index: 2;
+  transform: translate(-100%, -50%); /* start: sits left of the lens tip */
+  white-space: nowrap;
   pointer-events: none;
 }
-/* Injected tags container fills the stage; JS sets each pill's left/top on the ring. */
-[data-component='compouding'] .tabs-compouding_tags {
-  position: absolute;
-  inset: 0;
-}
-[data-component='compouding'] .tabs-compouding_tag {
-  position: absolute;
-  transform: translate(-50%, -50%); /* center the pill on its anchor point */
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  padding: 0.5rem 1rem;
-  border-radius: 999px;
-  background: rgba(244, 243, 240, 0.82);
-  backdrop-filter: blur(4px);
-  font-weight: 600;
-  white-space: nowrap;
-  color: var(--base--black, #0a0a0a);
+[data-component='compouding'].is-canvas [data-compouding-endpoint='end'] {
+  transform: translate(0, -50%); /* end: sits right of it */
 }
 
 /* — Fallback (no JS / reduced motion): show only the first / active tab — */

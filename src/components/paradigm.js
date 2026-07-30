@@ -127,15 +127,25 @@ function setupRoot(root) {
   // fallback), else the video duration split evenly — resolved once metadata is known.
   let cues = links.map((_, i) => i)
   let duration = 0
+  const evenSplit = (i) => (duration ? (i * duration) / count : i)
   const resolveCues = () => {
     duration = video && isFinite(video.duration) ? video.duration : 0
     cues = links.slice(0, count).map((link, i) => {
       const raw = parseFloat(
         link.getAttribute(CUE_ATTR) ?? titles[i]?.getAttribute(CUE_ATTR)
       )
-      if (isFinite(raw)) return raw
-      return duration ? (i * duration) / count : i // even split fallback
+      return isFinite(raw) ? raw : evenSplit(i)
     })
+    // Cues must strictly increase — they're segment STARTS. The same value on every tab
+    // (a Webflow class/component edit applying one attribute to all of them) makes every
+    // segment zero-length and strands the last tab active with the others empty. Warn and
+    // fall back to an even split rather than shipping a section that looks broken.
+    if (cues.some((c, i) => i > 0 && c <= cues[i - 1])) {
+      console.warn(
+        `[paradigm] ${CUE_ATTR} must increase per tab (got ${cues.join(', ')}) — falling back to an even split`
+      )
+      cues = links.slice(0, count).map((_, i) => evenSplit(i))
+    }
   }
   const cueStart = (i) => cues[i] || 0
   const cueEnd = (i) => (i < count - 1 ? cues[i + 1] : duration || cueStart(i))
