@@ -171,6 +171,17 @@ function setupRoot(root) {
     )
     return null
   }
+  // Tabs are paired by index, so a leftover element (e.g. a number whose text + visual were
+  // deleted in Webflow) is inert — warn, since it renders as a dead number in the menu.
+  if (
+    titles.length !== count ||
+    links.length !== count ||
+    visuals.length !== count
+  ) {
+    console.warn(
+      `[compouding] tab counts disagree (titles ${titles.length}, links ${links.length}, visuals ${visuals.length}) — cycling the first ${count}; remove the extras in Webflow`
+    )
+  }
 
   root.classList.add('is-enhanced')
 
@@ -814,7 +825,7 @@ function setupRoot(root) {
   // math is unreliable in rich text (mixed sizes, margins, wrapped inline markup).
   // `immediate` skips the tween on load and on resize, where there is no switch to ride.
   const fitMessages = (i, immediate) => {
-    if (!messagesWrap) return
+    if (!messagesWrap || !titles[i]) return
     const h = titles[i].offsetHeight
     if (immediate) gsap.set(messagesWrap, { height: h })
     else gsap.to(messagesWrap, { height: h, ...FIT_TWEEN })
@@ -855,10 +866,11 @@ function setupRoot(root) {
     })
   }
 
-  // Clicking a number in the menu jumps to that tab.
-  links.forEach((l, i) =>
-    wireButton(l, () => select(i), 'Go to slide ' + (i + 1))
-  )
+  // Clicking a number in the menu jumps to that tab. Clamped to `count` — a number with no
+  // paired title/visual stays unwired instead of switching to a tab that doesn't exist.
+  links
+    .slice(0, count)
+    .forEach((l, i) => wireButton(l, () => select(i), 'Go to slide ' + (i + 1)))
 
   // Visibility / hover / tab-focus gating (drives autoplay AND the cloud loop).
   const io = new window.IntersectionObserver(
