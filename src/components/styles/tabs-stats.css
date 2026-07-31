@@ -105,9 +105,9 @@
   }
 }
 
-/* — Progress underline / track / fill (two states) — grey track under every tab
-   (inactive), black fill only on the active tab. No intermediate active-track shade.
-   JS injects the fill + adds .is-track. Mirror of tabs-architected. */
+/* — Active-tab underline / track / fill (two states) — grey track under every tab
+   (inactive), black fill only on the active tab. No autoplay, so the fill is a state
+   indicator, not a progress bar. JS injects the fill + adds .is-track. */
 
 /* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-underline {
@@ -121,7 +121,7 @@
   transform: none;
   background-color: var(--base--grey-line, #e4e2dd);
 }
-/* Black progress fill (active-only; JS scales scaleX 0→1). */
+/* Black fill (active-only; JS slides scaleX 0→1 on switch). */
 [data-component='tabs-stats'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;

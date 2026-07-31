@@ -2,7 +2,8 @@
   Component: tabs-stats · data-component="tabs-stats"
   Stats tabs with a PNG-sampled 2D point cloud (~7k points) that morphs between states
   on switch. Intro: dispersed cloud floats in → converges. Residual shimmer keeps it
-  alive when idle; hover loosens it (desktop only). Autoplay underline advances tabs.
+  alive when idle; hover loosens it (desktop only). No autoplay — click / hover / keyboard
+  switch, and the active tab's underline slides in as a state indicator.
   Canvas 2D, no 3D lib. Fallback (no GSAP / reduced motion / CORS-tainted): static image.
   CSS → ./styles/tabs-stats.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-stats.md
 */
@@ -18,7 +19,14 @@ const ALPHA_MIN = 28 // min source alpha to count a pixel as "ink"
 const LUMA_MAX = 245 // opaque PNGs: count pixels darker than this
 const MORPH_DURATION = 1.25
 const MORPH_EASE = 'power2.inOut'
-// Outgoing underline fill eases out instead of snapping full → empty in one frame.
+// Active-tab underline: the incoming fill slides in, the outgoing one eases out (never a
+// snap — a full bar clearing in one frame read as a flicker).
+const FILL_IN = {
+  scaleX: 1,
+  duration: 0.45,
+  ease: 'power2.out',
+  overwrite: true,
+}
 const FILL_OUT = {
   scaleX: 0,
   duration: 0.35,
@@ -49,25 +57,10 @@ const INTRO_FADE = 0.5 // fade-in (s)
 const INTRO_HOLD = 1.0 // float ~1s before converging (s)
 const INTRO_DURATION = 1.6 // convergence (s)
 const INTRO_STAGGER = 0.5 // per-point convergence-start spread
-// Autoplay dwell scales with the tab's text length (more words → longer).
-const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
-const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the stat's label
-const AUTOPLAY_MIN = 4 // floor
-const AUTOPLAY_MAX = 11 // ceiling
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 // Hover nebula is desktop-only (reactive gate, no re-binding).
 const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
-
-// Per-tab autoplay seconds from its stat link's word count.
-function autoplayDuration(el) {
-  const words = (el?.textContent || '')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length
-  const d = AUTOPLAY_BASE + words * AUTOPLAY_PER_WORD
-  return Math.min(AUTOPLAY_MAX, Math.max(AUTOPLAY_MIN, d))
-}
 
 // Deterministic RNG so the subsample is stable across reloads.
 function mulberry32(seed) {
@@ -230,8 +223,8 @@ function setupTabs(root) {
   }
 
   // Expand each underline rail (is-track) + inject a black fill child. The fill is the
-  // autoplay progress bar — active-only (setStaticFills + startProgress): only the active
-  // tab's fill shows, every other tab stays empty (inactive). `bars` = the fill children.
+  // active-tab indicator (setActiveUnderline): only the active tab's fill shows, every
+  // other tab stays empty (inactive). `bars` = the fill children.
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-architected_tab-link-underline')
     if (!track) return null
@@ -241,6 +234,7 @@ function setupTabs(root) {
     track.classList.add('is-track')
     return fill
   })
+  gsap.set(bars.filter(Boolean), { scaleX: 0, transformOrigin: 'left center' })
 
   // ---- Canvas + point-cloud engine ----
   const canvas = document.createElement('canvas')
@@ -274,9 +268,7 @@ function setupTabs(root) {
   const morph = { t: 1 }
   let looping = false
   let ready = false
-  let started = false // intro done → autoplay may run
-  let progressTween = null // active tab's underline progress tween
-  let hover = false // pointer over the section → pause autoplay
+  let started = false // intro done → switching allowed
 
   // Hover state (eased per-point offsets → laggy nebula motion)
   let hovActive = false
@@ -472,48 +464,16 @@ function setupTabs(root) {
     morph.t = 0
     gsap.killTweensOf(morph)
     gsap.to(morph, { t: 1, duration: MORPH_DURATION, ease: MORPH_EASE })
-    if (started) startProgress(cur)
+    setActiveUnderline(cur)
     ensureLoop()
   }
 
-  // Active-only fills: every non-active tab empties out; the active one is the animated
-  // progress bar. Tweened, not set — a full bar snapping to empty in one frame read as a
-  // flicker on every switch (mirrors tabs-architected).
-  const setStaticFills = (index) => {
+  // Active-only fills: the active tab's bar slides in, every other one eases out. State
+  // indicator, not a progress bar — there is no autoplay to time.
+  function setActiveUnderline(index) {
     bars.forEach((bar, k) => {
-      if (!bar || k === index) return
-      gsap.to(bar, FILL_OUT)
+      if (bar) gsap.to(bar, k === index ? FILL_IN : FILL_OUT)
     })
-  }
-
-  // Pause/resume the progress tween from on-screen + not-hovered + tab-visible.
-  const sync = () => {
-    if (!progressTween) return
-    started && inView && !hover && !document.hidden
-      ? progressTween.resume()
-      : progressTween.pause()
-  }
-
-  // Fill the active tab's underline over its text-scaled dwell, then advance.
-  function startProgress(index) {
-    if (progressTween) progressTween.kill()
-    setStaticFills(index)
-    const bar = bars[index]
-    if (!bar) return
-    // Kill any FILL_OUT still easing this bar out (rapid re-select) — otherwise both tweens
-    // write scaleX in the same frames.
-    gsap.killTweensOf(bar)
-    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
-    progressTween = gsap.to(bar, {
-      scaleX: 1,
-      duration: autoplayDuration(links[index]),
-      ease: 'none',
-      overwrite: true,
-      onComplete: () => {
-        if (!introActive) select((index + 1) % count)
-      },
-    })
-    sync()
   }
 
   function select(i) {
@@ -523,8 +483,7 @@ function setupTabs(root) {
   }
 
   // ---- Events ----
-  // Click or HOVER a stat link to switch to its state. Hovering also pauses autoplay
-  // (see the section hover handlers below), so it resumes from there on leave.
+  // Click or HOVER a stat link to switch to its state — the only way tabs change.
   links.forEach((link, i) => {
     link.addEventListener('click', () => {
       if (i !== cur) select(i)
@@ -569,20 +528,7 @@ function setupTabs(root) {
     if (!e.matches) hovActive = false
   })
 
-  // Section hover + tab visibility gate the autoplay (pause while interacting / hidden).
-  const onEnter = () => {
-    hover = true
-    sync()
-  }
-  const onLeave = () => {
-    hover = false
-    sync()
-  }
-  root.addEventListener('mouseenter', onEnter)
-  root.addEventListener('mouseleave', onLeave)
-  document.addEventListener('visibilitychange', sync)
-
-  // Visibility: fire the intro on first enter; resume the shimmer loop + autoplay on re-entry.
+  // Visibility: fire the intro on first enter; resume the shimmer loop on re-entry.
   const io = new window.IntersectionObserver(
     (entries) => {
       inView = entries[0].isIntersecting
@@ -590,7 +536,6 @@ function setupTabs(root) {
         if (ready && !started && !introActive) runIntro()
         ensureLoop()
       }
-      sync()
     },
     { threshold: 0.05 }
   )
@@ -622,13 +567,13 @@ function setupTabs(root) {
     morph.t = 1
     cur = 0
     started = true
-    startProgress(0) // kick off autoplay from the first tab
     draw()
   }
 
   // ---- Boot: sample source images, normalize to a common centered scale ----
   async function boot() {
     setActiveTab(0)
+    setActiveUnderline(0) // first tab reads active from load (no autoplay to start it)
     resize()
     const srcs = imgs.slice(0, count).map((im) => im.currentSrc || im.src)
     const loaded = await Promise.all(srcs.map(loadImage))
