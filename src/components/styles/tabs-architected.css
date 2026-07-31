@@ -18,6 +18,20 @@
   grid-area: 1 / 1; /* every text block occupies the same grid cell */
 }
 
+/* — Text column vertical alignment: centred against the video on desktop, top-aligned from
+   tablet down. It has to be `align-self` on the column (not `align-items` inside it): the
+   column's height is collapsed onto the active panel by fitPanels, so there is no slack left
+   inside it to centre against — only the row can align it. Leaves the row itself, and every
+   other layout decision, to the Designer. — */
+[data-component='tabs-architected'] [tabs-architected='text-content'] {
+  align-self: center;
+}
+@media (max-width: 991px) {
+  [data-component='tabs-architected'] [tabs-architected='text-content'] {
+    align-self: start;
+  }
+}
+
 /* — Shared video (one for all tabs; the playhead drives the text) — */
 [data-component='tabs-architected'] [tabs-architected='video'] video,
 [data-component='tabs-architected'] [tabs-architected='image'] video,
@@ -32,7 +46,8 @@
 /* A mobile override used to live here forcing each link to size to its own text. It was
    written for a horizontal row and fights the stacked mobile list now set in Webflow — and
    since bundled CSS doesn't render in the Designer canvas, the two disagreed on screen.
-   Layout/sizing stay in Webflow; this file owns the track/fill and the text states only. */
+   Layout/sizing stay in Webflow — the one exception is the text column's vertical alignment
+   above (the JS owns that column's height, so the Designer can't own its alignment). */
 
 /* — Tab text: inactive grey, active black, always medium (500) — */
 /* The colour is transitioned: everything else on a switch animates, so a hard grey→black

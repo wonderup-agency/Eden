@@ -1,0 +1,133 @@
+/*
+  Global site-wide setup — runs on every page before any component (via main.js).
+  Smooth scroll (Lenis): desktop-only (≥ 992px), driven by the GSAP ticker + synced
+  to ScrollTrigger. Webflow head keeps only the Lenis <script>; the init lives here.
+  Also routes anchor links (incl. Finsweet TOC) through lenis.scrollTo(), and speeds
+  up the secondary-button gold beam on hover (button.css owns the spin).
+  Docs → .claude/rules/ARCHITECTURE.md (global.js section)
+*/
+
+// Below this width (tablet and down) Lenis stays off — native scroll.
+const SMOOTH_MIN_WIDTH = '(min-width: 992px)';
+
+// Extra gap above an anchor target so the fixed nav doesn't cover it (px).
+const ANCHOR_GAP = 16;
+
+// Secondary-button beam: hover playbackRate multiplier over the idle spin
+// (idle lap = --btn-beam-speed in button.css). Keep this JS-owned so the speed
+// change preserves the beam's position — no jump/reset (see initButtonBeams).
+const BEAM_HOVER_RATE = 3.6;
+
+function global () {
+  initSmoothScroll();
+  initButtonBeams();
+}
+
+// Secondary buttons spin a gold beam via a CSS animation on .button_main-element.
+// On hover/focus we only bump that animation's playbackRate (Web Animations API):
+// changing the rate keeps the current time, so the beam speeds up from where it is
+// and slows back down in place — never snapping to the idle-clock position.
+function initButtonBeams() {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  // Only the beam variant spins — plain secondary buttons have a static ring, no JS.
+  const wraps = document.querySelectorAll(
+    "[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']"
+  );
+  wraps.forEach((wrap) => {
+    const el = wrap.querySelector('.button_main-element');
+    if (!el) return
+    const setRate = (rate) => {
+      const beam = el
+        .getAnimations()
+        .find((a) => a.animationName === 'buttonBeamSpin');
+      if (beam) beam.playbackRate = rate;
+    };
+    wrap.addEventListener('mouseenter', () => setRate(BEAM_HOVER_RATE));
+    wrap.addEventListener('mouseleave', () => setRate(1));
+    wrap.addEventListener('focusin', () => setRate(BEAM_HOVER_RATE));
+    wrap.addEventListener('focusout', () => setRate(1));
+  });
+}
+
+function initSmoothScroll() {
+  const { Lenis, gsap } = window;
+  const ScrollTrigger = window.ScrollTrigger;
+
+  if (!Lenis) {
+    console.warn('[global] Lenis not found on window — native scroll only');
+    return
+  }
+  // Respect reduced-motion: never hijack the scroll.
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+
+  let lenis = null;
+
+  // Drive Lenis from GSAP's ticker (shares one rAF with ScrollTrigger).
+  function tick(time) {
+    if (lenis) lenis.raf(time * 1000);
+  }
+
+  // Standalone rAF fallback when GSAP isn't on the page.
+  function rafLoop(time) {
+    if (!lenis) return
+    lenis.raf(time);
+    window.requestAnimationFrame(rafLoop);
+  }
+
+  function start() {
+    if (lenis) return
+    lenis = new Lenis();
+
+    if (gsap) {
+      gsap.ticker.add(tick);
+      gsap.ticker.lagSmoothing(0);
+    } else {
+      window.requestAnimationFrame(rafLoop);
+    }
+
+    // Keep ScrollTrigger's scroll position in sync with Lenis.
+    if (ScrollTrigger) lenis.on('scroll', ScrollTrigger.update);
+
+    window.lenis = lenis; // expose for anchor scrolling / debugging
+  }
+
+  function stop() {
+    if (!lenis) return
+    if (gsap) gsap.ticker.remove(tick);
+    lenis.destroy();
+    lenis = null;
+    window.lenis = null;
+  }
+
+  // Anchor links (incl. Finsweet-generated TOC) → route through Lenis so the jump
+  // is smooth and stays in sync. Delegated on document so anchors injected later
+  // (Finsweet runs async) are covered without awaiting it; capture phase + stopPropagation
+  // pre-empts any click handler the anchor carries (e.g. Finsweet's native jump).
+  document.addEventListener(
+    'click',
+    (e) => {
+      if (!lenis) return // Lenis off (mobile / reduced-motion) → native anchor jump
+      const link = e.target.closest('a[href^="#"]');
+      if (!link) return
+      const hash = link.getAttribute('href');
+      if (hash.length < 2) return // bare "#" — ignore
+      const target = document.querySelector(hash);
+      if (!target) return // unknown id → let the browser handle it
+      e.preventDefault();
+      e.stopPropagation();
+      const nav = document.querySelector('[data-component="nav"]');
+      const offset = -((nav?.getBoundingClientRect().height || 0) + ANCHOR_GAP);
+      lenis.scrollTo(target, { offset });
+      window.history.pushState(null, '', hash); // shareable URL + back button
+    },
+    true // capture: beat the anchor's own handler regardless of load order
+  );
+
+  // Desktop-only, reactive: start/stop Lenis as the viewport crosses 992px (no reload).
+  const mq = window.matchMedia(SMOOTH_MIN_WIDTH);
+  if (mq.matches) start();
+  mq.addEventListener('change', (e) => (e.matches ? start() : stop()));
+}
+
+export { global as default };
+//# sourceMappingURL=global-CsuT3nZ5.js.map
