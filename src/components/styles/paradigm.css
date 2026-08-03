@@ -58,14 +58,15 @@
   overflow: hidden;
   background-color: var(--base--grey-line, #e2e2e2);
 }
-/* Black progress fill — only the active number's is grown (JS scaleX 0→1). */
+/* Black progress fill — only the active number's is grown (JS scaleX 0→1); on switch it
+   fades out at its current width instead of rewinding. */
 [data-component='paradigm'] .tabs-paradigm_tab-link-fill {
   display: block;
   width: 100%;
   height: 100%;
   transform: scaleX(0);
   transform-origin: left center;
-  will-change: transform;
+  will-change: transform, opacity;
   background-color: var(--base--black, #000);
 }
 

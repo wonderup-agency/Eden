@@ -7,10 +7,11 @@
 [data-component='nav'] {
   --nav-morph: 1s;
   --nav-ease: cubic-bezier(0.45, 0, 0.55, 1);
-  --nav-rest-top: 0px; /* auto-set by nav.js from nav_component's real padding-top */
+  --nav-rest-top: 0px; /* auto-set by nav.js from the bar's measured rest offset — never author it */
   --nav-float-top: 0.25rem; /* gap from the top when floating */
   --nav-float-pad-x: 1.25rem; /* inner side padding of the mobile pill so logo/menu aren't flush to the edge */
   --nav-float-logo-x: 0.75rem; /* logo nudge when floating — positive = right, negative = left (transform only, rest padding untouched) */
+  --nav-links-y: 3px; /* links optical nudge vs the logo — positive = down. Same in both states on purpose */
   --nav-center-gap: 2.5rem; /* item gap in the centered floating pill — lower = smaller */
   --nav-glass: rgba(255, 255, 255, 1); /* glass tint — raise/lower to taste */
   --nav-menu-glass: rgba(
@@ -58,6 +59,18 @@
 }
 [data-component='nav'] [data-nav-inner].is-floating [data-nav-logo] {
   transform: translateX(var(--nav-float-logo-x)) scale(0.833);
+}
+
+/* Links optical nudge (desktop bar only — on mobile they live in the dropdown).
+   Transform, never margin: Flip re-measures on every morph and getBoundingClientRect
+   ignores margins, so a layout offset snaps back when the tween restores flow. On the
+   links themselves — Flip captures the wrappers and writes inline transforms on them.
+   No .is-floating override and no transition: one constant value can't animate, so the
+   nudge holds through the morph instead of stepping at the class toggle. */
+@media (min-width: 992px) {
+  [data-component='nav'] .nav_links-wrapper > * {
+    transform: translateY(var(--nav-links-y));
+  }
 }
 
 /* — Desktop (≥ 992px): hugs content edge-left at rest → centred when floating — */

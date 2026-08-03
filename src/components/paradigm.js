@@ -8,6 +8,7 @@
 */
 
 import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
+import { armFill, fadeOutFill, fillTo } from '../utils/tab-underline.js'
 
 const { gsap } = window
 
@@ -15,20 +16,11 @@ const { gsap } = window
 const CUE_ATTR = 'data-video-time' // seconds at which this tab's text becomes active
 const CROSSFADE = 0.6 // visual crossfade (timer mode only)
 const OUT_FADE = 0.3 // outgoing text fade
-// Outgoing fill eases out instead of snapping full → empty in one frame (reads as a glitch).
-const FILL_OUT = {
-  scaleX: 0,
-  duration: 0.35,
-  ease: 'power2.in',
-  overwrite: true,
-}
 // Timer-mode autoplay dwell scales with the tab's text length (more words → longer).
 const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
 const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the tab's message
 const AUTOPLAY_MIN = 4 // floor
 const AUTOPLAY_MAX = 11 // ceiling
-
-const clamp01 = (n) => Math.min(1, Math.max(0, n))
 
 // Per-tab autoplay seconds from its message word count (timer mode).
 function autoplayDuration(el) {
@@ -195,21 +187,9 @@ function setupRoot(root) {
       )
   }
 
-  // Every non-active number's fill eases out to empty (inactive).
+  // Every non-active number's fill fades out where it stands (see tab-underline.js).
   const setStaticFills = (i) => {
-    bars.forEach((bar, k) => {
-      if (k === i) return
-      gsap.to(bar, FILL_OUT)
-    })
-  }
-
-  // Reset the incoming bar to empty, dropping any FILL_OUT still easing it out (a switch
-  // back inside that window would otherwise fight the fill).
-  const armFill = (i) => {
-    const bar = bars[i]
-    if (!bar) return
-    gsap.killTweensOf(bar)
-    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+    bars.forEach((bar, k) => k !== i && fadeOutFill(bar))
   }
 
   // Timer mode: underline = autoplay progress, active-only. Only the active number's fill
@@ -217,7 +197,7 @@ function setupRoot(root) {
   const runProgress = () => {
     progressTl && progressTl.kill()
     setStaticFills(index)
-    armFill(index)
+    armFill(bars[index]) // starts at the visible floor, not 0
     progressTl = gsap.timeline({ onComplete: () => goTo((index + 1) % count) })
     progressTl.to(
       bars[index],
@@ -232,7 +212,7 @@ function setupRoot(root) {
     activate(i)
     if (video) {
       setStaticFills(i)
-      armFill(i) // the ticker fills it from the playhead
+      armFill(bars[i]) // the ticker fills it from the playhead
     } else {
       runProgress()
     }
@@ -246,11 +226,9 @@ function setupRoot(root) {
     const t = video.currentTime
     const i = indexForTime(t)
     if (i !== index) goTo(i)
-    const bar = bars[i]
-    if (!bar) return
     const s = cueStart(i)
     const span = cueEnd(i) - s
-    gsap.set(bar, { scaleX: span > 0 ? clamp01((t - s) / span) : 0 })
+    fillTo(bars[i], span > 0 ? (t - s) / span : 0)
   }
 
   const start = () => {

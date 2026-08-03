@@ -79,14 +79,15 @@
   transform: none;
   background-color: var(--base--grey-line, #e4e2dd);
 }
-/* Black progress fill (active-only; JS scales scaleX 0→1 across the segment). */
+/* Black progress fill (active-only; JS scales scaleX 0→1 across the segment, then fades it
+   out at its current width instead of rewinding). */
 [data-component='tabs-architected'] .tabs-architected_tab-link-fill {
   display: block;
   width: 100%;
   height: 100%;
   transform: scaleX(0);
   transform-origin: left center;
-  will-change: transform;
+  will-change: transform, opacity;
   background-color: var(--base--black, #000);
 }
 

@@ -3,12 +3,14 @@
   Autoplay tabs — the active tab's dwell = its own VIDEO's duration (advances on the
   video's `ended`); the underline tracks the video playhead. Tabs with no video fall back
   to a text-scaled timer. On switch the incoming image wipes open (clip-path) while its
-  content de-blurs in. Starts on scroll-in; on hover the tab HOLDS (won't advance) but the
-  video keeps playing in a loop; restarts from the clicked tab. Click / keyboard also switch.
+  content de-blurs in. Starts on scroll-in; hover PAUSES the active video (so the tab holds
+  too — a paused video never fires `ended`); restarts from the clicked tab. Click / keyboard
+  also switch.
   CSS → ./styles/tabs-imaging.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-imaging.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
+import { armFill, clearFill, fillTo } from '../utils/tab-underline.js'
 
 const { gsap } = window
 
@@ -103,9 +105,8 @@ function setupTabs(root) {
   let onScreen = false
 
   // Prep each tab video: muted inline autoplay (autoplay-with-sound is blocked, so the
-  // video would never play and the tab would never advance). Loop off by default so
-  // `ended` fires → advance; `sync()` flips loop ON while hovered so the tab holds and the
-  // video keeps playing (a looping element never fires `ended`). Dwell = the video's duration.
+  // video would never play and the tab would never advance). Loop stays off so `ended`
+  // fires → advance. Dwell = the video's duration.
   const endedHandlers = []
   parts.forEach((part, i) => {
     const v = part.video
@@ -115,6 +116,12 @@ function setupTabs(root) {
     v.playsInline = true
     v.setAttribute('playsinline', '')
     v.preload = 'auto'
+    // Playback is owned here (starts on scroll-in, pauses on hover) — a Webflow `autoplay`
+    // attribute would run every hidden panel's video from load and, on the first panel,
+    // fire `ended` (advancing the tab) before the section is even in view.
+    v.autoplay = false
+    v.removeAttribute('autoplay')
+    v.pause()
     const onEnded = () => {
       if (i === activeIndex && !isAnimating && !reduceMotion.matches) {
         switchTab((i + 1) % count)
@@ -129,9 +136,7 @@ function setupTabs(root) {
   const tickBar = () => {
     if (!activeVideo || !activeBar) return
     const d = activeVideo.duration
-    if (isFinite(d) && d > 0) {
-      gsap.set(activeBar, { scaleX: Math.min(1, activeVideo.currentTime / d) })
-    }
+    if (isFinite(d) && d > 0) fillTo(activeBar, activeVideo.currentTime / d)
   }
   if (!reduceMotion.matches) gsap.ticker.add(tickBar)
 
@@ -157,33 +162,21 @@ function setupTabs(root) {
     panel.setAttribute('aria-labelledby', linkId)
   })
 
-  // Active-only fills: every non-active tab stays empty (inactive); the active one is
+  // Active-only fills: every non-active tab clears to empty (inactive); the active one is
   // animated separately (tracks the video playhead). Only the active tab carries a fill.
   const setStaticFills = (index) => {
-    bars.forEach((bar, k) => {
-      if (!bar || k === index) return
-      gsap.set(bar, {
-        scaleX: 0,
-        transformOrigin: 'left center',
-      })
-    })
+    bars.forEach((bar, k) => k !== index && clearFill(bar))
   }
 
-  // Gate the active clock. Off-screen / hidden tab always pauses. While hovered the tab is
-  // HELD (won't advance) but the video keeps playing in a LOOP — loop off fires `ended` →
-  // advance; loop on plays forever, no advance. The no-video fallback timer still pauses on
-  // hover (there's nothing to keep playing).
+  // Gate the active clock: off-screen / hidden tab / hovered all pause it. Pausing the
+  // video also holds the tab (a paused video never reaches `ended`), and the fill freezes
+  // with the playhead — so hover freezes the section as a whole and resumes cleanly.
   const sync = () => {
-    const visible = started && onScreen && !document.hidden
+    const play = started && onScreen && !document.hidden && !hover
     if (activeVideo) {
-      if (!visible) {
-        activeVideo.pause()
-      } else {
-        activeVideo.loop = hover // hover → loop (hold); else advance on `ended`
-        playVideo(activeVideo)
-      }
+      play ? playVideo(activeVideo) : activeVideo.pause()
     } else if (progressTween) {
-      visible && !hover ? progressTween.resume() : progressTween.pause()
+      play ? progressTween.resume() : progressTween.pause()
     }
   }
 
@@ -203,7 +196,7 @@ function setupTabs(root) {
     activeBar = bar || null
 
     if (video) {
-      if (bar) gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+      armFill(bar) // starts at the visible floor, not 0
       try {
         video.currentTime = 0
       } catch {
@@ -215,7 +208,7 @@ function setupTabs(root) {
 
     // No video → text-scaled timer (advance on complete).
     if (!bar) return
-    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+    armFill(bar)
     progressTween = gsap.to(bar, {
       scaleX: 1,
       duration: autoplayDuration(panels[index]),
@@ -354,8 +347,7 @@ function setupTabs(root) {
   }
   root.addEventListener('keydown', onKeydown)
 
-  // Hover hold (video keeps looping) / resume + tab-visibility gating (skipped under
-  // reduced motion).
+  // Hover pause / resume + tab-visibility gating (skipped under reduced motion).
   const onEnter = () => {
     hover = true
     sync()

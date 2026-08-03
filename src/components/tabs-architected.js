@@ -3,12 +3,13 @@
   ONE shared looping video drives multiple text tabs. As the playhead crosses each tab's
   cue time (data-video-time, seconds), the incoming text de-blurs in and the active tab's
   underline fills across that segment. Video-driven (no timer): plays muted+inline on
-  scroll-in, loops, pauses off-screen / hidden tab. Click / keyboard seek the
+  scroll-in, loops, pauses off-screen / hidden tab / on hover. Click / keyboard seek the
   video to a segment. No video → text-scaled timer fallback.
   CSS → ./styles/tabs-architected.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-architected.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
+import { armFill, fadeOutFill, fillTo } from '../utils/tab-underline.js'
 
 const { gsap } = window
 
@@ -35,17 +36,8 @@ const OUT_FADE = { autoAlpha: 0, duration: 0.4, ease: 'power2.out' }
 // Text column collapses onto the active panel — matched to CONTENT_TO so the resize and
 // the de-blur read as one motion, not two.
 const FIT_TWEEN = { duration: 0.9, ease: 'sine.out' }
-// Outgoing fill eases out instead of snapping full → empty in one frame (read as a glitch).
-const FILL_OUT = {
-  scaleX: 0,
-  duration: 0.35,
-  ease: 'power2.in',
-  overwrite: true,
-}
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
-
-const clamp01 = (n) => Math.min(1, Math.max(0, n))
 
 // Fallback dwell (no video, no cue gap) from the panel's word count.
 function autoplayDuration(el) {
@@ -118,6 +110,7 @@ function setupTabs(root) {
   let isAnimating = false
   let started = false // autoplay kicked off (section reached)
   let onScreen = false
+  let hover = false
   let progressTween = null // fallback timer (no-video mode only)
 
   // Cue times (segment starts), seconds. Explicit from data-video-time, else evenly
@@ -155,8 +148,10 @@ function setupTabs(root) {
     if (p && typeof p.catch === 'function') p.catch(() => {})
   }
 
-  // Autoplay runs only while started + on-screen + tab-visible.
-  const gated = () => started && onScreen && !document.hidden
+  // Autoplay runs only while started + on-screen + tab-visible + not hovered. Hover pauses
+  // the video itself, so the playhead — and with it the text switching and the underline
+  // fill, which both read from it — freezes as one and resumes from the same frame.
+  const gated = () => started && onScreen && !document.hidden && !hover
 
   // Play/pause the active clock (video, else the fallback tween) from the gate.
   const sync = () => {
@@ -182,13 +177,10 @@ function setupTabs(root) {
     panel.setAttribute('aria-labelledby', linkId)
   })
 
-  // Active-only fills: every non-active tab empties out. Tweened, not set — a full bar
-  // snapping to empty in one frame read as a flicker on every switch.
+  // Active-only fills: every non-active tab's bar fades out where it stands (see
+  // tab-underline.js).
   const setStaticFills = (index) => {
-    bars.forEach((bar, k) => {
-      if (!bar || k === index) return
-      gsap.to(bar, FILL_OUT)
-    })
+    bars.forEach((bar, k) => k !== index && fadeOutFill(bar))
   }
 
   // Collapse the text column onto the active panel, so a short tab doesn't drag the tallest
@@ -196,7 +188,7 @@ function setupTabs(root) {
   // keeps each stacked panel at its own content height, so a stretched grid item can't
   // report the row height back) rather than counting lines — line-height math is unreliable
   // in rich text. `immediate` skips the tween on load / resize, where there's no switch to
-  // ride. Mirrors compouding's fitMessages.
+  // ride. (compouding had the same thing and dropped it — this section still wants it.)
   const fitPanels = (index, immediate) => {
     if (!textWrap || !panels[index]) return
     const h = panels[index].offsetHeight
@@ -230,12 +222,7 @@ function setupTabs(root) {
     inLink.setAttribute('tabindex', '0')
 
     setStaticFills(index)
-    if (bars[index]) {
-      // Kill any FILL_OUT still easing this bar out (a switch back inside the 0.35s window)
-      // — otherwise that tween and the ticker's per-frame set fight over scaleX.
-      gsap.killTweensOf(bars[index])
-      gsap.set(bars[index], { scaleX: 0, transformOrigin: 'left center' })
-    }
+    armFill(bars[index])
     fitPanels(index)
 
     // Incoming overlays the outgoing (z-index) regardless of DOM order; it shows
@@ -285,12 +272,9 @@ function setupTabs(root) {
     if (i !== activeIndex && !isAnimating) switchTab(i)
     // Fill the CURRENT segment's bar (i) — not activeIndex, which lags until the switch
     // animation completes, so the fill stays on the incoming tab through the transition.
-    const bar = bars[i]
-    if (bar) {
-      const s = cueStart(i)
-      const span = cueEnd(i) - s
-      gsap.set(bar, { scaleX: span > 0 ? clamp01((t - s) / span) : 0 })
-    }
+    const s = cueStart(i)
+    const span = cueEnd(i) - s
+    fillTo(bars[i], span > 0 ? (t - s) / span : 0)
   }
 
   // Fallback (no video): timer cycles the tabs and fills the active bar. Dwell = the
@@ -300,8 +284,7 @@ function setupTabs(root) {
     setStaticFills(index)
     const bar = bars[index]
     if (!bar) return
-    gsap.killTweensOf(bar) // drop a FILL_OUT still running on this bar
-    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+    armFill(bar) // drop a FILL_OUT still fading this bar out
     const gap = cueEnd(index) - cueStart(index)
     const dwell =
       isFinite(gap) && gap > 0 ? gap : autoplayDuration(panels[index])
@@ -400,10 +383,20 @@ function setupTabs(root) {
   }
   root.addEventListener('keydown', onKeydown)
 
-  // Visibility + scroll-in start (no hover pause — the video keeps playing on hover).
+  // Hover pause + visibility + scroll-in start.
   const onVisibility = () => sync()
+  const onEnter = () => {
+    hover = true
+    sync()
+  }
+  const onLeave = () => {
+    hover = false
+    sync()
+  }
   let io = null
   if (!reduceMotion.matches) {
+    root.addEventListener('mouseenter', onEnter)
+    root.addEventListener('mouseleave', onLeave)
     document.addEventListener('visibilitychange', onVisibility)
     io = new window.IntersectionObserver(
       (entries) => {
@@ -412,6 +405,9 @@ function setupTabs(root) {
           started = true
           resolveCues()
           revealContent(activeIndex)
+          // The first tab never goes through switchTab, so arm its bar here — otherwise it
+          // has no floor and the ticker would fill it from a bare 0.
+          armFill(bars[activeIndex])
           if (video) sync()
           else startTimer(activeIndex)
         } else {
@@ -443,6 +439,8 @@ function setupTabs(root) {
       }
       if (io) io.disconnect()
       root.removeEventListener('keydown', onKeydown)
+      root.removeEventListener('mouseenter', onEnter)
+      root.removeEventListener('mouseleave', onLeave)
       document.removeEventListener('visibilitychange', onVisibility)
       links.forEach((link, i) => link.removeEventListener('click', onClick[i]))
     },

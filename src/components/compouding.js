@@ -101,12 +101,6 @@ const INTRO_HOLD = 0.8
 const INTRO_DURATION = 2.4
 const INTRO_STAGGER = 0.7
 
-// Tuning — messages column fits the active tab
-// Every tab-title shares grid cell 1/1, so the column would otherwise always be as tall as
-// the LONGEST tab, leaving the shorter ones trailing that leftover height before the
-// figures. The column height is tweened to the active tab instead, in step with the text.
-const FIT_TWEEN = { duration: 1, ease: 'sine.out' } // matches REVEAL_TO so it reads as one motion
-
 const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
 
 // Outgoing tab: plain fade. The de-blur lives on the words, never the parent.
@@ -818,27 +812,12 @@ function setupRoot(root) {
     sync()
   }
 
-  // Collapse the messages column onto the active tab, so a short tab doesn't drag the
-  // longest tab's leftover height around with it. Measured off the DOM (the CSS
-  // `align-items: start` keeps each stacked title at its own content height, so a stretched
-  // grid item can't report the row height back) rather than counting lines — line-height
-  // math is unreliable in rich text (mixed sizes, margins, wrapped inline markup).
-  // `immediate` skips the tween on load and on resize, where there is no switch to ride.
-  const fitMessages = (i, immediate) => {
-    if (!messagesWrap || !titles[i]) return
-    const h = titles[i].offsetHeight
-    if (immediate) gsap.set(messagesWrap, { height: h })
-    else gsap.to(messagesWrap, { height: h, ...FIT_TWEEN })
-  }
-
-  fitMessages(0, true) // no collapse animation on load
-  // Webfonts land after init and reflow the copy — re-measure once they're in.
-  document.fonts?.ready.then(() => fitMessages(index, true))
-
+  // The messages column keeps its natural height (the tallest tab). It used to be tweened
+  // down to the active tab on every switch; the extra whitespace on the short tabs is
+  // accepted, and a stable column means no per-switch reflow of the section.
   function goTo(i) {
     index = i
     activate(i)
-    fitMessages(i)
     runProgress()
   }
 
@@ -940,8 +919,6 @@ function setupRoot(root) {
   return {
     resize() {
       if (cloudOk) cloudResize()
-      // Column width drives how the copy wraps, so the active tab's height changes with it.
-      fitMessages(index, true)
     },
   }
 }

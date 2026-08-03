@@ -1,9 +1,9 @@
 /*
   Component: research-search · data-component="research-search"
-  Header search → hides the intermediate sections and filters the whitepapers
-  (Finsweet instance "2") by title, done directly on the rendered DOM (show/hide +
-  exact-substring highlight), re-applied on Finsweet's afterRender so it composes
-  with category filters. No dependency on fs-list-field / fs-list-highlight / fuzzy.
+  Header search → collapses the intermediate sections and filters the whitepapers
+  (Finsweet instance "2") by title through Finsweet's own `filter` hook, so the match
+  runs over EVERY item (all paginated pages), not just the rendered page. Finsweet then
+  owns pagination + the empty state; our gold <mark> highlight rides on afterRender.
   While there's text the magnifier becomes a ✕ that clears the search. No auto-scroll.
   CSS → ./styles/research-search.css (highlight style is also injected by JS) · Docs → .claude/rules/components/research-search.md
 */
@@ -12,8 +12,16 @@ const FILTER_DEBOUNCE = 220 // ms — debounce the re-filter while typing
 const COLLAPSE_DURATION = 0.6 // seconds — hide/show the intermediate sections
 const COLLAPSE_EASE = 'power2.inOut'
 
+const LIST_INSTANCE = '2' // the whitepapers Finsweet list
 const TITLE_SELECTOR = 'h3' // the whitepaper title inside each list item
+const TITLE_FIELD = 'title' // fs-list-field="title", on that same h3
 const HIGHLIGHT_CLASS = 'search-highlight' // <mark> class on matched substrings
+const PAGINATION_MARK = 'data-research-pagination' // written by JS — keep in sync with the CSS
+
+// Scrolled back into view on a page change. [data-research-anchor] wins; the Webflow
+// class is the fallback so it works with no Designer edit.
+const ANCHOR_FALLBACK = '.whitepapers_browse'
+const ANCHOR_GAP = 16 // px below the nav — keep in sync with global.js
 
 // ✕ glyph swapped into [data-research-clear] while the input has text.
 const CLEAR_ICON =
@@ -31,8 +39,6 @@ export default function (elements) {
       console.error('[research-search] init failed', err)
     }
   })
-
-  return { resize() {} }
 }
 
 // The <mark> is JS-generated, so its style ships with the JS (guaranteed to apply,
@@ -50,6 +56,9 @@ function ensureHighlightStyle() {
 function init(wrapper) {
   const input = wrapper.querySelector('[data-research-input]')
   const sections = Array.from(wrapper.querySelectorAll('[data-research-hide]'))
+  const anchor =
+    wrapper.querySelector('[data-research-anchor]') ||
+    wrapper.querySelector(ANCHOR_FALLBACK)
 
   if (!input) {
     console.warn('[research-search] missing [data-research-input] — skipping')
@@ -68,6 +77,11 @@ function init(wrapper) {
   // The input lives in a GET form — stop Enter from submitting / reloading.
   form?.addEventListener('submit', (e) => e.preventDefault())
 
+  // The input carries only a placeholder, which is not an accessible name.
+  if (!input.getAttribute('aria-label'))
+    input.setAttribute('aria-label', input.placeholder || 'Search papers')
+  if (form && !form.getAttribute('role')) form.setAttribute('role', 'search')
+
   const gsap = window.gsap
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
   const animate = !!gsap && !reduce
@@ -76,49 +90,118 @@ function init(wrapper) {
   let list = null // the Finsweet list instance "2"
   let searching = false // true while the input has text (sections collapsed)
   let debounce = null
+  let pageBeforeSearch = 1 // page to return to once the search is cleared
+  let pagination = null // Finsweet's pagination wrapper (hidden when 0 results)
 
-  // The Finsweet no-results element (author's [data-research-empty] / the
-  // fs-list-element="empty" div) — toggled from the visible count.
-  let emptyEl = null
-
-  // Filter + highlight + empty are done directly on the DOM — NOT via a Finsweet
-  // `filter` hook or `filters.value` mutation: v2 filters in a Web Worker that
-  // ignores the hook's returned items and can't clone a mutated ref (DataCloneError).
-  // We show/hide the rendered items ourselves and re-apply after each Finsweet render
-  // (category / pagination), so the two compose.
-  function applyFilter() {
-    if (!list) return
-    const listEl = list.listElement
-    if (!listEl) return
-    let visible = 0
-    Array.from(listEl.children).forEach((el) => {
-      const title = el.querySelector(TITLE_SELECTOR)
-      const match =
-        !query || (title?.textContent || '').toLowerCase().includes(query)
-      // Inline display overrides Finsweet's own inline display on the item.
-      el.style.display = match ? '' : 'none'
-      if (title) markMatches(title, match ? query : '')
-      if (match) visible++
-    })
-    if (emptyEl) emptyEl.style.display = visible === 0 ? '' : 'none'
+  // Match on the title only. `fields` is populated from fs-list-field="title" and is
+  // available for EVERY item — including the ones from pages Finsweet prefetched but
+  // has not rendered — which is the whole point of filtering here instead of in the DOM.
+  function itemTitle(item) {
+    const field = item?.fields?.[TITLE_FIELD]?.value
+    const text = Array.isArray(field) ? field.join(' ') : field
+    if (text) return String(text)
+    return item?.element?.querySelector(TITLE_SELECTOR)?.textContent || ''
   }
 
+  function matchesQuery(item) {
+    return !query || itemTitle(item).toLowerCase().includes(query)
+  }
+
+  // Finsweet keeps the "next" arrow enabled whenever currentPage !== totalPages, and
+  // totalPages is 0 on an empty result — so the pagination has to be hidden by hand.
+  // `hidden` (not a class) so it also leaves the a11y tree and the tab order, and still
+  // works if the bundled CSS is stale; the CSS rule only outranks Webflow's own display.
+  function setPaginationHidden(hide) {
+    if (!pagination) return
+    pagination.hidden = hide
+    pagination.inert = hide
+    if (hide) pagination.setAttribute('aria-hidden', 'true')
+    else pagination.removeAttribute('aria-hidden')
+  }
+
+  // Page change → bring the list header back into view. Finsweet does this natively with
+  // fs-list-element="scroll-anchor-pagination", but only via scrollIntoView, which fights
+  // desktop Lenis and ignores the fixed nav — so it goes through the same Lenis +
+  // nav-offset path as every other anchor on the site (see global.js).
+  function scrollToAnchor() {
+    if (!anchor) return
+    const nav = document.querySelector('[data-component="nav"]')
+    const offset = (nav?.getBoundingClientRect().height || 0) + ANCHOR_GAP
+    if (window.lenis) {
+      window.lenis.scrollTo(anchor, { offset: -offset })
+      return
+    }
+    // Lenis is absent on mobile and under reduced motion.
+    window.scrollTo({
+      top: anchor.getBoundingClientRect().top + window.scrollY - offset,
+      behavior: reduce ? 'auto' : 'smooth',
+    })
+  }
+
+  // Bound to a real click rather than to `currentPage`, so the page resets our own filter
+  // triggers cause (search → page 1, clear → restore) never scroll the user around.
+  function watchPagination() {
+    if (!pagination) return
+    pagination.addEventListener('click', (e) => {
+      if (e.target?.closest?.('a')) scrollToAnchor()
+    })
+  }
+
+  // Filtering happens inside Finsweet's own pipeline (hook `filter`, index 1), NOT on the
+  // rendered DOM. Its callbacks' return value IS used, so a subset propagates through
+  // sort → static → pagination → render: totalPages recomputes, the page buttons follow
+  // and the empty state toggles itself. It also composes with the category checkboxes for
+  // free — their filter callback is registered first, so we narrow whatever they left.
+  // Never mutate `filters.value` instead: that ref is cloned into a Web Worker and throws.
   bindFinsweet((instance) => {
     list = instance
-    emptyEl =
-      wrapper.querySelector('[data-research-empty]') ||
-      instance.wrapperElement?.querySelector('[fs-list-element="empty"]') ||
-      wrapper.querySelector('[fs-list-element="empty"]')
-    // Re-apply after every Finsweet render so category filters + pagination compose
-    // with our title search instead of wiping the hidden/highlight state.
+    pagination = instance.paginationWrapperElement || null
+    if (pagination) pagination.setAttribute(PAGINATION_MARK, '')
+    watchPagination()
+
+    // Hand an authored [data-research-empty] to Finsweet so it owns the toggle.
+    const authored = wrapper.querySelector('[data-research-empty]')
+    if (
+      authored &&
+      instance.emptyElement &&
+      instance.emptyElement.value !== authored
+    )
+      instance.emptyElement.value = authored
+    const emptyEl = instance.emptyElement?.value || authored
+    if (emptyEl && !emptyEl.getAttribute('role'))
+      emptyEl.setAttribute('role', 'status')
+
+    instance.addHook('filter', (items) => items.filter(matchesQuery))
+
+    // Highlight only what is on screen, after Finsweet has placed it. Re-running on every
+    // render is what keeps the marks correct across pagination and category changes — and
+    // what strips them again once the query is cleared.
     instance.addHook('afterRender', (items) => {
-      applyFilter()
+      items.forEach((item) => {
+        const title = item?.element?.querySelector(TITLE_SELECTOR)
+        if (title) markMatches(title, query)
+      })
+      setPaginationHidden(items.length === 0)
       return items
     })
-    applyFilter() // initial pass (covers a query typed before Finsweet was ready)
+
+    // A query typed before Finsweet resolved, and again once the background prefetch of
+    // the remaining CMS pages lands (until then `items` holds page 1 only).
+    if (query) refilter()
+    Promise.resolve(instance.loadingPaginatedItems)
+      .then(() => {
+        if (query) refilter()
+      })
+      .catch(() => {})
   })
 
-  const refilter = () => applyFilter()
+  function refilter() {
+    if (!list) return
+    list.triggerHook('filter', { resetCurrentPage: true })
+    // Clearing the search puts the user back on the page they were reading.
+    if (!query && pageBeforeSearch > 1 && list.currentPage)
+      list.currentPage.value = pageBeforeSearch
+  }
 
   // Swap the magnifier ↔ ✕ and toggle the icon's clear-button semantics.
   function setClearMode(on) {
@@ -151,6 +234,7 @@ function init(wrapper) {
     // Section + icon transitions fire only on the empty <-> non-empty edge.
     if (hasText && !searching) {
       searching = true
+      pageBeforeSearch = list?.currentPage?.value || 1
       sections.forEach((s) => collapse(s, animate, gsap))
       setClearMode(true)
     } else if (!hasText && searching) {
@@ -159,7 +243,7 @@ function init(wrapper) {
       setClearMode(false)
     }
 
-    // Debounced so fast typing doesn't re-scan the list every keystroke.
+    // Debounced so fast typing doesn't re-run the whole Finsweet pipeline per keystroke.
     clearTimeout(debounce)
     debounce = setTimeout(refilter, FILTER_DEBOUNCE)
   }
@@ -193,10 +277,10 @@ function bindFinsweet(onReady) {
   window.FinsweetAttributes.push([
     'list',
     (lists) => {
-      const instance = lists.find((l) => l.instance === '2')
+      const instance = lists.find((l) => l.instance === LIST_INSTANCE)
       if (!instance) {
         console.warn(
-          '[research-search] Finsweet list instance "2" not found — filtering disabled'
+          `[research-search] Finsweet list instance "${LIST_INSTANCE}" not found — filtering disabled`
         )
         return
       }

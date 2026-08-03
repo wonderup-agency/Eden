@@ -2,12 +2,14 @@
   Component: tabs-foundation-model · data-component="tabs-foundation-model"
   Autoplay tabs — only the active link's underline fills as a progress bar over a
   text-scaled dwell (others stay empty/inactive), then advances; on switch the incoming image wipes
-  open (clip-path) while its content de-blurs in. Starts on scroll-in, pauses on hover,
+  open (clip-path) while its content de-blurs in. A panel holding a <video> loops it while
+  that tab is active. Starts on scroll-in; hover pauses both the dwell and the video;
   restarts from the clicked tab. Click / keyboard also switch.
   CSS → ./styles/tabs-foundation-model.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-foundation-model.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
+import { armFill, clearFill } from '../utils/tab-underline.js'
 
 const { gsap } = window
 
@@ -81,7 +83,8 @@ function setupTabs(root) {
     return fill
   })
 
-  // Animatable parts per panel: the image wrapper (clip wipe) + content blocks (de-blur).
+  // Animatable parts per panel: the image wrapper (clip wipe) + content blocks (de-blur)
+  // + the panel's video, if it has one (plays while the tab is active).
   const parts = panels.map((panel) => ({
     image: panel.querySelector('[tabs-foundation-model="image"]'),
     content: gsap.utils.toArray(
@@ -90,14 +93,42 @@ function setupTabs(root) {
       )?.children ||
         panel.querySelectorAll('[tabs-foundation-model="text-content"] > *')
     ),
+    video:
+      panel.querySelector('video.tabs-foundation-model_tab-image') ||
+      panel.querySelector('[tabs-foundation-model="image"] video') ||
+      panel.querySelector('video'),
   }))
 
   let activeIndex = -1
   let isAnimating = false
   let progressTween = null
+  let activeVideo = null
   let started = false // autoplay kicked off (section reached)
   let hover = false
   let onScreen = false
+
+  // Prep each panel video: muted + inline (autoplay-with-sound is blocked, so it would
+  // never play), LOOP on — the dwell is text-scaled, not video-length, so a shorter video
+  // has to keep going until the tab advances. The Webflow `autoplay` attribute is dropped:
+  // playback is owned here (starts on scroll-in, pauses on hover), otherwise every hidden
+  // panel's video would run from load and hover could only pause the visible one.
+  parts.forEach((part) => {
+    const v = part.video
+    if (!v) return
+    v.muted = true
+    v.loop = true
+    v.playsInline = true
+    v.setAttribute('playsinline', '')
+    v.preload = 'auto'
+    v.autoplay = false
+    v.removeAttribute('autoplay')
+    v.pause()
+  })
+
+  const playVideo = (v) => {
+    const p = v.play()
+    if (p && typeof p.catch === 'function') p.catch(() => {})
+  }
 
   // Accessibility scaffolding — tablist / tab / tabpanel with roving tabindex.
   root
@@ -119,30 +150,39 @@ function setupTabs(root) {
   // Active-only fills: every non-active tab stays empty (inactive); the active one is
   // animated separately. Only the active tab carries a filled underline.
   const setStaticFills = (index) => {
-    bars.forEach((bar, k) => {
-      if (!bar || k === index) return
-      gsap.set(bar, {
-        scaleX: 0,
-        transformOrigin: 'left center',
-      })
-    })
+    bars.forEach((bar, k) => k !== index && clearFill(bar))
   }
 
-  // Pause/resume the progress tween from on-screen + not-hovered + tab-visible.
+  // Pause/resume the active clock — the progress tween AND the active panel's video —
+  // from on-screen + not-hovered + tab-visible.
   const sync = () => {
-    if (!progressTween) return
-    started && onScreen && !hover && !document.hidden
-      ? progressTween.resume()
-      : progressTween.pause()
+    const play = started && onScreen && !hover && !document.hidden
+    if (activeVideo) play ? playVideo(activeVideo) : activeVideo.pause()
+    if (progressTween) play ? progressTween.resume() : progressTween.pause()
   }
 
-  // Fill the active tab's underline over its text-scaled dwell, then advance.
+  // Fill the active tab's underline over its text-scaled dwell, then advance. The panel's
+  // video (if any) restarts with it and loops until the tab changes.
   function startProgress(index) {
-    if (progressTween) progressTween.kill()
+    if (progressTween) {
+      progressTween.kill()
+      progressTween = null
+    }
     setStaticFills(index)
+    if (reduceMotion.matches) return
+
+    activeVideo = parts[index].video || null
+    if (activeVideo) {
+      try {
+        activeVideo.currentTime = 0
+      } catch {
+        /* not seekable yet — plays from 0 anyway */
+      }
+    }
+
     const bar = bars[index]
-    if (!bar || reduceMotion.matches) return
-    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
+    if (!bar) return sync()
+    armFill(bar) // starts at the visible floor, not 0
     progressTween = gsap.to(bar, {
       scaleX: 1,
       duration: autoplayDuration(panels[index]),
@@ -162,6 +202,9 @@ function setupTabs(root) {
     const outPanel = panels[activeIndex]
     const inLink = links[index]
     const inPanel = panels[index]
+
+    // Stop the outgoing video so only the active one ever plays.
+    parts[activeIndex]?.video?.pause()
 
     // ARIA + active-class state flip
     outLink?.classList.remove(ACTIVE_CLASS)
@@ -318,6 +361,7 @@ function setupTabs(root) {
   return {
     destroy() {
       if (progressTween) progressTween.kill()
+      parts.forEach((part) => part.video?.pause())
       if (io) io.disconnect()
       root.removeEventListener('keydown', onKeydown)
       root.removeEventListener('mouseenter', onEnter)

@@ -1,4 +1,14 @@
-/* ===== RESEARCH-SEARCH · matched-term highlight + clear-icon affordance ===== */
+/* ===== RESEARCH-SEARCH · matched-term highlight + clear-icon affordance + empty-result pagination ===== */
+
+/* — Pagination on an empty result —
+   research-search.js marks Finsweet's pagination wrapper with
+   [data-research-pagination] and sets `hidden` on it when the search returns nothing
+   (Finsweet keeps the next arrow enabled there, since totalPages is 0). Webflow's
+   .w-pagination-wrapper sets its own display, which outranks the UA [hidden] rule —
+   hence !important. Keep the attribute name in sync with PAGINATION_MARK in the JS. */
+[data-research-pagination][hidden] {
+  display: none !important;
+}
 
 /* — Matched-term highlight —
    research-search.js wraps each matched substring in the title in

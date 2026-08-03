@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='halo-focus']",
+    importFn: () => import('./components/halo-focus.js'),
+  },
+  {
     selector: "[data-component='reveal']",
     importFn: () => import('./components/reveal.js'),
   },

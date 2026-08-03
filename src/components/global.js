@@ -14,9 +14,9 @@ const SMOOTH_MIN_WIDTH = '(min-width: 992px)'
 const ANCHOR_GAP = 16
 
 // Secondary-button beam: hover playbackRate multiplier over the idle spin
-// (idle lap = --btn-beam-speed in button.css). Keep this JS-owned so the speed
-// change preserves the beam's position — no jump/reset (see initButtonBeams).
-const BEAM_HOVER_RATE = 3.6
+// (idle lap = --btn-beam-speed in button.css). Below 1 = slower on hover (0.5 → 12s lap).
+// Keep this JS-owned so the speed change preserves the beam's position — no jump/reset.
+const BEAM_HOVER_RATE = 0.5
 
 // PERF — temporary diagnostic. Logs only janky frames (slower than LONG_FRAME)
 // with scrollY + the centered section, plus a rolling FPS. Set false to remove.
@@ -30,9 +30,9 @@ export default function () {
 }
 
 // Secondary buttons spin a gold beam via a CSS animation on .button_main-element.
-// On hover/focus we only bump that animation's playbackRate (Web Animations API):
-// changing the rate keeps the current time, so the beam speeds up from where it is
-// and slows back down in place — never snapping to the idle-clock position.
+// On hover/focus we only change that animation's playbackRate (Web Animations API):
+// changing the rate keeps the current time, so the beam decelerates from where it is
+// and speeds back up in place — never snapping to the idle-clock position.
 function initButtonBeams() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
   // Only the beam variant spins — plain secondary buttons have a static ring, no JS.

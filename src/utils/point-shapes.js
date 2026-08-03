@@ -80,7 +80,10 @@ export const TUNING = {
     inner: [0.6, 0.5], // per streamline: fat + dark on its axis, thin + faint at its edges
     axisBias: 2.4, // build — the streamline ribbons carry their ink on the centreline
     shim: [1, 0.08],
-    speed: 0.085, // crossings per second on the centre line
+    // Crossings per second on the centre line. BIDIRECTIONAL: the top half runs in this
+    // direction (left→right, São Paulo → Texas) and the bottom half always runs opposite,
+    // so the lens reads as traffic going both ways. A negative value mirrors both halves.
+    speed: 0.085,
     shear: 0.55, // outer streamlines run this much slower → fluid, not a slab
     // Slows the particles near both tips, so ink piles up there the way it does in the
     // reference (where every streamline converges into the node).
@@ -122,9 +125,24 @@ export const TUNING = {
     // `coreFade` must stay ABOVE the innermost radius (1/growth) or there is no taper.
     turns: 5, // build
     growth: 6, // outer radius / inner radius (per-turn spacing)
-    // Negative = inward (points born at the rim, spiralling into the centre). Positive
-    // reverses it to outward. Either way it never ends — only the direction reads different.
-    speed: -0.045, // full traversals per second (also the apparent spin)
+    // Positive = outward (points born at the centre, drifting out to the rim, like a galaxy
+    // throwing its arms out). Negative reverses it to inward. Either way it never ends —
+    // both ends of the path are fade-gated (`edge` + `coreFade`), so the recycle is
+    // invisible in both directions; only the reading changes.
+    speed: 0.045, // full traversals per second (also the apparent spin)
+    // Which way the arm winds, independent of `speed` (= where the points travel). Mirrors
+    // the angle only, so the disc keeps the `tilt` / `lean` inclination authored below.
+    // Like those two it reads live but moves the shape's EXTENTS, so the stage fit only
+    // catches up on the next makeShape (a rebuild slider in the playground).
+    spin: -1,
+    // Inclination — the disc seen at an angle instead of face-on. `tilt` foreshortens the
+    // minor axis (1 = a flat circle seen head-on, lower = closer to edge-on) and `lean`
+    // then rotates that ellipse. Applied AFTER the band, so the arm's thickness
+    // foreshortens with the disc rather than staying a constant-width ribbon.
+    // They read live, but they change the shape's extents — so the stage fit only catches
+    // up on the next `makeShape` (the playground rebuilds on these two).
+    tilt: 0.62,
+    lean: -20, // degrees; negative tips the major axis UP to the right
     // The reference's outer arm is a WIDE granulated band, not a line — this is what
     // separates "spiral of dust" from "spiral drawn with dots".
     band: 0.15, // thickness scales with radius → granulated outside
@@ -266,6 +284,18 @@ function spiralWarp(g) {
   return SPIRAL_WARP.t
 }
 
+// Disc inclination, memoised: sample() runs per point per frame, so computing the lean's
+// cos/sin inline would be ~32k trig calls a frame for one number that rarely changes.
+const SPIRAL_LEAN = { deg: NaN, c: 1, s: 0 }
+function spiralLean(deg) {
+  if (deg !== SPIRAL_LEAN.deg) {
+    SPIRAL_LEAN.deg = deg
+    SPIRAL_LEAN.c = Math.cos((deg * Math.PI) / 180)
+    SPIRAL_LEAN.s = Math.sin((deg * Math.PI) / 180)
+  }
+  return SPIRAL_LEAN
+}
+
 const SPIRAL_RADIUS = { growth: -1, t: null }
 function spiralRadius(growth) {
   if (growth !== SPIRAL_RADIUS.growth) {
@@ -385,6 +415,10 @@ function buildFlow(n, rng) {
   // Keyed per line, not to the lens axis, so every streamline reads the same: a thick dark
   // core fading to a diffuse edge — instead of the central lines being the only strong ones.
   const dep = new Float32Array(n)
+  // Travel direction: +1 = left→right (top half), -1 = right→left (bottom half). Resolved
+  // here from the LINE INDEX, not per frame from v[i] — v carries the ribbon jitter, and a
+  // point must never change sides. Core points (which return early) keep the +1 default.
+  const dir = new Int8Array(n).fill(1)
   for (let i = 0; i < n; i++) {
     if (rng() < T0.coreFrac) {
       // Static dark core: uniform inside the ellipse (sqrt keeps the density even).
@@ -401,12 +435,15 @@ function buildFlow(n, rng) {
     const line = (q / (lines - 1)) * 2 - 1
     // Bias packs the streamlines toward the axis, as in the reference graphic.
     const biased = Math.sign(line) * Math.pow(Math.abs(line), T0.lineBias || 1)
+    // Canvas draws +y downward, so biased > 0 is the BOTTOM half — the return leg. An odd
+    // `lines` puts one streamline exactly on the axis; it joins the top half.
+    if (biased > 0) dir[i] = -1
     u[i] = rng()
     const off = axisPack((rng() - 0.5) * 2, T0.axisBias) * T0.jitter
     dep[i] = T0.jitter ? Math.abs(off) / T0.jitter : 0
     v[i] = clamp(biased + off, -1, 1)
     a[i] = 0.4 + 0.6 * rng()
-    order[i] = u[i] // fills in the direction of the flow
+    order[i] = dir[i] > 0 ? u[i] : 1 - u[i] // each half fills in its OWN direction
   }
   return {
     order,
@@ -419,8 +456,10 @@ function buildFlow(n, rng) {
         out[3] = 0.7 // smaller dots pack tighter → a solid ellipse, not a fuzzy clump
         return
       }
-      // Poiseuille-ish profile: the centre line runs fastest, the outer ones lag.
-      let p = u[i] + time * T.speed * (1 - T.shear * v[i] * v[i])
+      // Poiseuille-ish profile: the centre line runs fastest, the outer ones lag. `dir`
+      // flips the bottom half; the floor-wrap normalises a negative p on its own, and the
+      // warp / edge / tipClear windows are all symmetric, so the recycle stays invisible.
+      let p = u[i] + time * T.speed * dir[i] * (1 - T.shear * v[i] * v[i])
       p -= Math.floor(p)
       const pw = flowWarp(T.tipSlow)[(p * 256) | 0] // crawl at the tips → ink piles up
       const x = pw * 2 - 1
@@ -460,11 +499,15 @@ function buildSpiral(n, rng) {
       p -= Math.floor(p)
       // fast inside, crawling at the rim
       const pw = spiralWarp(T.warp)[(p * SPIRAL_WARP_STEPS) | 0]
-      const th = pw * TAU * T.turns
+      const th = pw * TAU * T.turns * T.spin
       const r = spiralRadius(T.growth)[(pw * 256) | 0] // r = 1 on the outer turn
       const rr = r + v[i] * (T.band * r + T.bandMin)
-      out[0] = rr * Math.cos(th)
-      out[1] = rr * Math.sin(th)
+      // Inclined disc: foreshorten the minor axis, then rotate the ellipse.
+      const dx = rr * Math.cos(th)
+      const dy = rr * Math.sin(th) * T.tilt
+      const L = spiralLean(T.lean)
+      out[0] = dx * L.c - dy * L.s
+      out[1] = dx * L.s + dy * L.c
       out[2] =
         a[i] *
         smoothstep(0, T.edge, p) *

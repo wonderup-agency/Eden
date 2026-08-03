@@ -17,9 +17,10 @@ const FLOAT_OFF_MOBILE = 8 // px — a touch higher to absorb top overscroll
 const FLIP_DURATION = 1
 const FLIP_EASE = 'power2.inOut'
 
-// DEBUG — on-screen HUD + logs to chase the mobile scroll "jump". Off (the HUD loop
-// is itself overhead, and the HUD is real DOM so Terser can't strip it).
-const DEBUG = false
+// DEBUG — on-screen HUD + logs to chase the scroll "jump" (now also the bar's height,
+// probed around the class toggle and the Flip). Turn off before deploy: the HUD loop is
+// itself overhead, and the HUD is real DOM so Terser can't strip it.
+const DEBUG = true
 
 // Load entrance — the nav drops in from above the viewport.
 const ENTRANCE = {
@@ -30,6 +31,8 @@ const ENTRANCE = {
 }
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+
+const round1 = (n) => Math.round(n * 10) / 10
 
 // Wire one nav root. Returns { enable, disable } for gsap.matchMedia to switch per breakpoint.
 function setupNav(root) {
@@ -81,7 +84,8 @@ function setupNav(root) {
   // more than the scroll delta — i.e. shoved by the address bar / Flip).
   let hud = null
   let rafId = null
-  let prev = null // { y, h, top }
+  let prev = null // { y, h, top, barH }
+  let morphUntil = 0 // DEBUG — frames before this are an intentional morph, not a jump
   const buildHud = () => {
     if (!DEBUG || hud) return
     hud = document.createElement('div')
@@ -96,20 +100,33 @@ function setupNav(root) {
     if (!DEBUG) return
     const y = Math.round(window.scrollY)
     const h = window.innerHeight
-    const r = window.getComputedStyle(root).position
-    const top = Math.round(inner.getBoundingClientRect().top)
+    const cs = window.getComputedStyle(root)
+    const r = cs.position
+    const rect = inner.getBoundingClientRect()
+    const top = Math.round(rect.top)
+    const barH = round1(rect.height)
     const dY = prev ? y - prev.y : 0
     const dH = prev ? h - prev.h : 0
     const dTop = prev ? top - prev.top : 0
+    const dBar = prev ? round1(barH - prev.barH) : 0
+    // The bar is SUPPOSED to move during the load entrance (a transform on the root) and
+    // during a morph (Flip, or the mobile CSS transition — hence the timed window, which
+    // covers both). Without this every frame of an intentional tween reads as a jump.
+    const busy =
+      cs.transform !== 'none' ||
+      window.performance.now() < morphUntil ||
+      (flip && flip.isActive())
     // Bar is fixed → flag frames where its top moves more than the scroll did.
-    const jump = Math.abs(dTop) > 1 && Math.abs(dTop) > Math.abs(dY) + 1
+    const jump =
+      !busy && Math.abs(dTop) > 1 && Math.abs(dTop) > Math.abs(dY) + 1
     if (hud) {
-      hud.style.color = jump || dH !== 0 ? '#feb2b2' : '#9ae6b4'
+      hud.style.color = jump || dH !== 0 || dBar !== 0 ? '#feb2b2' : '#9ae6b4'
       hud.textContent =
-        `nav  pos:${r}\n` +
+        `nav  pos:${r}${busy ? '  (morphing)' : ''}\n` +
         `scrollY ${y}  Δ${dY}\n` +
         `vh ${h}  Δ${dH}${dH !== 0 ? '  ⚠ address-bar' : ''}\n` +
         `bar.top ${top}  Δ${dTop}${jump ? '  ⚠ JUMP' : ''}\n` +
+        `bar.h ${barH}  Δ${dBar}${dBar !== 0 ? '  ⚠ HEIGHT' : ''}\n` +
         `floating ${isFloating}  flip ${flip && flip.isActive() ? 'active' : '—'}`
     }
     if (jump)
@@ -117,13 +134,19 @@ function setupNav(root) {
         `%c[nav] ⚠ bar jumped ${dTop}px (scroll moved ${dY}px) vh=${h} floating=${isFloating}`,
         'color:#e53e3e;font-weight:bold'
       )
+    // Height should be constant — any change is layout, i.e. a candidate for the jump.
+    if (dBar !== 0)
+      console.log(
+        `%c[nav] ⚠ bar height ${prev.barH} → ${barH} (Δ${dBar}) floating=${isFloating} flip=${flip && flip.isActive() ? 'active' : 'idle'}`,
+        'color:#3182ce;font-weight:bold'
+      )
     // Only log a big one-shot vh change (address-bar swings are expected on mobile).
     if (Math.abs(dH) >= 12)
       console.log(
         `%c[nav] viewport height jumped ${dH}px → ${h}`,
         'color:#dd6b20'
       )
-    prev = { y, h, top }
+    prev = { y, h, top, barH }
   }
   const startDebug = () => {
     if (!DEBUG || rafId) return
@@ -139,19 +162,50 @@ function setupNav(root) {
     rafId = null
   }
 
+  // --nav-rest-top must be the bar's real gap from the viewport top at rest: the floating
+  // offset is calc(--nav-float-top - --nav-rest-top), so a wrong value moves the bar the
+  // WRONG WAY (it sinks by --nav-float-top instead of rising to it). Measured, not read off
+  // nav_component's padding-top — the gap can equally come from a `top`, a wrapper or a
+  // margin, and then the compensation silently no-ops on that page only. Root is fixed, so
+  // the rect is scroll-independent. Padding stays the fallback.
+  const measureRestTop = () => {
+    const top = inner.getBoundingClientRect().top
+    return top > 0
+      ? `${Math.round(top)}px`
+      : window.getComputedStyle(root).paddingTop
+  }
+  // Captured before the load entrance puts a yPercent on the root, which would corrupt the
+  // rect. enable() re-measures per breakpoint once that transform is cleared.
+  let restTop = measureRestTop()
+
+  // DEBUG — the bar's live height, to pin the jump on the class toggle vs the Flip.
+  const barHeight = () => round1(inner.getBoundingClientRect().height)
+  const logHeightStep = (label, before) => {
+    const after = barHeight()
+    const d = round1(after - before)
+    console.log(
+      `%c[nav]   ${label}: bar.h ${before} → ${after} (Δ${d})${d !== 0 ? '  ⚠ this step resized the bar' : ''}`,
+      `color:${d !== 0 ? '#e53e3e' : '#718096'};font-weight:${d !== 0 ? 'bold' : 'normal'}`
+    )
+  }
+
   const setFloating = (floating, animate) => {
     if (floating === isFloating) return
+    const hBefore = DEBUG ? barHeight() : 0
     if (DEBUG)
       console.log(
-        `%c[nav] setFloating ${isFloating} → ${floating} (animate=${animate}, scrollY=${Math.round(window.scrollY)})`,
+        `%c[nav] setFloating ${isFloating} → ${floating} (animate=${animate}, scrollY=${Math.round(window.scrollY)}, bar.h=${hBefore})`,
         'color:#a78bfa;font-weight:bold'
       )
     isFloating = floating
+    // DEBUG — mute the jump detector for the morph's duration (Flip tween or CSS transition).
+    morphUntil = window.performance.now() + FLIP_DURATION * 1000 + 100
 
     // Class-only path: initial sync, reduced motion, AND mobile/tablet. Mobile morph
     // is pure CSS (no Flip getState/re-measure for the address-bar resize to corrupt).
     if (!animate || reduceMotion.matches || !useFlip) {
       inner.classList.toggle('is-floating', floating)
+      if (DEBUG) logHeightStep('class toggle (no Flip)', hBefore)
       return
     }
 
@@ -169,16 +223,20 @@ function setupNav(root) {
         : []
     const state = Flip.getState(extra.length ? [inner, ...extra] : inner)
     inner.classList.toggle('is-floating', floating)
+    if (DEBUG) logHeightStep('class toggle (pre-Flip)', hBefore)
     flip && flip.kill()
+    const hPreFlip = DEBUG ? barHeight() : 0
     flip = Flip.from(state, {
       duration: FLIP_DURATION,
       ease: FLIP_EASE,
       absolute: true,
       nested: true,
       onComplete: () => {
+        if (DEBUG) logHeightStep('Flip complete', hPreFlip)
         logCss(floating ? 'settled → FLOATING' : 'settled → REST')
       },
     })
+    if (DEBUG) logHeightStep('Flip started (absolute applied)', hPreFlip)
   }
 
   // rAF-throttled scroll read — hysteresis flips the float state only when leaving the deadzone.
@@ -201,12 +259,16 @@ function setupNav(root) {
       floatOn = opts.floatOn ?? FLOAT_ON_DESKTOP
       floatOff = opts.floatOff ?? FLOAT_OFF_DESKTOP
       useFlip = opts.useFlip ?? true
-      // Feed nav_component's real padding-top to the CSS so the floating bar lands
-      // at --nav-float-top whatever the Webflow padding (no token ↔ padding coupling).
-      root.style.setProperty(
-        '--nav-rest-top',
-        window.getComputedStyle(root).paddingTop
-      )
+      // Re-measure per breakpoint (the rest gap can differ), but never while the entrance
+      // transform is live — computed 'none' is the signal it's been cleared.
+      if (window.getComputedStyle(root).transform === 'none')
+        restTop = measureRestTop()
+      root.style.setProperty('--nav-rest-top', restTop)
+      if (DEBUG)
+        console.log(
+          `%c[nav] --nav-rest-top = ${restTop} (padding-top was ${window.getComputedStyle(root).paddingTop})`,
+          'color:#38a169;font-weight:bold'
+        )
       window.addEventListener('scroll', onScroll, { passive: true })
       setFloating(window.scrollY > floatOff, false) // sync without animating (handles reload mid-page)
       logCss(isFloating ? 'init → FLOATING' : 'init → REST')

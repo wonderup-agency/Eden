@@ -3,10 +3,12 @@
   Stats tabs with a PNG-sampled 2D point cloud (~7k points) that morphs between states
   on switch. Intro: dispersed cloud floats in → converges. Residual shimmer keeps it
   alive when idle; hover loosens it (desktop only). No autoplay — click / hover / keyboard
-  switch, and the active tab's underline slides in as a state indicator.
+  switch, and the active tab's underline snaps to full as a state indicator.
   Canvas 2D, no 3D lib. Fallback (no GSAP / reduced motion / CORS-tainted): static image.
   CSS → ./styles/tabs-stats.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-stats.md
 */
+
+import { fadeOutFill, fillFull } from '../utils/tab-underline.js'
 
 const { gsap } = window
 
@@ -19,20 +21,9 @@ const ALPHA_MIN = 28 // min source alpha to count a pixel as "ink"
 const LUMA_MAX = 245 // opaque PNGs: count pixels darker than this
 const MORPH_DURATION = 1.25
 const MORPH_EASE = 'power2.inOut'
-// Active-tab underline: the incoming fill slides in, the outgoing one eases out (never a
-// snap — a full bar clearing in one frame read as a flicker).
-const FILL_IN = {
-  scaleX: 1,
-  duration: 0.45,
-  ease: 'power2.out',
-  overwrite: true,
-}
-const FILL_OUT = {
-  scaleX: 0,
-  duration: 0.35,
-  ease: 'power2.in',
-  overwrite: true,
-}
+// Active-tab underline: the incoming bar appears FULL immediately (nothing is being timed
+// here — sliding it in read as a progress bar that isn't one); the outgoing one fades out
+// at its current width (`fadeOutFill`) instead of retracting.
 const DOT_COLOR = '125,130,140' // #7d828c
 const FIT = 0.82 // half-stage fraction the cloud fills (1 = touches the edges)
 const DOT_RADIUS = 1.4
@@ -468,12 +459,10 @@ function setupTabs(root) {
     ensureLoop()
   }
 
-  // Active-only fills: the active tab's bar slides in, every other one eases out. State
-  // indicator, not a progress bar — there is no autoplay to time.
+  // Active-only fills: the active tab's bar snaps to full, every other one fades out where
+  // it stands. State indicator, not a progress bar — there is no autoplay to time.
   function setActiveUnderline(index) {
-    bars.forEach((bar, k) => {
-      if (bar) gsap.to(bar, k === index ? FILL_IN : FILL_OUT)
-    })
+    bars.forEach((bar, k) => (k === index ? fillFull(bar) : fadeOutFill(bar)))
   }
 
   function select(i) {

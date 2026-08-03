@@ -6,7 +6,8 @@
   --anim-ease: cubic-bezier(0.4, 0, 0.2, 1);
   --btn-radius: 0.5rem;
   --btn-beam-width: 1.5px; /* rotating-beam ring thickness (secondary) */
-  --btn-beam-speed: 6s; /* idle beam lap time; hover accel is JS (playbackRate) */
+  --btn-beam-speed: 6s; /* idle beam lap time; hover slowdown is JS (playbackRate) */
+  --btn-beam-arc: 140deg; /* lit portion of the lap — the remaining 220deg is dark */
 }
 
 /* Rotating gold beam angle (secondary). @property makes --btn-angle animatable;
@@ -51,8 +52,10 @@
   transform: translateX(0.12em);
 }
 
-/* — Primary (gradient fill + radial border, subtle gloss) — */
-.button_main-wrap[data-wf--element-button--variant='primary']
+/* — Primary (gradient fill + radial border, subtle gloss) —
+   `*=` so every size flavour matches (primary, primary-s, primary-m…) — same contract
+   as secondary below. Size/padding is Webflow's variant; this only paints the skin. */
+.button_main-wrap[data-wf--element-button--variant*='primary']
   .button_main-element {
   color: #ffffff;
   background:
@@ -65,7 +68,7 @@
       )
       border-box;
 }
-.button_main-wrap[data-wf--element-button--variant='primary']
+.button_main-wrap[data-wf--element-button--variant*='primary']
   .button_main-element::before {
   content: '';
   position: absolute;
@@ -79,7 +82,7 @@
   );
   pointer-events: none;
 }
-.button_main-wrap[data-wf--element-button--variant='primary']:hover
+.button_main-wrap[data-wf--element-button--variant*='primary']:hover
   .button_main-element {
   transform: translateY(-1px);
   box-shadow:
@@ -130,8 +133,12 @@
      el.getAnimations() and only change playbackRate on hover — no position jump. */
   animation: buttonBeamSpin var(--btn-beam-speed) linear infinite;
 }
-/* Beam ring: two bright gold arcs ride the perimeter (opposite ends), masked to a thin
-   ring. Only the animated variant has a gold ring — plain secondary has none. */
+/* Beam ring: ONE gold arc rides the perimeter, masked to a thin ring. It fades up from
+   nothing over a long tail, peaks near its leading edge and fades back out, leaving the
+   rest of the lap unlit — so the line visibly appears and disappears once per turn.
+   Stops are fractions of --btn-beam-arc, so the arc/gap split retunes from that one var.
+   Fade-out uses rgba(gold, 0) rather than `transparent` (= rgba(0,0,0,0)), which would
+   interpolate through grey. Only the animated variant has a gold ring. */
 .button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
   .button_main-element::after {
   content: '';
@@ -143,17 +150,17 @@
   background: conic-gradient(
     from var(--btn-angle, 0deg),
     rgba(199, 154, 75, 0) 0deg,
-    /* beam 2 (opposite end) */ rgba(199, 154, 75, 0) 120deg,
-    rgba(199, 154, 75, 0.5) 150deg,
-    var(--base--gold, #c79a4b) 170deg,
-    #ffedb5 175deg,
-    var(--base--gold, #c79a4b) 178deg,
-    rgba(199, 154, 75, 0) 195deg,
-    /* beam 1 */ rgba(199, 154, 75, 0) 300deg,
-    rgba(199, 154, 75, 0.5) 330deg,
-    var(--base--gold, #c79a4b) 350deg,
-    #ffedb5 355deg,
-    var(--base--gold, #c79a4b) 358deg,
+    /* gap */ rgba(199, 154, 75, 0) calc(360deg - var(--btn-beam-arc)),
+    /* tail */ rgba(199, 154, 75, 0.06)
+      calc(360deg - var(--btn-beam-arc) * 0.85),
+    rgba(199, 154, 75, 0.18) calc(360deg - var(--btn-beam-arc) * 0.65),
+    rgba(199, 154, 75, 0.38) calc(360deg - var(--btn-beam-arc) * 0.48),
+    rgba(199, 154, 75, 0.62) calc(360deg - var(--btn-beam-arc) * 0.32),
+    rgba(199, 154, 75, 0.88) calc(360deg - var(--btn-beam-arc) * 0.2),
+    var(--base--gold, #c79a4b) calc(360deg - var(--btn-beam-arc) * 0.12),
+    /* peak */ #ffedb5 calc(360deg - var(--btn-beam-arc) * 0.08),
+    var(--base--gold, #c79a4b) calc(360deg - var(--btn-beam-arc) * 0.05),
+    rgba(199, 154, 75, 0.4) calc(360deg - var(--btn-beam-arc) * 0.025),
     rgba(199, 154, 75, 0) 360deg
   );
   -webkit-mask:
@@ -171,27 +178,9 @@
   .button_main-element {
   background: rgba(212, 165, 74, 0.2);
 }
-/* Hover: continuous gold ring (no transparent dead-gaps) with two hot peaks that
-   sweep around — reads as a moving glow, not intermittent flashes. The base gold
-   never drops to 0, so there's no "off" frame between beams as it rotates. */
-.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']:hover
-  .button_main-element::after {
-  background: conic-gradient(
-    from var(--btn-angle, 0deg),
-    rgba(226, 180, 100, 0.4) 0deg,
-    /* beam 2 (opposite end) */ rgba(226, 180, 100, 0.4) 110deg,
-    #f2c65c 150deg,
-    #fff4cf 170deg,
-    #f2c65c 190deg,
-    rgba(226, 180, 100, 0.4) 230deg,
-    /* beam 1 */ rgba(226, 180, 100, 0.4) 290deg,
-    #f2c65c 330deg,
-    #fff4cf 350deg,
-    #f2c65c 356deg,
-    rgba(226, 180, 100, 0.4) 360deg
-  );
-}
-/* Hover acceleration: JS (global.js) bumps the spin's playbackRate — see @property note. */
+/* Hover paints the SAME beam — the only change is speed: JS (global.js) drops the spin's
+   playbackRate to BEAM_HOVER_RATE, so the line decelerates from its current angle instead
+   of snapping (see the @property note). No :hover gradient override lives here on purpose. */
 
 /* — Reduced motion — */
 @media (prefers-reduced-motion: reduce) {
@@ -212,7 +201,10 @@
   }
 }
 
-/* — Icon-first variant — opt in with data-button-icon="True" (icon before the label) — */
-[data-button-icon='True'] .button_main-element {
+/* — Icon variant — opt in with data-button-icon="True" —
+   :has() guard: the attribute is set per variant in Webflow, so it also lands on buttons
+   that carry no icon; reversing a single-child flex row would shove the label to the
+   other edge. Only flip when an icon is actually there. */
+[data-button-icon='True'] .button_main-element:has(.button_main-icon) {
   flex-direction: row-reverse;
 }

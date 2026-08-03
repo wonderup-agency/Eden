@@ -29,8 +29,8 @@
   display: flex;
   align-items: flex-start;
   gap: 1.25rem;
-  padding-bottom: 1.75rem;
-  margin-bottom: 1.75rem;
+  padding-bottom: 2rem;
+  margin-bottom: 2rem;
   border-bottom: 1px solid var(--base--grey-line, #d9d4c9);
   scroll-margin-top: 6rem;
   outline: none;

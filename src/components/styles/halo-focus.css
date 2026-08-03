@@ -1,0 +1,28 @@
+/* ===== HALO-FOCUS · About header — gate mirror + the two layers the JS injects ===== */
+
+/* — Anti-FOUC gate (mirror of the Webflow head block) — */
+/* The head copy is the authoritative one: inline in the document it applies at zero
+   latency, while this one only beats the first paint when dist/styles.css is current
+   and render-blocking. Same .js-anim gate, so a dead bundle still reveals the section
+   after the 4s fail-safe. The component lifts it with an inline opacity. */
+html.js-anim [data-component='halo-focus'] {
+  opacity: 0;
+}
+
+/* — The injected layers — */
+/* Two nested boxes the JS puts inside the card, each owning ONE animation: the outer
+   translates with the scroll, the inner scales on load. Both are the card's own box
+   (absolute + inset 0) — a transformed element becomes the containing block for its
+   absolute descendants, so the halo's top/margin percentages must keep resolving
+   against a box the card's size. */
+.halo-focus_stage,
+.halo-focus_grow {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.halo-focus_grow {
+  transform-origin: top center; /* the dome grows out of the card's top edge */
+}
