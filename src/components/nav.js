@@ -20,7 +20,7 @@ const FLIP_EASE = 'power2.inOut'
 // DEBUG — on-screen HUD + logs to chase the scroll "jump" (now also the bar's height,
 // probed around the class toggle and the Flip). Turn off before deploy: the HUD loop is
 // itself overhead, and the HUD is real DOM so Terser can't strip it.
-const DEBUG = true
+const DEBUG = false
 
 // Load entrance — the nav drops in from above the viewport.
 const ENTRANCE = {
@@ -105,10 +105,14 @@ function setupNav(root) {
     const rect = inner.getBoundingClientRect()
     const top = Math.round(rect.top)
     const barH = round1(rect.height)
+    const barW = round1(rect.width)
+    const btnW = btnWidth()
     const dY = prev ? y - prev.y : 0
     const dH = prev ? h - prev.h : 0
     const dTop = prev ? top - prev.top : 0
     const dBar = prev ? round1(barH - prev.barH) : 0
+    const dBarW = prev ? round1(barW - prev.barW) : 0
+    const dBtnW = prev ? round1(btnW - prev.btnW) : 0
     // The bar is SUPPOSED to move during the load entrance (a transform on the root) and
     // during a morph (Flip, or the mobile CSS transition — hence the timed window, which
     // covers both). Without this every frame of an intentional tween reads as a jump.
@@ -119,14 +123,16 @@ function setupNav(root) {
     // Bar is fixed → flag frames where its top moves more than the scroll did.
     const jump =
       !busy && Math.abs(dTop) > 1 && Math.abs(dTop) > Math.abs(dY) + 1
+    const resized = dBar !== 0 || dBarW !== 0 || dBtnW !== 0
     if (hud) {
-      hud.style.color = jump || dH !== 0 || dBar !== 0 ? '#feb2b2' : '#9ae6b4'
+      hud.style.color = jump || dH !== 0 || resized ? '#feb2b2' : '#9ae6b4'
       hud.textContent =
         `nav  pos:${r}${busy ? '  (morphing)' : ''}\n` +
         `scrollY ${y}  Δ${dY}\n` +
         `vh ${h}  Δ${dH}${dH !== 0 ? '  ⚠ address-bar' : ''}\n` +
         `bar.top ${top}  Δ${dTop}${jump ? '  ⚠ JUMP' : ''}\n` +
-        `bar.h ${barH}  Δ${dBar}${dBar !== 0 ? '  ⚠ HEIGHT' : ''}\n` +
+        `bar ${barW}×${barH}  Δ${dBarW}×${dBar}${dBarW || dBar ? '  ⚠ SIZE' : ''}\n` +
+        `btn.w ${btnW}  Δ${dBtnW}${dBtnW !== 0 ? '  ⚠ SIZE' : ''}\n` +
         `floating ${isFloating}  flip ${flip && flip.isActive() ? 'active' : '—'}`
     }
     if (jump)
@@ -134,10 +140,11 @@ function setupNav(root) {
         `%c[nav] ⚠ bar jumped ${dTop}px (scroll moved ${dY}px) vh=${h} floating=${isFloating}`,
         'color:#e53e3e;font-weight:bold'
       )
-    // Height should be constant — any change is layout, i.e. a candidate for the jump.
-    if (dBar !== 0)
+    // Nothing should ever resize — by design the morph only translates the bar. Any Δ here
+    // is a reflow, and a button changing width mid-tween shows up nowhere else.
+    if (resized)
       console.log(
-        `%c[nav] ⚠ bar height ${prev.barH} → ${barH} (Δ${dBar}) floating=${isFloating} flip=${flip && flip.isActive() ? 'active' : 'idle'}`,
+        `%c[nav] ⚠ RESIZE bar ${prev.barW}×${prev.barH} → ${barW}×${barH} (Δ${dBarW}×${dBar}) · btn.w ${prev.btnW} → ${btnW} (Δ${dBtnW}) · floating=${isFloating} flip=${flip && flip.isActive() ? 'active' : 'idle'}`,
         'color:#3182ce;font-weight:bold'
       )
     // Only log a big one-shot vh change (address-bar swings are expected on mobile).
@@ -146,7 +153,7 @@ function setupNav(root) {
         `%c[nav] viewport height jumped ${dH}px → ${h}`,
         'color:#dd6b20'
       )
-    prev = { y, h, top, barH }
+    prev = { y, h, top, barH, barW, btnW }
   }
   const startDebug = () => {
     if (!DEBUG || rafId) return
@@ -178,23 +185,34 @@ function setupNav(root) {
   // rect. enable() re-measures per breakpoint once that transform is cleared.
   let restTop = measureRestTop()
 
-  // DEBUG — the bar's live height, to pin the jump on the class toggle vs the Flip.
-  const barHeight = () => round1(inner.getBoundingClientRect().height)
-  const logHeightStep = (label, before) => {
-    const after = barHeight()
-    const d = round1(after - before)
+  // DEBUG — bar + button box, to pin a resize on the class toggle vs the Flip.
+  const btnEl = inner.querySelector('.nav_button-wrapper')
+  const btnWidth = () =>
+    btnEl ? round1(btnEl.getBoundingClientRect().width) : 0
+  const boxOf = () => {
+    const r = inner.getBoundingClientRect()
+    return { w: round1(r.width), h: round1(r.height), btn: btnWidth() }
+  }
+  const logBoxStep = (label, before) => {
+    const a = boxOf()
+    const d = {
+      w: round1(a.w - before.w),
+      h: round1(a.h - before.h),
+      btn: round1(a.btn - before.btn),
+    }
+    const changed = d.w !== 0 || d.h !== 0 || d.btn !== 0
     console.log(
-      `%c[nav]   ${label}: bar.h ${before} → ${after} (Δ${d})${d !== 0 ? '  ⚠ this step resized the bar' : ''}`,
-      `color:${d !== 0 ? '#e53e3e' : '#718096'};font-weight:${d !== 0 ? 'bold' : 'normal'}`
+      `%c[nav]   ${label}: bar ${before.w}×${before.h} → ${a.w}×${a.h} (Δ${d.w}×${d.h}) · btn.w ${before.btn} → ${a.btn} (Δ${d.btn})${changed ? '  ⚠ THIS STEP RESIZED IT' : ''}`,
+      `color:${changed ? '#e53e3e' : '#718096'};font-weight:${changed ? 'bold' : 'normal'}`
     )
   }
 
   const setFloating = (floating, animate) => {
     if (floating === isFloating) return
-    const hBefore = DEBUG ? barHeight() : 0
+    const boxBefore = DEBUG ? boxOf() : null
     if (DEBUG)
       console.log(
-        `%c[nav] setFloating ${isFloating} → ${floating} (animate=${animate}, scrollY=${Math.round(window.scrollY)}, bar.h=${hBefore})`,
+        `%c[nav] setFloating ${isFloating} → ${floating} (animate=${animate}, scrollY=${Math.round(window.scrollY)}, bar=${boxBefore && boxBefore.w}\u00d7${boxBefore && boxBefore.h})`,
         'color:#a78bfa;font-weight:bold'
       )
     isFloating = floating
@@ -205,7 +223,7 @@ function setupNav(root) {
     // is pure CSS (no Flip getState/re-measure for the address-bar resize to corrupt).
     if (!animate || reduceMotion.matches || !useFlip) {
       inner.classList.toggle('is-floating', floating)
-      if (DEBUG) logHeightStep('class toggle (no Flip)', hBefore)
+      if (DEBUG) logBoxStep('class toggle (no Flip)', boxBefore)
       return
     }
 
@@ -223,20 +241,20 @@ function setupNav(root) {
         : []
     const state = Flip.getState(extra.length ? [inner, ...extra] : inner)
     inner.classList.toggle('is-floating', floating)
-    if (DEBUG) logHeightStep('class toggle (pre-Flip)', hBefore)
+    if (DEBUG) logBoxStep('class toggle (pre-Flip)', boxBefore)
     flip && flip.kill()
-    const hPreFlip = DEBUG ? barHeight() : 0
+    const boxPreFlip = DEBUG ? boxOf() : null
     flip = Flip.from(state, {
       duration: FLIP_DURATION,
       ease: FLIP_EASE,
       absolute: true,
       nested: true,
       onComplete: () => {
-        if (DEBUG) logHeightStep('Flip complete', hPreFlip)
+        if (DEBUG) logBoxStep('Flip complete', boxPreFlip)
         logCss(floating ? 'settled → FLOATING' : 'settled → REST')
       },
     })
-    if (DEBUG) logHeightStep('Flip started (absolute applied)', hPreFlip)
+    if (DEBUG) logBoxStep('Flip started (absolute applied)', boxPreFlip)
   }
 
   // rAF-throttled scroll read — hysteresis flips the float state only when leaving the deadzone.
