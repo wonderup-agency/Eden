@@ -28,6 +28,7 @@ import './components/styles/impact-map.css'
 import './components/styles/random-item.css'
 import './components/styles/research-search.css'
 import './components/styles/whitepapers.css'
+import './components/styles/book-demo.css'
 
 // ── blog-post modules ────────────────────────────────────────────────
 import './components/blog-post/styles/toc.css'

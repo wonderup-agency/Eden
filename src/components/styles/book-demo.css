@@ -1,0 +1,63 @@
+/* ===== BOOK-DEMO · the Book a Demo form rules the Designer can't express ===== */
+
+/*
+  Everything else for this section is a NATIVE Webflow style on the .book-demo_*
+  classes (layout, type, colour, borders, transitions, hover, focus-visible,
+  ::placeholder, the small-breakpoint overrides). Only what the Designer has no
+  seam for lives here: parent-state → child rules, the vendor autofill pseudo,
+  and the reduced-motion query. Docs → .claude/rules/components/book-demo.md
+*/
+
+/* — Gold focus sweep: the field lights the underline CHILD, so the rule can
+     only be written here. Out = fade in place, then snap scaleX back while
+     invisible (native style), same as tab-underline.js. — */
+.book-demo_control:focus-within .book-demo_underline {
+  opacity: 1;
+  transform: scaleX(1);
+  transition:
+    opacity 0.12s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* — Dropdown open. `:focus-within` is the no-JS fallback (click the toggle);
+     `.is-open` is what the JS will drive via aria-expanded. — */
+.book-demo_dropdown.is-open .book-demo_dropdown-list,
+.book-demo_dropdown:focus-within .book-demo_dropdown-list {
+  display: block;
+}
+
+.book-demo_dropdown.is-open .book-demo_caret,
+.book-demo_dropdown:focus-within .book-demo_caret {
+  transform: rotate(180deg);
+}
+
+/* — Filled: placeholder grey → ink once a value exists (JS adds .is-filled) — */
+.book-demo_control.is-filled .book-demo_dropdown-value,
+.book-demo_control.is-filled .book-demo_phone-code {
+  color: var(--base--black, #000);
+}
+
+/* — Error (JS adds .is-error on the field) — */
+.book-demo_field.is-error .book-demo_control {
+  border-bottom-color: #c0392b;
+}
+
+.book-demo_field.is-error .book-demo_error {
+  display: block;
+}
+
+/* — Autofill: Chrome's yellow fill would break the underline look — */
+.book-demo_input:-webkit-autofill,
+.book-demo_input:-webkit-autofill:hover,
+.book-demo_input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 6.25rem var(--base--white, #fff) inset;
+  -webkit-text-fill-color: var(--base--black, #000);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .book-demo_control,
+  .book-demo_underline,
+  .book-demo_caret {
+    transition: none;
+  }
+}
