@@ -19,16 +19,123 @@
     transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* — Dropdown open. `:focus-within` is the no-JS fallback (click the toggle);
-     `.is-open` is what the JS will drive via aria-expanded. — */
-.book-demo_dropdown.is-open .book-demo_dropdown-list,
-.book-demo_dropdown:focus-within .book-demo_dropdown-list {
+/* ===== DROPDOWN PANEL · owned by the BUNDLE (moved here 2026-08-05) =====
+   These were native Webflow styles until the panel kept breaking on the published page:
+   an open list painted UNDER the submit button and the caret's box depended on the
+   embed's own markup. They live here now so the panel is deterministic.
+   Trade-off, accepted deliberately: this stylesheet loads AFTER Webflow's and ties on
+   specificity, so it WINS — editing these exact properties in the Designer no longer has
+   any effect. Everything not listed below (type, option padding + hover, spacing) is
+   still the Designer's. */
+
+/* — The control is the positioning AND stacking anchor for both the underline and the
+     panel. Webflow was missing `position: relative` here, and the failure is invisible:
+     `top: 100%` then resolves against `book-demo_field`, whose bottom edge is only a few
+     px away, so the panel still LOOKS right — while `.is-open`'s z-index is silently
+     ignored (z-index does nothing on a static box). That is exactly how the submit button
+     ended up painting over the open list. — */
+.book-demo_control {
+  position: relative;
+}
+
+/* — Stacking while open: lift the whole FIELD, not just the control, so the comparison
+     happens between siblings of the form where nothing else sets a z-index. The control is
+     lifted too — it's the fallback for browsers without `:has()`, and it's what the JS
+     mirrors `.is-open` onto. — */
+.book-demo_field:has(.book-demo_control.is-open),
+.book-demo_control.is-open {
+  position: relative;
+  z-index: 20;
+}
+
+/* — The panel. `[data-dropdown-list]` is absent from the Webflow markup (the JS falls back
+     to the options' own parent), so the class carries the weight there; both are listed so
+     the playground markup renders identically. — */
+[data-dropdown] [data-dropdown-list],
+[data-dropdown] .book-demo_dropdown-list {
+  display: none;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  left: 0;
+  z-index: 2;
+  max-height: 13rem;
+  margin: 0.25rem 0 0;
+  padding: 0.25rem;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--base--grey-line, #e4e2dd);
+  border-radius: 0.5rem;
+  /* Solid on purpose: a transparent panel reads as the list overlapping the page. */
+  background-color: var(--base--white, #fff);
+  box-shadow: 0 0.75rem 2rem rgba(0, 0, 0, 0.1);
+}
+
+/* — Open, driven by the JS (which toggles `.is-open` + the `hidden` attribute together).
+     There is deliberately NO `:focus-within` variant — it would force the list open
+     whenever the toggle merely has focus and fight `.is-open`. — */
+[data-dropdown].is-open [data-dropdown-list],
+[data-dropdown].is-open .book-demo_dropdown-list {
   display: block;
 }
 
-.book-demo_dropdown.is-open .book-demo_caret,
-.book-demo_dropdown:focus-within .book-demo_caret {
+/* — Caret. In Webflow the chevron is an HTML Embed: the wrapper div carries
+     `book-demo_caret`, while the SVG inside still carries the playground's
+     `book-demo__caret` (two underscores). The Designer cannot style anything inside an
+     embed, so the box has to be pinned here or the arrow's size is whatever the embed's
+     markup happens to say. — */
+.book-demo_caret {
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.book-demo_caret svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+[data-dropdown].is-open .book-demo_caret {
   transform: rotate(180deg);
+}
+
+/* — The gold sweep IS the focus indicator for the fields (the design has no ring there).
+     The toggle is a real <button>, so without this the browser paints its own default
+     outline around the whole control. — */
+.book-demo_dropdown-toggle:focus-visible,
+.book-demo_input:focus-visible {
+  outline: none;
+}
+
+/* — The phone trigger DOES keep a ring: it shares its field's underline with the tel input,
+     so without one a keyboard user can't tell which of the two holds focus. Same ring as the
+     country button below. (The submit is the site's Button component — its ring lives in
+     `button.css`.) — */
+.book-demo_phone-trigger:focus-visible {
+  outline: 0.125rem solid var(--base--gold, #fbd07c);
+  outline-offset: 0.25rem;
+}
+
+/* ===== HOVER FEEDBACK · bundle-owned too (2026-08-05) =====
+   The two hovers this form needs. They were meant to be native Webflow styles and neither
+   made it across the paste. The SUBMIT is not here on purpose: it's the site's
+   `Element / Button` component, so `button.css` owns its skin and its hover — a second
+   source for one button is how the two drift. */
+
+/* — Field: the 1px track darkens under the pointer. Deliberately NOT the gold underline —
+     that one is reserved for focus, so hover and focus stay distinguishable. — */
+.book-demo_control:hover {
+  border-bottom-color: var(--base--grey, #666);
+}
+
+/* — Option: the SAME background as the keyboard cursor below, so mouse and keyboard read
+     identically. That's the reason both live here now instead of one here and one in the
+     Designer — they were documented as "keep the two in sync" and drifted. — */
+.book-demo_dropdown-option:hover,
+.book-demo_dropdown-option.is-active {
+  background-color: #f4f3f1;
 }
 
 /* — Filled: placeholder grey → ink once a value exists (JS adds .is-filled) — */
@@ -54,10 +161,114 @@
   -webkit-text-fill-color: var(--base--black, #000);
 }
 
+/* ===== PHONE · intl-tel-input, retinted to match the field =====
+   The library is loaded on demand by book-demo.js (never in the Webflow head), so every
+   .iti__* class below only exists on this page — that's what keeps these rules inert
+   elsewhere even though a few can't be scoped to the control (see the panel note).
+   Its whole look is driven by --iti-* custom properties declared on :root, so we
+   re-declare them on a closer ancestor instead of fighting individual rules. */
+
+/* — Our static 🇺🇸 +1 trigger is what the widget replaces. The JS only adds .is-intl
+     once the widget is really live, so a CDN failure leaves the trigger in place. — */
+.book-demo_control.is-intl .book-demo_phone-trigger {
+  display: none;
+}
+
+/* Phone is the FIRST field, so its country panel opens over everything below it. */
+.book-demo_control.is-intl {
+  z-index: 4;
+}
+
+/* `.iti` is display:inline-block; it has to behave as the flex child the input was. */
+.book-demo_control.is-intl .iti {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* — Tokens. Declared on the widget's own two roots rather than on the control, because
+     below 768px the panel is detached from .iti (fixed/anchor-positioned) and a rule
+     scoped to the control would stop reaching it. — */
+.iti,
+.iti__country-selector {
+  --iti-hover-color: #f4f3f1; /* same as the dropdown option hover */
+  --iti-border-color: var(--base--grey-line, #e4e2dd);
+  --iti-country-selector-bg: var(--base--white, #fff);
+  --iti-icon-color: var(--base--black, #000);
+  --iti-arrow-padding: 0.5rem;
+}
+
+/* — The caret: the library's own is replaced, not restyled. Two reasons it had to go:
+     it's a triangle built from CSS borders, which at this size reads as a filled diamond
+     rather than a chevron; and it CAN'T be moved past the dial code with `order`, because
+     v29 nests it inside `.iti__selected-country-primary` with the flag while `+1` is a
+     sibling of that container — `order` only sorts within one flex row.
+     So it's hidden and we draw the form's own chevron as an `::after` on the button: a flex
+     item, so it lands after `+1` by itself, which is the order the design draws
+     ([flag] [+1] [caret]). A pseudo-element is fine here — this markup is the library's, so
+     there is nothing for BYQ to convert. `mask` + `currentColor` so it inherits the field's
+     ink exactly like the SVG carets in the dropdowns. — */
+.book-demo_control.is-intl .iti__arrow {
+  display: none;
+}
+
+/* Forced rather than assumed: the ::after has to be a flex item to land after the code. */
+.book-demo_control.is-intl .iti__selected-country {
+  display: flex;
+  align-items: center;
+}
+
+.book-demo_control.is-intl .iti__selected-country::after {
+  content: '';
+  flex: 0 0 auto;
+  width: 1rem;
+  height: 1rem;
+  margin-left: 0.375rem;
+  background-color: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6.5 8 10.5 12 6.5'/%3E%3C/svg%3E")
+    center / 1rem 1rem no-repeat;
+  transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Same feedback as the dropdowns — the library owns aria-expanded on this button. */
+.book-demo_control.is-intl .iti__selected-country[aria-expanded='true']::after {
+  transform: rotate(180deg);
+}
+
+/* The flag sits flush left, where our own trigger used to start. */
+.book-demo_control.is-intl .iti__selected-country-primary {
+  padding-left: 0;
+}
+
+/* Match the panel to book-demo_dropdown-list. Width is left to the library (it sizes to
+   the country names) — forcing 100% would resolve against the flag button, not the field.
+   The offset clears the field's underline: the control's padding-bottom + our 0.25rem gap. */
+.iti__country-selector {
+  margin-top: 0.875rem;
+  border-radius: 0.5rem;
+  box-shadow: 0 0.75rem 2rem 0 rgba(0, 0, 0, 0.1);
+}
+
+/* No max-height on .iti__country-list: the library measures the panel and writes an
+   inline width/height on .iti__country-selector, so capping the list separately breaks
+   its arithmetic (search box + capped list overflows the container it sized). */
+.iti__search-input {
+  font-family: inherit;
+  font-size: 0.875rem;
+}
+
+/* The gold sweep is the field's focus indicator, but the country button needs its own —
+   it shares the underline with the tel input, so focus would otherwise be ambiguous.
+   Same reason book-demo_phone-trigger has one. */
+.book-demo_control.is-intl .iti__selected-country:focus-visible {
+  outline: 0.125rem solid var(--base--gold, #fbd07c);
+  outline-offset: 0.25rem;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .book-demo_control,
   .book-demo_underline,
-  .book-demo_caret {
+  .book-demo_caret,
+  .book-demo_control.is-intl .iti__selected-country::after {
     transition: none;
   }
 }

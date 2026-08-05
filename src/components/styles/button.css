@@ -1,13 +1,16 @@
-/* ===== BUTTON · primary + secondary variants ===== */
+/* ===== BUTTON · primary + secondary + tertiary variants ===== */
 
 /* — Tokens + base — */
 .button_main-wrap {
   --anim-time: 0.35s;
   --anim-ease: cubic-bezier(0.4, 0, 0.2, 1);
   --btn-radius: 0.5rem;
-  --btn-beam-width: 1.5px; /* rotating-beam ring thickness (secondary) */
-  --btn-beam-speed: 6s; /* idle beam lap time; hover slowdown is JS (playbackRate) */
-  --btn-beam-arc: 140deg; /* lit portion of the lap — the remaining 220deg is dark */
+  --btn-beam-width: 1.25px; /* rotating-beam ring thickness (secondary) */
+  /* Idle beam lap; hover speed-up is JS (playbackRate). Matched to --btn-tert-speed on
+     purpose (2026-08-05) so both animated variants share one idle+hover rhythm — retune
+     the two together, or the site gets two different tempos. */
+  --btn-beam-speed: 9s;
+  --btn-beam-arc: 140deg; /* AVERAGE lit portion of the lap — global.js varies it, see below */
 }
 
 /* Rotating gold beam angle (secondary). @property makes --btn-angle animatable;
@@ -19,15 +22,51 @@
   initial-value: 0deg;
   inherits: true;
 }
+/* Registered too, because global.js ANIMATES it: the wedge is sized in degrees, so holding
+   it at a constant angle makes it cover a wildly different amount of border depending on
+   where it sits (1.7x at 140deg on a 200x48 box, and worse the shorter the arc). The
+   generated keyframes widen it over the long edges and narrow it at the corners so the lit
+   line keeps a constant LENGTH. The value above is the average the compensation is built
+   around — and the static fallback. */
+@property --btn-beam-arc {
+  syntax: '<angle>';
+  initial-value: 140deg;
+  inherits: true;
+}
+/* No-JS fallback: angle only, so the beam still laps (unevenly, never broken). */
 @keyframes buttonBeamSpin {
   to {
     --btn-angle: 360deg;
   }
 }
 
-.button_main-wrap .item-link:focus-visible {
+/* The overlay is the real focus target (the wrap is a div). Two flavours: `.item-link` (an
+   anchor — every navigational button) and `.item-link-button` (a real `<button type="submit">`
+   — the flavour a button inside a form needs, since an anchor cannot submit). Both listed:
+   the form variant would otherwise have no visible focus at all. */
+.button_main-wrap .item-link:focus-visible,
+.button_main-wrap .item-link-button:focus-visible {
   outline: 2px solid #fbd07c;
   outline-offset: 2px;
+}
+
+/* — The `<button>` overlay (a button inside a form, where an anchor can't submit) has to sit
+     ON TOP of the pill, and then be invisible.
+     On top: the overlay and `.button_main-element` are siblings, both positioned with
+     `z-index: auto`, so DOM order alone decides — and the pill comes later, so it painted
+     over the overlay and swallowed every click. That is why the Book-a-Demo form did
+     nothing when you pressed its button: the click landed on a `div`.
+     Invisible: lifting it exposes its own paint, and a bare `<button>` carries the UA's grey
+     background + border, which then covers the pill entirely.
+     `.item-link` (the anchor flavour) needs no reset — an `<a>` paints nothing — and gets
+     its lift from `custom.css`, since cards use it too. — */
+.button_main-wrap .item-link-button {
+  z-index: 1;
+  appearance: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
 }
 
 .button_main-element {
@@ -178,9 +217,162 @@
   .button_main-element {
   background: rgba(212, 165, 74, 0.2);
 }
-/* Hover paints the SAME beam — the only change is speed: JS (global.js) drops the spin's
-   playbackRate to BEAM_HOVER_RATE, so the line decelerates from its current angle instead
+/* Hover paints the SAME beam — the only change is speed: JS (global.js) raises the spin's
+   playbackRate to BEAM_HOVER_RATE, so the line accelerates from its current angle instead
    of snapping (see the @property note). No :hover gradient override lives here on purpose. */
+
+/* — Tertiary (dark surface: warm bloom orbiting inside, radial stroke, glass) —
+   Dark-surface only, by construction: the fill is near-black and the label is white.
+   Same `*=` contract as the other two, so tertiary-s / -m inherit the skin. */
+
+/* The two bloom colours are registered <color>s so :hover INTERPOLATES them — a gradient's
+   stops are not animatable otherwise. Where @property <color> is unsupported the colour
+   simply snaps, which is an acceptable degradation. */
+@property --btn-tert-warm {
+  syntax: '<color>';
+  initial-value: rgba(199, 154, 75, 0.55);
+  inherits: true;
+}
+@property --btn-tert-hot {
+  syntax: '<color>';
+  initial-value: rgba(255, 237, 200, 0.9);
+  inherits: true;
+}
+
+/* Rotated with `rotate`, NOT with a conic-gradient's angle. Two reasons, both load-bearing:
+   a transform is composited, so the button doesn't repaint every frame (the fill covers the
+   whole box, unlike secondary's 1px ring — measured ~2x the frame cost with a dozen on
+   screen); and a rotating radial bloom has no seam, so there is nothing to hide at 0deg. */
+@keyframes buttonTertiaryOrbit {
+  to {
+    rotate: 360deg;
+  }
+}
+
+.button_main-wrap[data-wf--element-button--variant*='tertiary'] {
+  --btn-tert-speed: 9s; /* idle lap; hover speed-up is JS (playbackRate) */
+  --btn-tert-surface: #0b0b0b;
+  --btn-tert-bloom: 46%; /* bloom radius, % of the rotating square */
+  --btn-tert-veil: 0.85; /* bloom opacity at rest */
+  --btn-tert-warm: rgba(199, 154, 75, 0.55);
+  --btn-tert-hot: rgba(255, 237, 200, 0.9);
+  --btn-tert-ring-warm: rgba(
+    255,
+    237,
+    200,
+    0.5
+  ); /* Figma stroke: radial @ 50% */
+  --btn-tert-ring-grey: rgba(211, 211, 211, 0.5);
+  --btn-tert-glow: 0 0 0 rgba(255, 214, 140, 0); /* outer glow, off at rest */
+  /* Hover targets, read by the :hover rule below */
+  --btn-tert-veil-hover: 1;
+  --btn-tert-warm-hover: rgba(251, 208, 124, 0.75);
+  --btn-tert-hot-hover: rgba(255, 237, 181, 1);
+  --btn-tert-glow-size: 18px;
+  --btn-tert-glow-color: rgba(255, 214, 140, 0.3);
+  /* The colour transition has to be declared where the value CHANGES (here), not only on
+     ::before, or the inherited value snaps before the child can interpolate it. */
+  transition:
+    --btn-tert-warm var(--anim-time) var(--anim-ease),
+    --btn-tert-hot var(--anim-time) var(--anim-ease);
+}
+
+/* Surface + the 1px radial stroke, painted the same way primary does it: fill on
+   padding-box, gradient on border-box, transparent border. `overflow: hidden` is what
+   clips the rotating bloom to the pill. The surface layer MUST be a gradient, not a
+   colour: in the `background` shorthand only the last layer may carry a background-color,
+   so a colour in the middle invalidates the whole declaration. */
+.button_main-wrap[data-wf--element-button--variant*='tertiary']
+  .button_main-element {
+  position: relative;
+  overflow: hidden;
+  color: #ffffff;
+  border: 1px solid transparent;
+  background:
+    linear-gradient(
+        180deg,
+        rgba(255, 255, 255, 0.06) 0%,
+        rgba(255, 255, 255, 0.01) 60%
+      )
+      padding-box,
+    linear-gradient(var(--btn-tert-surface), var(--btn-tert-surface))
+      padding-box,
+    radial-gradient(
+        120% 190% at 50% 0%,
+        var(--btn-tert-ring-warm) 50%,
+        var(--btn-tert-ring-grey) 100%
+      )
+      border-box;
+  -webkit-backdrop-filter: blur(6px) saturate(120%);
+  backdrop-filter: blur(6px) saturate(120%);
+  box-shadow: var(--btn-tert-glow);
+}
+
+/* The label has to outrank both pseudo layers. */
+.button_main-wrap[data-wf--element-button--variant*='tertiary']
+  :is(.button_main-text, .button_main-icon) {
+  position: relative;
+  z-index: 2;
+}
+
+/* The orbiting bloom — opt-in via data-gradient-animation="True", same prop as secondary.
+   A square 200% wide with aspect-ratio 1 always covers the button's diagonal, so rotating
+   it can never reveal a corner. */
+.button_main-wrap[data-wf--element-button--variant*='tertiary'][data-gradient-animation='True']
+  .button_main-element::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 0;
+  width: 200%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: radial-gradient(
+    circle at 50% 20%,
+    var(--btn-tert-hot) 0%,
+    var(--btn-tert-warm) calc(var(--btn-tert-bloom) * 0.45),
+    rgba(0, 0, 0, 0) var(--btn-tert-bloom)
+  );
+  opacity: var(--btn-tert-veil);
+  animation: buttonTertiaryOrbit var(--btn-tert-speed) linear infinite;
+  transition: opacity var(--anim-time) var(--anim-ease);
+  pointer-events: none;
+}
+
+/* Gloss, above the bloom and below the label. */
+.button_main-wrap[data-wf--element-button--variant*='tertiary']
+  .button_main-element::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0) 45%
+  );
+  pointer-events: none;
+}
+
+/* Hover / keyboard focus: hotter ramp, fuller bloom, outer glow. The SPEED-UP is JS
+   (global.js raises playbackRate) so the bloom accelerates from its current angle.
+   :focus-within is what gives keyboard users the same state — the focus target is the
+   overlay inside the wrap, not the wrap. */
+.button_main-wrap[data-wf--element-button--variant*='tertiary']:hover,
+.button_main-wrap[data-wf--element-button--variant*='tertiary']:focus-within {
+  --btn-tert-warm: var(--btn-tert-warm-hover);
+  --btn-tert-hot: var(--btn-tert-hot-hover);
+  --btn-tert-veil: var(--btn-tert-veil-hover);
+  --btn-tert-glow: 0 0 var(--btn-tert-glow-size) var(--btn-tert-glow-color);
+}
+.button_main-wrap[data-wf--element-button--variant*='tertiary']:hover
+  .button_main-element,
+.button_main-wrap[data-wf--element-button--variant*='tertiary']:focus-within
+  .button_main-element {
+  transform: translateY(-1px);
+}
 
 /* — Reduced motion — */
 @media (prefers-reduced-motion: reduce) {
@@ -189,6 +381,18 @@
   .button_main-element::after,
   .button_main-icon {
     transition: none !important;
+  }
+  /* Tertiary: the bloom holds still and the lift goes (a transform is motion, not just
+     timing). The colour ramp on hover survives — colour is not motion. */
+  .button_main-wrap[data-wf--element-button--variant*='tertiary']
+    .button_main-element::before {
+    animation: none;
+  }
+  .button_main-wrap[data-wf--element-button--variant*='tertiary']:hover
+    .button_main-element,
+  .button_main-wrap[data-wf--element-button--variant*='tertiary']:focus-within
+    .button_main-element {
+    transform: none;
   }
   /* No spin — the beam variant falls back to a static uniform gold ring */
   .button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']

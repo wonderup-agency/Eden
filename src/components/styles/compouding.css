@@ -112,20 +112,12 @@
   pointer-events: auto; /* hover nebula needs the cursor over the canvas */
 }
 
-/* — Flow-tab endpoint labels (São Paulo / Texas) — real text in the DOM. In canvas mode
-   the JS moves them onto the visual wrapper and sets left/top from the lens tips; the
-   translate below parks each one OUTSIDE its tip. They only fade in on the flow tab.
-   Without the canvas (no JS / reduced motion) they stay in normal flow inside their
-   visual, next to the fallback image. */
-[data-component='compouding'].is-canvas [data-compouding-endpoint] {
-  position: absolute;
-  z-index: 2;
-  transform: translate(-100%, -50%); /* start: sits left of the lens tip */
-  white-space: nowrap;
-  pointer-events: none;
-}
-[data-component='compouding'].is-canvas [data-compouding-endpoint='end'] {
-  transform: translate(0, -50%); /* end: sits right of it */
+/* — Retired flow-tab endpoint labels (São Paulo / Texas), removed 2026-08-05 — the JS no
+   longer reads or positions them. Kept as a gate so leftover Webflow markup can't render
+   in the middle of the flow visual; delete the elements in the Designer and this goes too. */
+[data-component='compouding'] [data-compouding-endpoint],
+[data-component='compouding'] [data-compouding-startpoint] {
+  display: none;
 }
 
 /* — Fallback (no JS / reduced motion): show only the first / active tab — */

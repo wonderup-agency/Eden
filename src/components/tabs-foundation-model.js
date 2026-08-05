@@ -3,8 +3,8 @@
   Autoplay tabs — only the active link's underline fills as a progress bar over a
   text-scaled dwell (others stay empty/inactive), then advances; on switch the incoming image wipes
   open (clip-path) while its content de-blurs in. A panel holding a <video> loops it while
-  that tab is active. Starts on scroll-in; hover pauses both the dwell and the video;
-  restarts from the clicked tab. Click / keyboard also switch.
+  that tab is active. Starts on scroll-in; hover pauses the underline only — the video keeps
+  looping, so the tab holds without the frame freezing. Click / keyboard also switch.
   CSS → ./styles/tabs-foundation-model.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-foundation-model.md
 */
 
@@ -19,6 +19,10 @@ const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
 const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the panel's text
 const AUTOPLAY_MIN = 4 // floor (also keeps it ≥ the reveal)
 const AUTOPLAY_MAX = 11 // ceiling
+// Hover only holds the underline on a real pointer at desktop width. On touch a tap fires
+// `mouseenter` with NO matching `mouseleave`, so tapping a tab would freeze the progress for
+// good; `(hover: hover)` also rules out a large tablet that clears the width gate.
+const HOVER_QUERY = '(min-width: 992px) and (hover: hover)'
 
 // Image: vertical clip-path wipe (top→bottom). Flip the inset() sides to reverse.
 const IMG_CLIP_HIDDEN = 'inset(0% 0% 100% 0%)' // clipped from the bottom
@@ -101,7 +105,7 @@ function setupTabs(root) {
 
   let activeIndex = -1
   let isAnimating = false
-  let progressTween = null
+  let progressTl = null // the active tab's progress clock
   let activeVideo = null
   let started = false // autoplay kicked off (section reached)
   let hover = false
@@ -110,8 +114,8 @@ function setupTabs(root) {
   // Prep each panel video: muted + inline (autoplay-with-sound is blocked, so it would
   // never play), LOOP on — the dwell is text-scaled, not video-length, so a shorter video
   // has to keep going until the tab advances. The Webflow `autoplay` attribute is dropped:
-  // playback is owned here (starts on scroll-in, pauses on hover), otherwise every hidden
-  // panel's video would run from load and hover could only pause the visible one.
+  // playback is owned here (starts on scroll-in, follows the active tab), otherwise every
+  // hidden panel's video would run from load.
   parts.forEach((part) => {
     const v = part.video
     if (!v) return
@@ -153,20 +157,25 @@ function setupTabs(root) {
     bars.forEach((bar, k) => k !== index && clearFill(bar))
   }
 
-  // Pause/resume the active clock — the progress tween AND the active panel's video —
-  // from on-screen + not-hovered + tab-visible.
+  // Off-screen / hidden tab pause everything. HOVER pauses only the underline clock: the
+  // video keeps looping, so the panel never freezes on a still frame while the progress —
+  // and with it the tab — holds where the user is reading. Desktop-pointer only (HOVER_QUERY).
+  const canHover = window.matchMedia(HOVER_QUERY)
+  const hoverHolds = () => hover && canHover.matches
   const sync = () => {
-    const play = started && onScreen && !hover && !document.hidden
-    if (activeVideo) play ? playVideo(activeVideo) : activeVideo.pause()
-    if (progressTween) play ? progressTween.resume() : progressTween.pause()
+    const on = started && onScreen && !document.hidden
+    if (activeVideo) on ? playVideo(activeVideo) : activeVideo.pause()
+    if (progressTl)
+      on && !hoverHolds() ? progressTl.resume() : progressTl.pause()
   }
 
-  // Fill the active tab's underline over its text-scaled dwell, then advance. The panel's
-  // video (if any) restarts with it and loops until the tab changes.
+  // The underline IS the clock: the active bar grows floor→1 over that tab's text-scaled
+  // dwell and its completion advances the tab. The panel's video (if any) restarts with it
+  // and loops until the tab changes.
   function startProgress(index) {
-    if (progressTween) {
-      progressTween.kill()
-      progressTween = null
+    if (progressTl) {
+      progressTl.kill()
+      progressTl = null
     }
     setStaticFills(index)
     if (reduceMotion.matches) return
@@ -181,16 +190,17 @@ function setupTabs(root) {
     }
 
     const bar = bars[index]
-    if (!bar) return sync()
-    armFill(bar) // starts at the visible floor, not 0
-    progressTween = gsap.to(bar, {
-      scaleX: 1,
-      duration: autoplayDuration(panels[index]),
-      ease: 'none',
+    if (bar) armFill(bar) // starts at the visible floor, not 0
+    const dwell = autoplayDuration(panels[index])
+    // A timeline rather than a bare tween on the bar, so the clock still exists on a tab
+    // whose underline is missing from the markup — the bar is optional, advancing isn't.
+    progressTl = gsap.timeline({
       onComplete: () => {
         if (!isAnimating) switchTab((index + 1) % count)
       },
     })
+    if (bar) progressTl.to(bar, { scaleX: 1, duration: dwell, ease: 'none' }, 0)
+    else progressTl.to({}, { duration: dwell }, 0)
     sync()
   }
 
@@ -330,11 +340,18 @@ function setupTabs(root) {
     hover = false
     sync()
   }
+  // The listeners stay bound across breakpoints — only the gate is reactive — so a `hover`
+  // left true by a tap can't stick once the query stops matching (rotate / resize).
+  const onHoverQuery = () => {
+    hover = false
+    sync()
+  }
   const onVisibility = () => sync()
   let io = null
   if (!reduceMotion.matches) {
     root.addEventListener('mouseenter', onEnter)
     root.addEventListener('mouseleave', onLeave)
+    canHover.addEventListener('change', onHoverQuery)
     document.addEventListener('visibilitychange', onVisibility)
     // Autoplay starts when the section enters the viewport; pauses while off-screen.
     io = new window.IntersectionObserver(
@@ -360,12 +377,13 @@ function setupTabs(root) {
 
   return {
     destroy() {
-      if (progressTween) progressTween.kill()
+      if (progressTl) progressTl.kill()
       parts.forEach((part) => part.video?.pause())
       if (io) io.disconnect()
       root.removeEventListener('keydown', onKeydown)
       root.removeEventListener('mouseenter', onEnter)
       root.removeEventListener('mouseleave', onLeave)
+      canHover.removeEventListener('change', onHoverQuery)
       document.removeEventListener('visibilitychange', onVisibility)
       links.forEach((link, i) => link.removeEventListener('click', onClick[i]))
     },

@@ -1,16 +1,15 @@
 /*
   Component: tabs-imaging · data-component="tabs-imaging"
-  Autoplay tabs — the active tab's dwell = its own VIDEO's duration (advances on the
-  video's `ended`); the underline tracks the video playhead. Tabs with no video fall back
-  to a text-scaled timer. On switch the incoming image wipes open (clip-path) while its
-  content de-blurs in. Starts on scroll-in; hover PAUSES the active video (so the tab holds
-  too — a paused video never fires `ended`); restarts from the clicked tab. Click / keyboard
-  also switch.
+  Autoplay tabs — the underline IS the clock: a pausable tween per tab whose dwell is that
+  tab's own VIDEO duration (text-scaled when it has no video), and whose completion advances
+  the tab. On switch the incoming image wipes open (clip-path) while its content de-blurs in.
+  Starts on scroll-in; hover pauses the underline only — the video keeps looping, so the tab
+  holds without the frame freezing. Click / keyboard also switch.
   CSS → ./styles/tabs-imaging.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-imaging.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
-import { armFill, clearFill, fillTo } from '../utils/tab-underline.js'
+import { armFill, clearFill } from '../utils/tab-underline.js'
 
 const { gsap } = window
 
@@ -20,6 +19,13 @@ const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
 const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the panel's text
 const AUTOPLAY_MIN = 4 // floor (also keeps it ≥ the reveal)
 const AUTOPLAY_MAX = 11 // ceiling
+// Dwell correction threshold: how far the real video duration must differ from the fallback
+// the clock started on before the active tab is re-run on it.
+const DWELL_SLACK = 0.25
+// Hover only holds the underline on a real pointer at desktop width. On touch a tap fires
+// `mouseenter` with NO matching `mouseleave`, so tapping a tab would freeze the progress for
+// good; `(hover: hover)` also rules out a large tablet that clears the width gate.
+const HOVER_QUERY = '(min-width: 992px) and (hover: hover)'
 
 // Image: vertical clip-path wipe (top→bottom). Flip the inset() sides to reverse.
 const IMG_CLIP_HIDDEN = 'inset(0% 0% 100% 0%)' // clipped from the bottom
@@ -97,48 +103,50 @@ function setupTabs(root) {
 
   let activeIndex = -1
   let isAnimating = false
-  let progressTween = null // fallback timer (tabs with no video)
+  let progressTl = null // the active tab's progress clock
+  let dwellUsed = 0 // seconds the running clock was built with
   let activeVideo = null
-  let activeBar = null
   let started = false // autoplay kicked off (section reached)
   let hover = false
   let onScreen = false
+  // Set the instant a tab takes over, unlike activeIndex which lags until the switch
+  // animation completes — a late `loadedmetadata` has to know which tab is really current.
+  let segIndex = 0
 
-  // Prep each tab video: muted inline autoplay (autoplay-with-sound is blocked, so the
-  // video would never play and the tab would never advance). Loop stays off so `ended`
-  // fires → advance. Dwell = the video's duration.
-  const endedHandlers = []
+  // Dwell for a tab: its own video's duration — what the section is built around — falling
+  // back to the text-scaled duration when it has no video, or when metadata hasn't landed
+  // yet (corrected by onMeta below as soon as it does).
+  const dwellFor = (index) => {
+    const d = parts[index].video?.duration
+    return isFinite(d) && d > 0 ? d : autoplayDuration(panels[index])
+  }
+
+  // Prep each tab video: muted inline autoplay (autoplay-with-sound is blocked, so it would
+  // never play at all), LOOP on — the underline owns the dwell now, so a video whose tab is
+  // being held on hover has to keep going rather than stop dead on its last frame.
+  const metaHandlers = []
   parts.forEach((part, i) => {
     const v = part.video
     if (!v) return
     v.muted = true
-    v.loop = false
+    v.loop = true
     v.playsInline = true
     v.setAttribute('playsinline', '')
     v.preload = 'auto'
-    // Playback is owned here (starts on scroll-in, pauses on hover) — a Webflow `autoplay`
-    // attribute would run every hidden panel's video from load and, on the first panel,
-    // fire `ended` (advancing the tab) before the section is even in view.
+    // Playback is owned here (starts on scroll-in, follows the active tab) — a Webflow
+    // `autoplay` attribute would run every hidden panel's video from load.
     v.autoplay = false
     v.removeAttribute('autoplay')
     v.pause()
-    const onEnded = () => {
-      if (i === activeIndex && !isAnimating && !reduceMotion.matches) {
-        switchTab((i + 1) % count)
-      }
+    // The duration IS this tab's dwell, so a clock started before metadata landed is running
+    // on the text-scaled placeholder — re-run it on the real duration.
+    const onMeta = () => {
+      if (!started || i !== segIndex) return
+      if (Math.abs(dwellFor(i) - dwellUsed) > DWELL_SLACK) startProgress(i)
     }
-    v.addEventListener('ended', onEnded)
-    endedHandlers[i] = onEnded
+    v.addEventListener('loadedmetadata', onMeta)
+    metaHandlers[i] = onMeta
   })
-
-  // Underline fill tracks the active video's playhead — smooth + always in sync (a fixed
-  // tween would drift from the video under pause/resume + buffering).
-  const tickBar = () => {
-    if (!activeVideo || !activeBar) return
-    const d = activeVideo.duration
-    if (isFinite(d) && d > 0) fillTo(activeBar, activeVideo.currentTime / d)
-  }
-  if (!reduceMotion.matches) gsap.ticker.add(tickBar)
 
   const playVideo = (v) => {
     const p = v.play()
@@ -163,60 +171,57 @@ function setupTabs(root) {
   })
 
   // Active-only fills: every non-active tab clears to empty (inactive); the active one is
-  // animated separately (tracks the video playhead). Only the active tab carries a fill.
+  // animated separately, by its own progress clock. Only the active tab carries a fill.
   const setStaticFills = (index) => {
     bars.forEach((bar, k) => k !== index && clearFill(bar))
   }
 
-  // Gate the active clock: off-screen / hidden tab / hovered all pause it. Pausing the
-  // video also holds the tab (a paused video never reaches `ended`), and the fill freezes
-  // with the playhead — so hover freezes the section as a whole and resumes cleanly.
+  // Off-screen / hidden tab pause everything. HOVER pauses only the underline clock: the
+  // video keeps looping, so the panel never freezes on a still frame while the progress —
+  // and with it the tab — holds where the user is reading. Desktop-pointer only (HOVER_QUERY).
+  const canHover = window.matchMedia(HOVER_QUERY)
+  const hoverHolds = () => hover && canHover.matches
   const sync = () => {
-    const play = started && onScreen && !document.hidden && !hover
-    if (activeVideo) {
-      play ? playVideo(activeVideo) : activeVideo.pause()
-    } else if (progressTween) {
-      play ? progressTween.resume() : progressTween.pause()
-    }
+    const on = started && onScreen && !document.hidden
+    if (activeVideo) on ? playVideo(activeVideo) : activeVideo.pause()
+    if (progressTl)
+      on && !hoverHolds() ? progressTl.resume() : progressTl.pause()
   }
 
-  // Start the active tab's dwell: video-driven when the tab has one (advance on `ended`,
-  // bar tracks the playhead), else the text-scaled fallback timer.
+  // The underline IS the clock: the active bar grows floor→1 over that tab's dwell and its
+  // completion advances the tab. Being a tween is the point — it can be paused on hover while
+  // the video plays on, which reading the playhead every frame could never do.
   function startProgress(index) {
-    if (progressTween) {
-      progressTween.kill()
-      progressTween = null
+    if (progressTl) {
+      progressTl.kill()
+      progressTl = null
     }
     setStaticFills(index)
     if (reduceMotion.matches) return
 
+    segIndex = index
     const bar = bars[index]
-    const video = parts[index].video
-    activeVideo = video || null
-    activeBar = bar || null
-
-    if (video) {
-      armFill(bar) // starts at the visible floor, not 0
+    activeVideo = parts[index].video || null
+    if (activeVideo) {
       try {
-        video.currentTime = 0
+        activeVideo.currentTime = 0
       } catch {
         /* not seekable yet — plays from 0 anyway */
       }
-      sync() // plays now if on-screen + not hovered
-      return
     }
 
-    // No video → text-scaled timer (advance on complete).
-    if (!bar) return
-    armFill(bar)
-    progressTween = gsap.to(bar, {
-      scaleX: 1,
-      duration: autoplayDuration(panels[index]),
-      ease: 'none',
+    if (bar) armFill(bar) // starts at the visible floor, not 0
+    dwellUsed = dwellFor(index)
+    // A timeline rather than a bare tween on the bar, so the clock still exists on a tab
+    // whose underline is missing from the markup — the bar is optional, advancing isn't.
+    progressTl = gsap.timeline({
       onComplete: () => {
         if (!isAnimating) switchTab((index + 1) % count)
       },
     })
+    if (bar)
+      progressTl.to(bar, { scaleX: 1, duration: dwellUsed, ease: 'none' }, 0)
+    else progressTl.to({}, { duration: dwellUsed }, 0)
     sync()
   }
 
@@ -356,11 +361,18 @@ function setupTabs(root) {
     hover = false
     sync()
   }
+  // The listeners stay bound across breakpoints — only the gate is reactive — so a `hover`
+  // left true by a tap can't stick once the query stops matching (rotate / resize).
+  const onHoverQuery = () => {
+    hover = false
+    sync()
+  }
   const onVisibility = () => sync()
   let io = null
   if (!reduceMotion.matches) {
     root.addEventListener('mouseenter', onEnter)
     root.addEventListener('mouseleave', onLeave)
+    canHover.addEventListener('change', onHoverQuery)
     document.addEventListener('visibilitychange', onVisibility)
     // Autoplay starts when the section enters the viewport; pauses while off-screen.
     io = new window.IntersectionObserver(
@@ -386,18 +398,18 @@ function setupTabs(root) {
 
   return {
     destroy() {
-      if (progressTween) progressTween.kill()
-      if (!reduceMotion.matches) gsap.ticker.remove(tickBar)
+      if (progressTl) progressTl.kill()
       parts.forEach((part, i) => {
-        if (part.video && endedHandlers[i]) {
-          part.video.removeEventListener('ended', endedHandlers[i])
-          part.video.pause()
-        }
+        if (!part.video) return
+        if (metaHandlers[i])
+          part.video.removeEventListener('loadedmetadata', metaHandlers[i])
+        part.video.pause()
       })
       if (io) io.disconnect()
       root.removeEventListener('keydown', onKeydown)
       root.removeEventListener('mouseenter', onEnter)
       root.removeEventListener('mouseleave', onLeave)
+      canHover.removeEventListener('change', onHoverQuery)
       document.removeEventListener('visibilitychange', onVisibility)
       links.forEach((link, i) => link.removeEventListener('click', onClick[i]))
     },

@@ -1,26 +1,35 @@
 /*
   Component: tabs-architected · data-component="tabs-architected"
-  ONE shared looping video drives multiple text tabs. As the playhead crosses each tab's
-  cue time (data-video-time, seconds), the incoming text de-blurs in and the active tab's
-  underline fills across that segment. Video-driven (no timer): plays muted+inline on
-  scroll-in, loops, pauses off-screen / hidden tab / on hover. Click / keyboard seek the
-  video to a segment. No video → text-scaled timer fallback.
+  ONE shared looping video behind multiple text tabs. The underline IS the clock: a pausable
+  tween per tab whose dwell is that tab's authored cue gap (data-video-time, seconds); on
+  completion the incoming text de-blurs in and the video is re-synced to the new cue. Plays
+  muted+inline on scroll-in, loops, pauses off-screen / hidden tab. Hover pauses the
+  underline only — the video keeps looping the active tab's segment.
   CSS → ./styles/tabs-architected.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-architected.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
-import { armFill, fadeOutFill, fillTo } from '../utils/tab-underline.js'
+import { armFill, fadeOutFill } from '../utils/tab-underline.js'
 
 const { gsap } = window
 
 const ACTIVE_CLASS = 'is-active'
 const CUE_ATTR = 'data-video-time' // seconds at which this tab's text becomes active
 
-// Fallback autoplay dwell (only when there is NO video and no cue gap) — text-scaled.
+// Fallback autoplay dwell (only when a tab has no cue gap) — text-scaled.
 const AUTOPLAY_BASE = 3.5
 const AUTOPLAY_PER_WORD = 0.35
 const AUTOPLAY_MIN = 4
 const AUTOPLAY_MAX = 11
+// Playhead slack. SEEK_SLACK: drift tolerated at a switch before the footage is re-synced —
+// under it the video is left playing through untouched, so with no hover nothing is ever
+// seeked. SEG_SLACK: tolerance on the segment's lower edge (a seek lands a few ms short).
+const SEEK_SLACK = 0.25
+const SEG_SLACK = 0.05
+// Hover only holds the underline on a real pointer at desktop width. On touch a tap fires
+// `mouseenter` with NO matching `mouseleave`, so tapping a tab would freeze the progress for
+// good; `(hover: hover)` also rules out a large tablet that clears the width gate.
+const HOVER_QUERY = '(min-width: 992px) and (hover: hover)'
 
 // Content blocks de-blur + fade + rise (REVEAL_FROM = shared paradigm/hero start state).
 const CONTENT_TO = {
@@ -111,7 +120,11 @@ function setupTabs(root) {
   let started = false // autoplay kicked off (section reached)
   let onScreen = false
   let hover = false
-  let progressTween = null // fallback timer (no-video mode only)
+  let progressTl = null // the active tab's progress clock
+  let dwellUsed = 0 // seconds the running clock was built with
+  // Set the instant a tab takes over, unlike activeIndex which lags until the switch
+  // animation completes — the playhead has to be held against the incoming segment at once.
+  let segIndex = 0
 
   // Cue times (segment starts), seconds. Explicit from data-video-time, else evenly
   // divided across the video duration (resolved once metadata is known).
@@ -135,29 +148,31 @@ function setupTabs(root) {
     return cueStart(i) + (count > 1 ? cueStart(i) - cueStart(i - 1) : 2)
   }
 
-  // Segment the playhead falls into (last cue <= t).
-  const indexForTime = (t) => {
-    let idx = 0
-    for (let i = 0; i < count; i++) if (t >= cueStart(i) - 0.001) idx = i
-    return idx
-  }
-
   const playVideo = () => {
     if (!video) return
     const p = video.play()
     if (p && typeof p.catch === 'function') p.catch(() => {})
   }
+  const seek = (t) => {
+    if (!video) return
+    try {
+      video.currentTime = t
+    } catch {
+      /* not seekable yet */
+    }
+  }
 
-  // Autoplay runs only while started + on-screen + tab-visible + not hovered. Hover pauses
-  // the video itself, so the playhead — and with it the text switching and the underline
-  // fill, which both read from it — freezes as one and resumes from the same frame.
-  const gated = () => started && onScreen && !document.hidden && !hover
-
-  // Play/pause the active clock (video, else the fallback tween) from the gate.
+  // Off-screen / hidden tab pause everything. HOVER pauses only the underline clock: the
+  // video keeps looping, so the visual never freezes on a still frame while the progress —
+  // and with it the tab — holds where the user is reading. Desktop-pointer only (HOVER_QUERY).
+  const canHover = window.matchMedia(HOVER_QUERY)
+  const hoverHolds = () => hover && canHover.matches
+  const visible = () => started && onScreen && !document.hidden
   const sync = () => {
-    const go = gated()
-    if (video) go ? playVideo() : video.pause()
-    else if (progressTween) go ? progressTween.resume() : progressTween.pause()
+    const on = visible()
+    if (video) on ? playVideo() : video.pause()
+    if (progressTl)
+      on && !hoverHolds() ? progressTl.resume() : progressTl.pause()
   }
 
   // Accessibility scaffolding — tablist / tab / tabpanel with roving tabindex.
@@ -221,9 +236,7 @@ function setupTabs(root) {
     inLink.setAttribute('aria-selected', 'true')
     inLink.setAttribute('tabindex', '0')
 
-    setStaticFills(index)
-    armFill(bars[index])
-    fitPanels(index)
+    fitPanels(index) // the bars + the clock are startProgress's, called right after this
 
     // Incoming overlays the outgoing (z-index) regardless of DOM order; it shows
     // instantly, its content de-blurs in while the outgoing fades out.
@@ -262,60 +275,67 @@ function setupTabs(root) {
     fitPanels(index, true)
   }
 
-  // rAF driver: switch the text when the playhead crosses a cue, and fill the active
-  // tab's underline across the current segment. Ticker (not `timeupdate`, ~4×/s) keeps the
-  // fill smooth through pause/resume / buffering.
-  const tick = () => {
+  // rAF: the playhead is slaved to the active tab. While the underline clock is paused
+  // (hover) the video would otherwise run on into the next tab's footage — or wrap to 0 on
+  // the last tab — so it loops the active segment instead. Nothing to do while the clock
+  // runs: the tween owns the switch and the playhead is already in step with it.
+  const holdSegment = () => {
     if (!started || !video || reduceMotion.matches) return
+    if (!progressTl || !progressTl.paused()) return
+    const s = cueStart(segIndex)
+    const e = cueEnd(segIndex)
+    if (!(e > s)) return // last tab before metadata lands: span still unknown
     const t = video.currentTime
-    const i = indexForTime(t)
-    if (i !== activeIndex && !isAnimating) switchTab(i)
-    // Fill the CURRENT segment's bar (i) — not activeIndex, which lags until the switch
-    // animation completes, so the fill stays on the incoming tab through the transition.
-    const s = cueStart(i)
-    const span = cueEnd(i) - s
-    fillTo(bars[i], span > 0 ? (t - s) / span : 0)
+    if (t < s - SEG_SLACK || t >= e) seek(s)
   }
 
-  // Fallback (no video): timer cycles the tabs and fills the active bar. Dwell = the
-  // authored cue gap; else the text-scaled duration.
-  function startTimer(index) {
-    if (progressTween) progressTween.kill()
+  // The underline IS the clock: the active bar grows floor→1 over that tab's dwell (the
+  // authored cue gap, else the text-scaled duration) and its completion advances the tab.
+  // Being a tween is the point — it can be paused on hover while the video plays on, which
+  // reading the playhead every frame could never do.
+  function startProgress(index) {
+    if (progressTl) progressTl.kill()
+    segIndex = index
     setStaticFills(index)
     const bar = bars[index]
-    if (!bar) return
-    armFill(bar) // drop a FILL_OUT still fading this bar out
+    if (bar) armFill(bar) // drop a FILL_OUT still fading this bar out
     const gap = cueEnd(index) - cueStart(index)
-    const dwell =
-      isFinite(gap) && gap > 0 ? gap : autoplayDuration(panels[index])
-    progressTween = gsap.to(bar, {
-      scaleX: 1,
-      duration: dwell,
-      ease: 'none',
-      overwrite: true,
+    dwellUsed = isFinite(gap) && gap > 0 ? gap : autoplayDuration(panels[index])
+    // A timeline rather than a bare tween on the bar, so the clock still exists on a tab
+    // whose underline is missing from the markup — the bar is optional, advancing isn't.
+    progressTl = gsap.timeline({
       onComplete: () => {
-        if (!isAnimating) {
-          const next = (index + 1) % count
-          switchTab(next)
-          startTimer(next)
-        }
+        if (isAnimating) return
+        const next = (index + 1) % count
+        switchTab(next)
+        startProgress(next)
       },
     })
-    if (!gated()) progressTween.pause()
+    if (bar)
+      progressTl.to(bar, { scaleX: 1, duration: dwellUsed, ease: 'none' }, 0)
+    else progressTl.to({}, { duration: dwellUsed }, 0)
+    sync()
+  }
+
+  // Re-sync the footage to the tab it belongs to — but only once it has actually drifted,
+  // which only a hover can cause. With no hover the playhead is already at the cue, so the
+  // video is never seeked and plays through as one continuous shot. A seek that IS needed
+  // lands here, hidden under the text transition, instead of out in the open.
+  const syncPlayhead = (index) => {
+    if (!video) return
+    const target = cueStart(index)
+    if (Math.abs(video.currentTime - target) > SEEK_SLACK) seek(target)
   }
 
   const goTo = (index) => {
     if (reduceMotion.matches) return switchTabInstant(index)
-    if (video && started) {
-      // Seek the playhead to the segment start; the ticker picks up the text + bar.
-      try {
-        video.currentTime = cueStart(index)
-      } catch {
-        /* not seekable yet */
-      }
-    }
+    // Dropped mid-transition on purpose: switchTab guards itself on isAnimating, so without
+    // this the clock and the playhead would move to a tab whose panel switch was skipped —
+    // bar on one tab, panel on another. The transition is ~1s.
+    if (isAnimating) return
+    if (started) syncPlayhead(index)
     switchTab(index)
-    if (!video && started) startTimer(index)
+    if (started) startProgress(index)
   }
 
   // Initial state: first tab visible, rest hidden (before paint, no CLS).
@@ -345,10 +365,18 @@ function setupTabs(root) {
     video.playsInline = true
     video.setAttribute('playsinline', '')
     video.preload = 'auto'
-    onMeta = () => resolveCues()
+    onMeta = () => {
+      resolveCues()
+      // The last tab's cue gap needs the duration, and an unauthored cue set needs it for all
+      // of them — so if metadata lands after autoplay started, re-run the active tab on the
+      // corrected dwell instead of letting it finish on the placeholder gap.
+      const gap = cueEnd(segIndex) - cueStart(segIndex)
+      if (started && isFinite(gap) && Math.abs(gap - dwellUsed) > SEEK_SLACK)
+        startProgress(segIndex)
+    }
     video.addEventListener('loadedmetadata', onMeta)
     if (isFinite(video.duration) && video.duration > 0) resolveCues()
-    gsap.ticker.add(tick)
+    gsap.ticker.add(holdSegment)
   }
 
   // Click — seek to the tab's segment (or switch, in no-video/reduced-motion mode).
@@ -393,10 +421,17 @@ function setupTabs(root) {
     hover = false
     sync()
   }
+  // The listeners stay bound across breakpoints — only the gate is reactive — so a `hover`
+  // left true by a tap can't stick once the query stops matching (rotate / resize).
+  const onHoverQuery = () => {
+    hover = false
+    sync()
+  }
   let io = null
   if (!reduceMotion.matches) {
     root.addEventListener('mouseenter', onEnter)
     root.addEventListener('mouseleave', onLeave)
+    canHover.addEventListener('change', onHoverQuery)
     document.addEventListener('visibilitychange', onVisibility)
     io = new window.IntersectionObserver(
       (entries) => {
@@ -405,11 +440,9 @@ function setupTabs(root) {
           started = true
           resolveCues()
           revealContent(activeIndex)
-          // The first tab never goes through switchTab, so arm its bar here — otherwise it
-          // has no floor and the ticker would fill it from a bare 0.
-          armFill(bars[activeIndex])
-          if (video) sync()
-          else startTimer(activeIndex)
+          // The first tab never goes through switchTab, so this is what arms its bar and
+          // starts its clock.
+          startProgress(activeIndex)
         } else {
           sync()
         }
@@ -431,8 +464,8 @@ function setupTabs(root) {
       fitPanels(activeIndex, true)
     },
     destroy() {
-      if (progressTween) progressTween.kill()
-      if (!reduceMotion.matches) gsap.ticker.remove(tick)
+      if (progressTl) progressTl.kill()
+      if (!reduceMotion.matches) gsap.ticker.remove(holdSegment)
       if (video && !reduceMotion.matches) {
         if (onMeta) video.removeEventListener('loadedmetadata', onMeta)
         video.pause()
@@ -441,6 +474,7 @@ function setupTabs(root) {
       root.removeEventListener('keydown', onKeydown)
       root.removeEventListener('mouseenter', onEnter)
       root.removeEventListener('mouseleave', onLeave)
+      canHover.removeEventListener('change', onHoverQuery)
       document.removeEventListener('visibilitychange', onVisibility)
       links.forEach((link, i) => link.removeEventListener('click', onClick[i]))
     },

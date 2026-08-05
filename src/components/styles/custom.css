@@ -7,7 +7,9 @@
   display: none;
 }
 
-/* Keep card links above their sibling decoration so the whole card stays clickable. */
+/* Keep card links above their sibling decoration so the whole card stays clickable.
+   The Button component's `<button>` overlay flavour is lifted in button.css instead — it
+   needs a paint reset in the same breath, so the two belong together. */
 .item-link {
   z-index: 1;
 }

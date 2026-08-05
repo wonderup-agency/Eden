@@ -52,6 +52,10 @@ const FIT = 0.8 // per-state: fraction of the stage each shape fills on its limi
 // reads as touching whatever sits above the wrapper.
 const STAGE_PAD = 32
 // Varied dot sizes: mostly fine dots, a fraction a bit bigger (keep them slim).
+// These are the LINE shapes' baseline — a shape needing heavier dots scales them with its own
+// `ink` multiplier (see point-shapes.js) rather than moving this. ⚠ They are RADII, so most of
+// the cloud is sub-pixel here: a dot under 0.5px can only deliver a fraction of its alpha to
+// the pixel, so raising `ink[0]` past ~1.7 buys opacity as well as size.
 const BIG_DOT_CHANCE = 0.12
 const SMALL_R = [0.3, 0.62]
 const BIG_R = [0.75, 1.3]
@@ -78,22 +82,18 @@ const DRIFT_FREQ_VAR = 0.4 // per-point drift-frequency variation → desynced s
 const BREATH_AMP = 0.03
 const BREATH_SPEED = 1.65
 const BREATH_RIPPLE = 2.2
-// Flow tab: gold endpoint nodes drawn on canvas + the two HTML endpoint labels.
-const ENDPOINT_ATTR = 'data-compouding-endpoint' // start | end
-const START_ATTR = 'data-compouding-startpoint' // accepted alias for the start label
+// Flow tab: the two gold nodes drawn on canvas at the lens tips. The HTML endpoint labels
+// ("São Paulo" / "Texas") were removed 2026-08-05 — see the CSS for the leftover-markup gate.
 const UNIT_SHIM = [1, 1] // fallback shimmer anisotropy
+const UNIT_INK = [1, 1] // fallback per-shape ink (size × alpha multiplier)
 const ALPHA_SKIP = 0.015 // below this a dot is invisible — skip the draw, not the physics
 const NODE_CORE_R = 4.5 // px
 const NODE_GLOW_R = 15 // px (halo)
 const NODE_PULSE = 1.5 // rad/s
-const LABEL_GAP = 16 // px between a lens tip and its label
-const LABEL_FADE = 0.75
-const LABEL_STAGGER = 0.16
-// The nodes + labels belong to the lens, so they must not show while the cloud is still the
-// previous shape — they'd sit on top of it. Windows of the morph progress: in late, out early.
+// The nodes belong to the lens, so they must not show while the cloud is still the previous
+// shape — they'd sit on top of it. Windows of the morph progress: in late, out early.
 const NODE_IN = 0.55
 const NODE_OUT = 0.3
-const LABEL_IN = 0.6 // fraction of the morph waited before the labels fade in
 // Intro (float in → assemble): gentle so the load assembly never lurches.
 const INTRO_SCATTER = 0.6
 const INTRO_FADE = 0.6
@@ -105,42 +105,6 @@ const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
 
 // Outgoing tab: plain fade. The de-blur lives on the words, never the parent.
 const REVEAL_OUT = { autoAlpha: 0, duration: OUT_FADE }
-
-// The endpoint labels are authored in Webflow, where the attribute VALUE is the easiest
-// thing to get wrong (a city name instead of start/end). So: accept start|end in any case,
-// accept the -startpoint alias, and fall back to DOM order for whatever is left — then
-// rewrite the canonical value, since the CSS and positionEndpoints() key off it.
-function resolveEndpoints(root, visualsWrap) {
-  if (!visualsWrap) return []
-  const found = gsap.utils.toArray(
-    root.querySelectorAll(`[${ENDPOINT_ATTR}], [${START_ATTR}]`)
-  )
-  const sides = found.map((el) => {
-    if (el.hasAttribute(START_ATTR)) return 'start'
-    const v = (el.getAttribute(ENDPOINT_ATTR) || '').trim().toLowerCase()
-    if (v === 'start' || v === 'from') return 'start'
-    if (v === 'end' || v === 'to') return 'end'
-    return null
-  })
-  found.forEach((el, i) => {
-    if (!sides[i]) sides[i] = sides.includes('start') ? 'end' : 'start'
-  })
-  if (found.length > 2)
-    console.warn(
-      `[compouding] ${found.length} endpoint labels — only the first start + end are used`
-    )
-  // start first, so the fade-in stagger always runs origin → destination.
-  const out = []
-  ;['start', 'end'].forEach((side) => {
-    const el = found[sides.indexOf(side)]
-    if (!el) return
-    el.setAttribute(ENDPOINT_ATTR, side)
-    el.removeAttribute(START_ATTR)
-    if (el.parentElement !== visualsWrap) visualsWrap.appendChild(el)
-    out.push(el)
-  })
-  return out
-}
 
 function setupRoot(root) {
   const titles = gsap.utils.toArray(
@@ -216,12 +180,6 @@ function setupRoot(root) {
     return fallback
   })
   const flowIndex = shapeKinds.indexOf('flow')
-
-  // Flow endpoint labels (São Paulo / Texas): real text in the DOM. Moved onto the visual
-  // wrapper so JS can anchor them to the lens tips (and so .is-canvas can't hide them
-  // along with the source visuals).
-  const endpoints = resolveEndpoints(root, visualsWrap)
-  if (endpoints.length) gsap.set(endpoints, { autoAlpha: 0 })
 
   let cloudOk = false // procedural cloud is live → canvas drives the visuals
   let canvas = null
@@ -337,14 +295,12 @@ function setupRoot(root) {
       canvas.height = cssH * cdpr
       cctx.setTransform(cdpr, 0, 0, cdpr, 0, 0)
     }
-    // The flow state fits into the stage MINUS its endpoint labels + node halos, so the
-    // labels can never be pushed off the stage (or over the section copy).
-    const res = endpointReserve()
+    // The flow state fits into the stage MINUS its two node halos: the nodes are drawn AT
+    // the lens tips, so a lens fitted edge to edge would clip half of each glow.
     for (let i = 0; i < states.length; i++) {
-      const rx = i === flowIndex ? res.x : 0
-      const ry = i === flowIndex ? res.y : 0
-      const halfW = Math.max(cssW * 0.5 - rx - STAGE_PAD, cssW * 0.25)
-      const halfH = Math.max(cssH * 0.5 - ry - STAGE_PAD, cssH * 0.25)
+      const res = i === flowIndex ? NODE_GLOW_R : 0
+      const halfW = Math.max(cssW * 0.5 - res - STAGE_PAD, cssW * 0.25)
+      const halfH = Math.max(cssH * 0.5 - res - STAGE_PAD, cssH * 0.25)
       stateScale[i] =
         Math.min(halfW / states[i].extX, halfH / states[i].extY) *
         FIT *
@@ -354,34 +310,7 @@ function setupRoot(root) {
     scaleFrom = cscale
     coverX = cscale ? (cssW * 0.5) / cscale : 1
     coverY = cscale ? (cssH * 0.5) / cscale : 1
-    positionEndpoints()
     if (cloudReady) drawCloud()
-  }
-
-  // Room the flow tab needs outside the lens: the widest label + the gap + the node halo.
-  function endpointReserve() {
-    let x = 0
-    endpoints.forEach((el) => {
-      x = Math.max(x, el.offsetWidth + LABEL_GAP + NODE_GLOW_R)
-    })
-    return { x, y: endpoints.length ? NODE_GLOW_R : 0 }
-  }
-
-  // Anchor each label just outside its lens tip. `start` sits left of it, `end` right of it
-  // (the CSS translates them off their anchor point accordingly). The gap is measured from
-  // the OUTER EDGE OF THE NODE HALO, not the tip: the halo reaches NODE_GLOW_R past the tip,
-  // so a gap measured from the tip alone puts the text right on top of the glow.
-  function positionEndpoints() {
-    if (flowIndex < 0 || !endpoints.length || !states) return
-    const sc = stateScale[flowIndex] || cscale
-    const off = states[flowIndex].extX * sc + NODE_GLOW_R + LABEL_GAP
-    const cx = cssW / 2
-    const cy = cssH / 2
-    endpoints.forEach((el) => {
-      const isEnd = el.getAttribute(ENDPOINT_ATTR) === 'end'
-      el.style.left = (isEnd ? cx + off : cx - off) + 'px'
-      el.style.top = cy + 'px'
-    })
   }
 
   // Per-point local morph progress at global t: staggered START (target order ⊕ randomness)
@@ -414,8 +343,8 @@ function setupRoot(root) {
         ? 1 - win(t, 0, NODE_OUT)
         : 0
     if (amt < 0.002) return
-    // Pinned to the LENS's own scale, not the interpolated one: the endpoint labels are
-    // positioned at that scale, so anything else drifts the node off its label mid-morph.
+    // Pinned to the LENS's own scale, not the interpolated one: the streamlines dissolve into
+    // a pocket sized for the node (`tipClear`), so the two have to agree on where the tip is.
     const hw = states[flowIndex].extX * (stateScale[flowIndex] || cscale)
     const cy = cssH / 2
     const cx = cssW / 2
@@ -461,13 +390,22 @@ function setupRoot(root) {
     const driftAmpY = SHIMMER_FLOOR * DRIFT * shFrom[1]
     const driftDX = SHIMMER_FLOOR * DRIFT * (shTo[0] - shFrom[0])
     const driftDY = SHIMMER_FLOOR * DRIFT * (shTo[1] - shFrom[1])
-    // Radial breathing is per shape (`pulse`): flow keeps it at 0 because its lens is pinned
-    // to two labelled endpoints, and a pulse there reads as the cities drifting.
+    // Radial breathing is per shape (`pulse`): flow keeps it at 0 because its lens tips are
+    // pinned to the two gold nodes, which don't breathe — a pulse detaches one from the other.
     const puTo = BREATH_AMP * (TUNING[toState.kind]?.pulse ?? 1)
     const puFrom = morphing
       ? BREATH_AMP * (TUNING[fromState.kind]?.pulse ?? 1)
       : puTo
     const puDelta = puTo - puFrom
+    // Per-shape ink (`ink: [sizeMul, alphaMul]`), multiplying the global dot radius + alpha.
+    // The baseline is set for the LINE shapes; a shape whose ink spreads over a much wider
+    // area (the galaxy's broad arms) needs its own to land at the same visible weight.
+    // Interpolated per point below, like `shim` — a global blend would visibly re-weight the
+    // points that already arrived.
+    const inkTo = TUNING[toState.kind]?.ink || UNIT_INK
+    const inkFrom = morphing ? TUNING[fromState.kind]?.ink || UNIT_INK : inkTo
+    const inkDR = inkTo[0] - inkFrom[0]
+    const inkDA = inkTo[1] - inkFrom[1]
     const fade = introActive ? introFade.v : 1
     const ispan = 1 + INTRO_STAGGER
     const icovX = coverX * INTRO_SCATTER
@@ -545,11 +483,11 @@ function setupRoot(root) {
       }
       offX[i] += (txo - offX[i]) * HOVER_EASE
       offY[i] += (tyo - offY[i]) * HOVER_EASE
-      al *= fade
+      al *= fade * (inkFrom[1] + inkDA * lpv)
       if (al < ALPHA_SKIP) continue // invisible: the draw is the expensive half of the frame
       const sx = cx + (bx + offX[i]) * rscale
       const sy = cy + (by + offY[i]) * rscale
-      const r = pointR[i] * rm * (1 + glow * 0.7)
+      const r = pointR[i] * rm * (1 + glow * 0.7) * (inkFrom[0] + inkDR * lpv)
       cctx.globalAlpha = al > 1 ? 1 : al
       cctx.drawImage(sprite, sx - r, sy - r, r * 2, r * 2)
     }
@@ -686,10 +624,8 @@ function setupRoot(root) {
           : SMALL_R[0] + frng() * (SMALL_R[1] - SMALL_R[0])
     }
 
-    // .is-canvas BEFORE the first measure: it makes the endpoint labels absolute, and
-    // cloudResize() reserves room for them from their offsetWidth — measured in normal flow
-    // a label reports the whole stage width, so the flow lens got fitted into a quarter of
-    // the stage and then jumped to its real size on the first resize.
+    // .is-canvas BEFORE the first measure — it decides the wrapper's own layout (the source
+    // imgs stop occupying it), and cloudResize() fits every state to what it measures there.
     root.classList.add('is-canvas') // CSS hides the source imgs, shows the canvas
     cloudResize()
     // Re-measure on ANY wrapper size change (not just width) so the canvas buffer
@@ -710,7 +646,6 @@ function setupRoot(root) {
     cloudReady = true
     if (pendingGo != null) cloudGo(pendingGo)
     else if (onScreen) cloudGo(index)
-    updateFlowLabels(index) // show the labels if we booted onto the flow tab
   }
 
   // Crossfade fallback (no visual wrapper → no canvas): the original paradigm behaviour.
@@ -722,30 +657,6 @@ function setupRoot(root) {
         ease: 'sine.out',
       })
     )
-  }
-
-  // Endpoint labels fade in only on the flow tab, each at its own speed (staggered) — and
-  // only once the cloud has become the lens (they're anchored to its tips, so showing them
-  // earlier parks them on whatever shape is still morphing away).
-  function updateFlowLabels(i) {
-    if (!cloudOk || flowIndex < 0 || !endpoints.length) return
-    gsap.killTweensOf(endpoints)
-    if (i === flowIndex) {
-      positionEndpoints()
-      const wait = introActive
-        ? INTRO_HOLD + INTRO_DURATION * 0.8
-        : MORPH_DURATION * LABEL_IN
-      endpoints.forEach((el, k) =>
-        gsap.to(el, {
-          autoAlpha: 1,
-          duration: LABEL_FADE * (0.85 + k * 0.35),
-          ease: 'power2.out',
-          delay: wait + k * LABEL_STAGGER,
-        })
-      )
-    } else {
-      gsap.to(endpoints, { autoAlpha: 0, duration: 0.3, ease: 'sine.out' })
-    }
   }
 
   // ===================== Paradigm chrome (underline + text + autoplay) =========
@@ -778,7 +689,6 @@ function setupRoot(root) {
     // Visuals: point-cloud morph when the canvas is live, else image crossfade.
     if (cloudEnabled) {
       cloudGo(i)
-      updateFlowLabels(i)
     } else {
       crossfadeVisuals(i)
     }

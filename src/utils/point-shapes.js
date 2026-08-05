@@ -9,7 +9,7 @@
 
 const TAU = Math.PI * 2
 // Share of flow's `tipClear` window that is FULLY clear (alpha 0) before the ramp starts —
-// the pocket the gold endpoint node sits in.
+// the pocket the gold tip node sits in.
 const TIP_HOLD = 0.42
 
 export const SHAPE_ORDER = ['loop', 'lattice', 'flow', 'spiral']
@@ -20,14 +20,21 @@ export const SHAPE_ORDER = ['loop', 'lattice', 'flow', 'spiral']
 // where the shape IS lines: the shimmer's amplitude (~0.08 normalized) is bigger than the
 // gap between two streamlines (~0.045), so an isotropic shimmer smears them into fog.
 // Keeping it along the line (x) and near-zero across it (y) is what makes the lines read.
+// `ink` = [sizeMul, alphaMul]: multiplies the renderer's dot radius and alpha for this shape.
+// The global baseline is set for the LINE shapes, where the ink is concentrated on a thin
+// band; a shape that spreads the same point count over a much larger area needs its own
+// multiplier to land at the same visible weight (see spiral).
 // `inner` = [sizeBias, alphaBias]: ink gradient from the shape's INSIDE to its OUTSIDE.
 // Positive makes the interior dots fatter / darker than the rim, negative flips it. What
-// counts as "inside" is per shape: distance across the band (loop), distance from the
-// centre thread (lattice), from the flow axis (flow), from the centre (spiral).
+// counts as "inside" is per shape, but it is always the offset ACROSS that shape's own line:
+// the band (loop), the thread's own band (lattice), the streamline's own ribbon (flow), the
+// arm's own band (spiral). Keying it on the distance from the shape's centre instead only
+// shades interior-vs-rim and leaves every line an even smear — see buildSpiral.
 export const TUNING = {
   loop: {
     fill: 1, // stage fill, multiplies the renderer's FIT — per shape
     pulse: 1, // scales the renderer's BREATH_AMP (radial breathing) — 0 turns it off
+    ink: [1, 1],
     inner: [0.45, 0.3],
     axisBias: 1.8, // build — >1 packs the dots onto the line's own axis
     shim: [1, 0.5],
@@ -43,6 +50,7 @@ export const TUNING = {
   lattice: {
     fill: 0.85,
     pulse: 1, // radial breathing ×  (its own `breath` below is a different thing: node pinch)
+    ink: [1, 1],
     // dep here is the offset inside the thread's OWN band, so this darkens each of the four
     // axes and softens their edges (using the distance to the middle thread instead would
     // just make the inner threads darker than the outer ones).
@@ -77,12 +85,13 @@ export const TUNING = {
     // pulse that grows/shrinks the whole shape reads as the cities moving. The streamlines
     // already carry the motion.
     pulse: 0,
+    ink: [1, 1],
     inner: [0.6, 0.5], // per streamline: fat + dark on its axis, thin + faint at its edges
     axisBias: 2.4, // build — the streamline ribbons carry their ink on the centreline
     shim: [1, 0.08],
     // Crossings per second on the centre line. BIDIRECTIONAL: the top half runs in this
-    // direction (left→right, São Paulo → Texas) and the bottom half always runs opposite,
-    // so the lens reads as traffic going both ways. A negative value mirrors both halves.
+    // direction (left→right) and the bottom half always runs opposite, so the lens reads as
+    // traffic going both ways. A negative value mirrors both halves.
     speed: 0.085,
     shear: 0.55, // outer streamlines run this much slower → fluid, not a slab
     // Slows the particles near both tips, so ink piles up there the way it does in the
@@ -108,28 +117,82 @@ export const TUNING = {
   },
   spiral: {
     fill: 1,
-    pulse: 1, // radial breathing ×
-    // Negative: the arm THINS and FADES toward the centre (the reference carries its grain
-    // on the outer turns and tapers to a hairline inside).
-    inner: [-0.5, -0.45],
-    coreFade: 0.24, // radius under which the arm tapers away (must be > 1/growth)
-    axisBias: 1.6, // build
-    shim: [0.45, 0.45],
+    // Breathing kept LOW (2026-08-05), and this is a fluidity knob, not a decoration one. The
+    // coherent pulse is RADIAL, and on a disc the radius runs across the arms — so it pushes
+    // the points sideways off their own path, which is exactly what reads as "not fluid".
+    // `BREATH_RIPPLE` compounds it: the pulse is a spatial wave, so the inner and outer galaxy
+    // squeeze in opposite directions at times. Measured as the share of a point's motion that
+    // runs across its path rather than along it: at pulse 1 the galaxy was 0.20× — the WORST of
+    // the four shapes, against `loop`'s 0.17× — and the breathing alone was ~36% of that.
+    // 0.3 keeps a trace of the pulse (the cloud must never look frozen) at 0.14×.
+    pulse: 0.3,
+    // This shape alone gets an `ink` at all: the global SMALL_R / BIG_R / DOT_COLOR are the LINE
+    // shapes' baseline and must not move (raising those made all four heavier, which is not what
+    // was wanted). Why the galaxy needs its own — it spreads the same 16000 points over a filled
+    // disc instead of a thin band, so at [1, 1] its median painted pixel delivered only −51/255
+    // of contrast against the page, against −79…−102 for the three line shapes: half as visible,
+    // which is what read as "too subtle".
+    // [1.6, 2.35] measures −80 with 27% of its pixels saturated — the same WEIGHT as `loop`
+    // (−83 / 25%) and `flow` (−83 / 29%) — with visibly fatter dots than theirs (max radius
+    // ~3.2px against ~2px). Weight and thickness are separate knobs here, which is the point of
+    // splitting them: each was tuned to the numbers above on its own.
+    // They are close to independent in practice — the whole size range ×1 → ×1.8 only shifts
+    // the contrast by about 4/255 at a fixed alpha (bigger dots escape the sub-pixel alpha
+    // penalty, a second-order effect at these radii) — so a size change needs only a small
+    // alpha trim to hold the weight, and never a retune.
+    ink: [1.6, 2.35],
+    // Keyed on the offset ACROSS the arm (see the sample), so each arm gets a fat dark spine
+    // fading to a diffuse edge. This is what makes an arm read as an arm rather than as an
+    // even smear — it does more for definition than `band` does.
+    // The alphaBias is wide (0.6) BECAUSE `ink[1]` is high: alpha clamps at 1 per point, so a
+    // boosted spine clips while the edge doesn't, flattening the very gradient that defines the
+    // arm. Measured: at alphaBias 0.32 the spine/edge ratio collapses from 1.68× to 1.16×;
+    // widening it to 0.6 holds 1.24× at the shipping ink. Raise the two together, never one.
+    inner: [0.55, 0.6],
+    // Radius under which the arm tapers away. Deliberately BELOW the innermost radius
+    // (1/growth = 0.125), i.e. effectively OFF: the reference galaxy has a dense bulge, not
+    // a hole, so nothing may fade at the centre. Raise it above 1/growth to punch one.
+    coreFade: 0.05,
+    axisBias: 2.6, // build — high: packs the dots onto each arm's own centreline
+    // Isotropic, and LOWER than the line shapes' for that reason: it can't be anisotropic here
+    // (an arm's direction rotates through the full 360° while `shim` is in screen axes, so
+    // "along the line" has no fixed axis), which means all of it lands across the arm as well
+    // as along it. Halved together with `pulse` above — the two are roughly additive, and the
+    // pair takes the across-path share from 0.20× to 0.10×, i.e. between `loop` (0.17×) and
+    // `flow` (0.02×). Don't take either to 0: a few px of sway is what keeps the grain from
+    // reading as one rigid image being rotated.
+    shim: [0.2, 0.2],
     // Density toward the rim. A warp, not a distribution: points move fast through the
     // inner turns and crawl on the outer ones, so the density pattern stays PUT while they
     // travel (biasing the distribution instead would make the dense band orbit the spiral).
-    warp: 0.6,
-    // READABLE turns ≈ turns × (−ln(coreFade)/ln(growth)) — the inner ones taper away, so
-    // `turns` alone doesn't decide what you see. 5 / 6 / 0.24 leaves ~4 readable turns, each
-    // ~1.43× the radius of the one inside it (band 0.15 → they never touch).
-    // `coreFade` must stay ABOVE the innermost radius (1/growth) or there is no taper.
-    turns: 5, // build
-    growth: 6, // outer radius / inner radius (per-turn spacing)
+    // Also the counterweight to the disc's own 1/r² pile-up: uniform-in-p points spread over
+    // a band whose width ∝ r means area ∝ r², so without a warp < 1 the core is a solid
+    // blob. At 0.45 ≈ 16% of the points sit inside r < 0.3 — dense bulge, still granular.
+    warp: 0.45,
+    // A GALAXY (2026-08-05), not the old coil of concentric rings: few, broad, OPEN arms
+    // sweeping out of a dense bulge, with visible dark sky between them.
+    //
+    // ⚠ The one constraint that decides whether arms read at all — and it is NOT the radial
+    // one the old tuning was written against. A band of half-width `band × r` around a log
+    // spiral covers an ANGULAR span of 2 × band / b at every radius, where
+    // b = ln(growth) / (TAU × turns). So the arms only separate while
+    //
+    //     band  <  ln(growth) / (2 × arms × turns)        [= 0.347 here; we use 0.18]
+    //
+    // Miss it and the band wraps the full circle at every radius: a perfectly smooth fuzzy
+    // ellipse, no arms at all, whatever `arms` says. That is why this is an OPEN spiral (1.5
+    // turns over growth 8) and not the tight 5-turn coil it replaced — a tight coil only
+    // separates at a band so thin the arms stop reading as dust. Measured: the old 5 / 6 /
+    // 0.15 tuning was 1.7× over the limit, which is why it read as concentric rings.
+    // At 0.18 each arm subtends ~1.6 rad (~93°), leaving ~87° of dark sky between the two.
+    arms: 2, // build — arms evenly spaced around the disc
+    turns: 1.5, // build — LOW: an open spiral, so the arms can stay broad (see above)
+    growth: 8, // outer radius / inner radius (per-turn spacing)
     // Positive = outward (points born at the centre, drifting out to the rim, like a galaxy
     // throwing its arms out). Negative reverses it to inward. Either way it never ends —
     // both ends of the path are fade-gated (`edge` + `coreFade`), so the recycle is
     // invisible in both directions; only the reading changes.
-    speed: 0.045, // full traversals per second (also the apparent spin)
+    speed: 0.022, // full traversals per second (also the apparent spin)
     // Which way the arm winds, independent of `speed` (= where the points travel). Mirrors
     // the angle only, so the disc keeps the `tilt` / `lean` inclination authored below.
     // Like those two it reads live but moves the shape's EXTENTS, so the stage fit only
@@ -141,13 +204,15 @@ export const TUNING = {
     // foreshortens with the disc rather than staying a constant-width ribbon.
     // They read live, but they change the shape's extents — so the stage fit only catches
     // up on the next `makeShape` (the playground rebuilds on these two).
-    tilt: 0.62,
-    lean: -20, // degrees; negative tips the major axis UP to the right
-    // The reference's outer arm is a WIDE granulated band, not a line — this is what
-    // separates "spiral of dust" from "spiral drawn with dots".
-    band: 0.15, // thickness scales with radius → granulated outside
-    bandMin: 0.006,
-    edge: 0.06,
+    tilt: 0.74,
+    lean: -22, // degrees; negative tips the major axis UP to the right
+    // The arms are granulated BANDS, not lines — this is what separates "galaxy of dust"
+    // from "spiral drawn with dots". Hard-capped by the angular constraint above.
+    band: 0.18, // thickness scales with radius → broad outside, tight inside
+    // Floor on that thickness, so the inner turns overlap into a BULGE instead of the
+    // hairline `band × r` alone leaves them (0.18 × 0.125 = 0.02 at the innermost radius).
+    bandMin: 0.05,
+    edge: 0.05,
   },
 }
 
@@ -188,6 +253,26 @@ function lutN(n, fill) {
 }
 function lut256(fill) {
   return lutN(256, fill)
+}
+
+// Linearly-interpolated read. The tables are built with n+1 entries precisely so the last
+// cell has a right-hand neighbour to interpolate against.
+//
+// ⚠ Use this, not `t[(x * n) | 0]`, for anything that feeds a POSITION. A floored read
+// quantises the value, so a point crossing a cell boundary teleports by one cell's worth of
+// distance instead of gliding — and with thousands of points each crossing at its own moment,
+// a fraction of the cloud is mid-jump on every frame. That reads as a vibration, not as flow,
+// and no amount of shimmer tuning touches it (measured: the spiral's worst decile of points
+// stepped at 1.98× its median step; interpolating brought it to ~1.0×). Interpolating costs
+// one subtract + multiply-add per read.
+function lutAt(t, n, x) {
+  const f = x * n
+  let i = f | 0
+  if (i < 0) i = 0
+  else if (i >= n) i = n - 1
+  const g = f - i
+  const a = t[i]
+  return a + (t[i + 1] - a) * g
 }
 
 // Ink gradient helper: dep 0 = the shape's interior, 1 = its outer edge. Writes the size
@@ -461,10 +546,10 @@ function buildFlow(n, rng) {
       // warp / edge / tipClear windows are all symmetric, so the recycle stays invisible.
       let p = u[i] + time * T.speed * dir[i] * (1 - T.shear * v[i] * v[i])
       p -= Math.floor(p)
-      const pw = flowWarp(T.tipSlow)[(p * 256) | 0] // crawl at the tips → ink piles up
+      const pw = lutAt(flowWarp(T.tipSlow), 256, p) // crawl at the tips → ink piles up
       const x = pw * 2 - 1
       // flat = long horizontal run, tip < 1 = the streamlines converge into a point
-      const prof = flowProfile(T.flat, T.tip)[(Math.abs(x) * 256) | 0]
+      const prof = lutAt(flowProfile(T.flat, T.tip), 256, Math.abs(x))
       out[0] = x
       out[1] = T.h * prof * v[i]
       out[2] = a[i] * smoothstep(0, T.edge, p) * smoothstep(0, T.edge, 1 - p)
@@ -484,11 +569,16 @@ function buildSpiral(n, rng) {
   const u = new Float32Array(n)
   const v = new Float32Array(n)
   const a = new Float32Array(n)
+  const arm = new Float32Array(n) // this point's arm, as an angle offset
   const order = new Float32Array(n)
+  // Split by index, not by rng: an exact even split across the arms, and it stays
+  // independent of the per-point dot size (which is drawn from its own RNG in the renderer).
+  const arms = Math.max(1, Math.round(TUNING.spiral.arms || 1))
   for (let i = 0; i < n; i++) {
     u[i] = rng()
     v[i] = axisPack(gauss(rng), TUNING.spiral.axisBias)
     a[i] = 0.45 + 0.55 * rng()
+    arm[i] = ((i % arms) / arms) * TAU
     order[i] = u[i] // winds outward from the centre
   }
   return {
@@ -498,9 +588,9 @@ function buildSpiral(n, rng) {
       let p = u[i] + time * T.speed
       p -= Math.floor(p)
       // fast inside, crawling at the rim
-      const pw = spiralWarp(T.warp)[(p * SPIRAL_WARP_STEPS) | 0]
-      const th = pw * TAU * T.turns * T.spin
-      const r = spiralRadius(T.growth)[(pw * 256) | 0] // r = 1 on the outer turn
+      const pw = lutAt(spiralWarp(T.warp), SPIRAL_WARP_STEPS, p)
+      const th = pw * TAU * T.turns * T.spin + arm[i]
+      const r = lutAt(spiralRadius(T.growth), 256, pw) // r = 1 on the outer turn
       const rr = r + v[i] * (T.band * r + T.bandMin)
       // Inclined disc: foreshorten the minor axis, then rotate the ellipse.
       const dx = rr * Math.cos(th)
@@ -508,13 +598,16 @@ function buildSpiral(n, rng) {
       const L = spiralLean(T.lean)
       out[0] = dx * L.c - dy * L.s
       out[1] = dx * L.s + dy * L.c
-      out[2] =
-        a[i] *
-        smoothstep(0, T.edge, p) *
-        smoothstep(0, T.edge, 1 - p) *
-        smoothstep(0, T.coreFade, r) // the arm vanishes into the centre
+      out[2] = a[i] * smoothstep(0, T.edge, p) * smoothstep(0, T.edge, 1 - p)
       out[3] = 1
-      applyInner(out, T.inner, r) // r = 0 at the centre, 1 on the outer turn
+      // Keyed on the offset ACROSS the arm (like loop / lattice / flow), not on the radius:
+      // that is what gives each arm a fat dark spine fading to a diffuse edge, i.e. what
+      // makes it read as an arm at all. Keyed on the radius instead — which it was until
+      // 2026-08-05 — it only shades centre-vs-rim, and every arm stays an even smear.
+      applyInner(out, T.inner, 1 - Math.abs(v[i]))
+      // Fades the arm out into the centre. Multiplied here rather than folded into out[2]
+      // above so it survives the clamp applyInner does.
+      out[2] *= smoothstep(0, T.coreFade, r)
     },
   }
 }

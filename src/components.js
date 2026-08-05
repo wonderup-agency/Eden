@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='book-demo']",
+    importFn: () => import('./components/book-demo.js'),
+  },
+  {
     selector: "[data-component='halo-focus']",
     importFn: () => import('./components/halo-focus.js'),
   },

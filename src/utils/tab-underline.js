@@ -22,12 +22,6 @@ const FILL_OUT = {
   overwrite: true,
 }
 
-// Floor per bar, measured once per arm — `fillTo` runs every frame, so it must never read
-// layout itself.
-const floors = new WeakMap()
-
-const clamp01 = (n) => Math.min(1, Math.max(0, n))
-
 function measureFloor(bar) {
   const w = bar.parentElement?.offsetWidth || 0
   return w ? Math.min(FLOOR_MAX, MIN_PX / w) : FLOOR_FALLBACK
@@ -35,24 +29,16 @@ function measureFloor(bar) {
 
 // Arm a bar for its own fill: at the floor + fully opaque, dropping any fade still running
 // on it (a switch back inside the FILL_OUT window would otherwise leave it half-transparent
-// and fight the per-frame `fillTo`). Re-measures the floor, so a breakpoint change
-// self-corrects on the next switch.
+// and fight the progress tween that follows). Re-measures the floor, so a breakpoint change
+// self-corrects on the next switch. The caller then tweens scaleX floor → 1 over the dwell.
 export function armFill(bar) {
   if (!bar) return
   gsap.killTweensOf(bar)
-  floors.set(bar, measureFloor(bar))
   gsap.set(bar, {
-    scaleX: floors.get(bar),
+    scaleX: measureFloor(bar),
     opacity: 1,
     transformOrigin: 'left center',
   })
-}
-
-// Progress 0→1 mapped above the floor, so the bar is visible from its first frame.
-export function fillTo(bar, progress) {
-  if (!bar) return
-  const f = floors.get(bar) ?? 0
-  gsap.set(bar, { scaleX: f + clamp01(progress) * (1 - f) })
 }
 
 // Full bar, immediately — a state indicator with nothing to time.

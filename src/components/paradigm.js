@@ -1,14 +1,15 @@
 /*
   Component: paradigm · data-component="paradigm"
   Autoplay tabs with a per-number underline (grey track + black fill, active-only) and a
-  per-word text de-blur on each switch. Two modes: VIDEO-DRIVEN (one shared <video>; the
-  playhead crossing each tab's data-video-time cue swaps the text and fills the underline)
-  or the legacy TIMER (text-scaled dwell + image crossfade).
+  per-word text de-blur on each switch. The underline IS the clock: a pausable tween per
+  tab, its dwell = the authored data-video-time cue gap (VIDEO mode, one shared <video>
+  slaved to the active tab) or the text-scaled duration (legacy TIMER mode + image
+  crossfade). Hover pauses that tween only — the video keeps looping.
   CSS → ./styles/paradigm.css (bundled via src/styles.js) · Docs → .claude/rules/components/paradigm.md
 */
 
 import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
-import { armFill, fadeOutFill, fillTo } from '../utils/tab-underline.js'
+import { armFill, fadeOutFill } from '../utils/tab-underline.js'
 
 const { gsap } = window
 
@@ -21,6 +22,16 @@ const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
 const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the tab's message
 const AUTOPLAY_MIN = 4 // floor
 const AUTOPLAY_MAX = 11 // ceiling
+// Playhead slack (video mode). SEEK_SLACK: drift tolerated at a switch before the footage
+// is re-synced — under it the video is left playing through untouched, so with no hover
+// nothing is ever seeked. SEG_SLACK: tolerance on the segment's lower edge (a seek lands
+// a few ms short of the cue).
+const SEEK_SLACK = 0.25
+const SEG_SLACK = 0.05
+// Hover only holds the underline on a real pointer at desktop width. On touch a tap fires
+// `mouseenter` with NO matching `mouseleave`, so tapping a number would freeze the progress
+// for good; `(hover: hover)` also rules out a large tablet that clears the width gate.
+const HOVER_QUERY = '(min-width: 992px) and (hover: hover)'
 
 // Per-tab autoplay seconds from its message word count (timer mode).
 function autoplayDuration(el) {
@@ -110,7 +121,8 @@ function setupRoot(root) {
 
   let index = 0
   let started = false
-  let progressTl = null // timer mode only
+  let progressTl = null // the active tab's progress clock (both modes)
+  let dwellUsed = 0 // seconds the running clock was built with
   let onScreen = false
   let hover = false
   let docVisible = !document.hidden
@@ -142,25 +154,28 @@ function setupRoot(root) {
   const cueStart = (i) => cues[i] || 0
   const cueEnd = (i) => (i < count - 1 ? cues[i + 1] : duration || cueStart(i))
 
-  // Segment the playhead falls into (last cue <= t).
-  const indexForTime = (t) => {
-    let idx = 0
-    for (let i = 0; i < count; i++) if (t >= cueStart(i) - 0.001) idx = i
-    return idx
-  }
-
   const playVideo = () => {
     const p = video.play()
     if (p && typeof p.catch === 'function') p.catch(() => {})
   }
+  const seek = (t) => {
+    try {
+      video.currentTime = t
+    } catch {
+      /* not seekable yet */
+    }
+  }
 
-  // Video mode has no hover pause — hovering the section leaves the video playing.
-  const shouldPlay = () =>
-    started && onScreen && docVisible && (!!video || !hover)
+  // Off-screen / hidden tab pause everything. HOVER pauses only the underline clock: the
+  // video keeps looping, so the visual never freezes on a still frame while the progress —
+  // and with it the tab — holds where the user is reading. Desktop-pointer only (HOVER_QUERY).
+  const canHover = window.matchMedia(HOVER_QUERY)
+  const hoverHolds = () => hover && canHover.matches
+  const visible = () => started && onScreen && docVisible
   const sync = () => {
-    const go = shouldPlay()
-    if (video) go ? playVideo() : video.pause()
-    else if (progressTl) go ? progressTl.play() : progressTl.pause()
+    const on = visible()
+    if (video) on ? playVideo() : video.pause()
+    if (progressTl) on && !hoverHolds() ? progressTl.play() : progressTl.pause()
   }
 
   const activate = (i) => {
@@ -192,43 +207,59 @@ function setupRoot(root) {
     bars.forEach((bar, k) => k !== i && fadeOutFill(bar))
   }
 
-  // Timer mode: underline = autoplay progress, active-only. Only the active number's fill
-  // grows 0→1 over its text-scaled dwell; the others stay empty. Advances on complete.
+  // Dwell for a tab: the authored cue gap in video mode (so the underline still measures the
+  // segment the footage was cut to), the text-scaled duration otherwise.
+  const dwellFor = (i) => {
+    const gap = video ? cueEnd(i) - cueStart(i) : 0
+    return isFinite(gap) && gap > 0 ? gap : autoplayDuration(messages[i])
+  }
+
+  // The underline IS the clock: only the active number's fill grows floor→1 over that tab's
+  // dwell (the others stay empty) and its completion advances the tab. Being a tween is the
+  // point — it can be paused on hover while the video plays on, which reading the playhead
+  // every frame could never do.
   const runProgress = () => {
     progressTl && progressTl.kill()
     setStaticFills(index)
     armFill(bars[index]) // starts at the visible floor, not 0
+    dwellUsed = dwellFor(index)
     progressTl = gsap.timeline({ onComplete: () => goTo((index + 1) % count) })
     progressTl.to(
       bars[index],
-      { scaleX: 1, duration: autoplayDuration(messages[index]), ease: 'none' },
+      { scaleX: 1, duration: dwellUsed, ease: 'none' },
       0
     )
     sync()
   }
 
+  // Re-sync the footage to the tab it belongs to — but only once it has actually drifted,
+  // which only a hover can cause. With no hover the playhead is already at the cue, so the
+  // video is never seeked and plays through as one continuous shot. A seek that IS needed
+  // lands here, hidden under the text transition, instead of out in the open.
+  const syncPlayhead = (i) => {
+    if (!video) return
+    const target = cueStart(i)
+    if (Math.abs(video.currentTime - target) > SEEK_SLACK) seek(target)
+  }
+
   function goTo(i) {
     index = i
     activate(i)
-    if (video) {
-      setStaticFills(i)
-      armFill(bars[i]) // the ticker fills it from the playhead
-    } else {
-      runProgress()
-    }
+    syncPlayhead(i)
+    runProgress()
   }
 
-  // rAF driver (video mode): switch the text when the playhead crosses a cue, and fill the
-  // active tab's underline across the current segment. The ticker (not `timeupdate`, ~4x/s)
-  // keeps the fill smooth through pause/resume and buffering.
-  const tick = () => {
-    if (!started) return
+  // Video mode, rAF: the playhead is slaved to the active tab. While the underline clock is
+  // paused (hover) the video would otherwise run on into the next tab's footage — or wrap to
+  // 0 on the last tab — so it loops the active segment instead. Nothing to do while the clock
+  // runs: the tween owns the switch and the playhead is already in step with it.
+  const holdSegment = () => {
+    if (!started || !progressTl || !progressTl.paused()) return
+    const s = cueStart(index)
+    const e = cueEnd(index)
+    if (!(e > s)) return // last tab before metadata lands: span still unknown
     const t = video.currentTime
-    const i = indexForTime(t)
-    if (i !== index) goTo(i)
-    const s = cueStart(i)
-    const span = cueEnd(i) - s
-    fillTo(bars[i], span > 0 ? (t - s) / span : 0)
+    if (t < s - SEG_SLACK || t >= e) seek(s)
   }
 
   const start = () => {
@@ -236,24 +267,12 @@ function setupRoot(root) {
     started = true
     if (video) resolveCues()
     goTo(0)
-    if (video) sync()
   }
 
   // User-driven switch (click / keyboard) — also kicks off autoplay if not started yet.
   const select = (i) => {
-    const first = !started
+    if (!started && video) resolveCues()
     started = true
-    if (video) {
-      if (first) resolveCues()
-      try {
-        video.currentTime = cueStart(i) // the ticker picks up the text + fill
-      } catch {
-        /* not seekable yet */
-      }
-      goTo(i)
-      sync()
-      return
-    }
     goTo(i)
   }
 
@@ -275,17 +294,24 @@ function setupRoot(root) {
     wireButton(l, () => select(i), 'Go to slide ' + (i + 1))
   )
 
-  // Prep the shared video: muted + inline (autoplay-with-sound is blocked, so the playhead
-  // would never move and the text would never change), LOOP on so it wraps back to tab 1.
+  // Prep the shared video: muted + inline (autoplay-with-sound is blocked, so it would never
+  // play at all), LOOP on so it wraps back to the first segment.
   if (video) {
     video.muted = true
     video.loop = true
     video.playsInline = true
     video.setAttribute('playsinline', '')
     video.preload = 'auto'
-    video.addEventListener('loadedmetadata', resolveCues)
+    video.addEventListener('loadedmetadata', () => {
+      resolveCues()
+      // The last tab's cue gap needs the duration, and an unauthored cue set needs it for all
+      // of them — so if metadata lands after autoplay started, re-run the active tab on the
+      // corrected dwell instead of letting it finish on the placeholder gap.
+      if (started && Math.abs(dwellFor(index) - dwellUsed) > SEEK_SLACK)
+        runProgress()
+    })
     if (isFinite(video.duration) && video.duration > 0) resolveCues()
-    gsap.ticker.add(tick)
+    gsap.ticker.add(holdSegment)
   }
 
   // Visibility / hover / tab-focus gating
@@ -305,21 +331,26 @@ function setupRoot(root) {
   )
   io.observe(root)
 
-  // Timer mode: pause only while hovering the content (text + visual), not the whole
-  // section. Video mode keeps playing on hover.
-  if (!video) {
-    ;[messagesWrap, visualsWrap].forEach((el) => {
-      if (!el) return
-      el.addEventListener('mouseenter', () => {
-        hover = true
-        sync()
-      })
-      el.addEventListener('mouseleave', () => {
-        hover = false
-        sync()
-      })
+  // Hover freezes the underline (both modes). Scoped to the content — text + visual — not the
+  // whole section, so the cursor sitting in the section margins doesn't hold the progress.
+  // Falls back to the root if neither hook exists, so the pause can't silently disappear.
+  const hoverZones = [messagesWrap, visualsWrap].filter(Boolean)
+  ;(hoverZones.length ? hoverZones : [root]).forEach((el) => {
+    el.addEventListener('mouseenter', () => {
+      hover = true
+      sync()
     })
-  }
+    el.addEventListener('mouseleave', () => {
+      hover = false
+      sync()
+    })
+  })
+  // The listeners stay bound across breakpoints — only the gate is reactive — so a `hover`
+  // left true by a tap can't stick once the query stops matching (rotate / resize).
+  canHover.addEventListener('change', () => {
+    hover = false
+    sync()
+  })
   document.addEventListener('visibilitychange', () => {
     docVisible = !document.hidden
     sync()
