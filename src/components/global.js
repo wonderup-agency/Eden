@@ -25,7 +25,7 @@ const ANCHOR_GAP = 16
 // Matched to TERT_HOVER_RATE on purpose (2026-08-05): one rhythm for both animated
 // variants. They stay separate constants so each variant can still be tuned alone, but
 // move them together unless the two tempos are meant to diverge.
-const BEAM_HOVER_RATE = 1.8
+const BEAM_HOVER_RATE = 4
 
 // Samples around the perimeter for the constant-speed re-timing. Higher = finer, longer rule.
 const BEAM_STEPS = 96

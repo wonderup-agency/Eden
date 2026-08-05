@@ -9,7 +9,7 @@
   /* Idle beam lap; hover speed-up is JS (playbackRate). Matched to --btn-tert-speed on
      purpose (2026-08-05) so both animated variants share one idle+hover rhythm — retune
      the two together, or the site gets two different tempos. */
-  --btn-beam-speed: 9s;
+  --btn-beam-speed: 14s;
   --btn-beam-arc: 140deg; /* AVERAGE lit portion of the lap — global.js varies it, see below */
 }
 
