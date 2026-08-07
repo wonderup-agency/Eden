@@ -52,11 +52,16 @@
 
 /* — Tab text: inactive grey, active gradient (background-clip: text), weight normal — */
 [data-component='tabs-stats'] {
-  /* Stops spread across the full glyph run (no early hard stop) so the ramp actually reads. */
+  /* Stops spread across the full glyph run (no early hard stop) so the ramp actually reads.
+     The light stop is capped at #767676 = 4.54:1 on white, the WCAG AA floor for normal text
+     (audit 2026-08-06). It was #9e9e9e, which measured 2.68:1 — failing even the 3:1 large-text
+     threshold, so both the 72px number and the 16px label were below AA at the light end.
+     Any lighter value reopens the failure: the ramp's darkest point is #000 (21:1), so the
+     final stop alone decides whether the whole gradient passes. */
   --tabs-stats-active-gradient: linear-gradient(
     120deg,
     #000000 0%,
-    #9e9e9e 100%
+    #767676 100%
   );
 }
 
@@ -69,7 +74,7 @@
     --tabs-stats-active-gradient: linear-gradient(
       180deg,
       #000000 0%,
-      #9e9e9e 100%
+      #767676 100%
     );
   }
 }

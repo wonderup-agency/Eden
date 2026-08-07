@@ -132,33 +132,27 @@
 /* — Secondary (light frosted glass, no border) —
    Plain secondary is borderless: just the frosted glass + a subtle background lift on
    hover. Add data-gradient-animation="True" on the wrap for the rotating gold-beam ring. */
+/* The gloss is a background LAYER, not a ::before (2026-08-06): the beam variant's hover
+   bloom needs ::before, since ::after is the beam ring. Written as background-color +
+   background-image (not the shorthand) so the hover rules can swap the tint alone without
+   wiping the gloss. */
 .button_main-wrap[data-wf--element-button--variant*='secondary']
   .button_main-element {
   position: relative;
   color: #000000;
-  background: rgba(114, 114, 114, 0.08);
-  -webkit-backdrop-filter: blur(4px) saturate(115%);
-  backdrop-filter: blur(4px) saturate(115%);
-  border-color: transparent;
-}
-/* Gloss */
-.button_main-wrap[data-wf--element-button--variant*='secondary']
-  .button_main-element::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  border-radius: inherit;
-  background: linear-gradient(
+  background-color: rgba(114, 114, 114, 0.08);
+  background-image: linear-gradient(
     180deg,
     rgba(255, 255, 255, 0.12) 0%,
     rgba(255, 255, 255, 0) 50%
   );
-  pointer-events: none;
+  -webkit-backdrop-filter: blur(4px) saturate(115%);
+  backdrop-filter: blur(4px) saturate(115%);
+  border-color: transparent;
 }
 .button_main-wrap[data-wf--element-button--variant*='secondary']:hover
   .button_main-element {
-  background: rgba(114, 114, 114, 0.14);
+  background-color: rgba(114, 114, 114, 0.14);
   transform: translateY(-1px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.4),
@@ -166,11 +160,71 @@
 }
 
 /* — Secondary · rotating-beam variant (data-gradient-animation="True") — */
+.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True'] {
+  /* Hover bloom (TEST 2026-08-06) — tokens for the orbiting wash below. */
+  --btn-sec-bloom-speed: 9s; /* matched to --btn-tert-speed, not to the 14s beam lap */
+  --btn-sec-bloom: 46%; /* bloom radius, % of the rotating square */
+  --btn-sec-bloom-veil-hover: 1;
+  /* GOLD, unlike tertiary's warm grey — on a light surface the bloom only reads if it
+     DARKENS the glass. Tertiary's own cream stops would be invisible over near-white. */
+  --btn-sec-bloom-hot: rgba(212, 165, 74, 0.45);
+  --btn-sec-bloom-warm: rgba(199, 154, 75, 0.22);
+  --btn-sec-wash-hover: rgba(
+    212,
+    165,
+    74,
+    0.08
+  ); /* flat tint under the bloom */
+}
 .button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
   .button_main-element {
   /* Beam spin lives on the element (not ::after) so global.js can grab it via
      el.getAnimations() and only change playbackRate on hover — no position jump. */
   animation: buttonBeamSpin var(--btn-beam-speed) linear infinite;
+  overflow: hidden; /* clips the hover bloom to the pill */
+}
+/* Hover bloom — the same orbiting wash as tertiary, but at opacity 0 until hover, so the
+   idle button is untouched. The orbit is PAUSED at rest (invisible, so nothing to see) and
+   resumes on hover from the angle it stopped at — no jump, and no composited rotate running
+   under an opacity-0 layer on every page. No JS: unlike tertiary there is no hover speed-up,
+   and retimeBeam can't hijack the shared keyframes name because el.getAnimations() without
+   `subtree` never returns a pseudo-element's animation. */
+.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
+  .button_main-element::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 0;
+  width: 200%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: radial-gradient(
+    circle at 50% 20%,
+    var(--btn-sec-bloom-hot) 0%,
+    var(--btn-sec-bloom-warm) calc(var(--btn-sec-bloom) * 0.45),
+    rgba(0, 0, 0, 0) var(--btn-sec-bloom)
+  );
+  opacity: 0;
+  animation: buttonTertiaryOrbit var(--btn-sec-bloom-speed) linear infinite
+    paused;
+  transition: opacity var(--anim-time) var(--anim-ease);
+  pointer-events: none;
+}
+.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']:hover
+  .button_main-element::before,
+.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']:focus-within
+  .button_main-element::before {
+  opacity: var(--btn-sec-bloom-veil-hover);
+  animation-play-state: running;
+}
+/* The label has to outrank the bloom (a z-index:0 pseudo paints above inline content).
+   z-index 1, not 2: the beam ring sits at 2 and keeps painting over the label exactly as
+   before — it's a 1.25px border ring, so it never overlaps the text anyway. */
+.button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
+  :is(.button_main-text, .button_main-icon) {
+  position: relative;
+  z-index: 1;
 }
 /* Beam ring: ONE gold arc rides the perimeter, masked to a thin ring. It fades up from
    nothing over a long tail, peaks near its leading edge and fades back out, leaving the
@@ -212,10 +266,12 @@
   mask-composite: exclude;
   pointer-events: none;
 }
-/* Subtle gold wash on hover (beam variant only) — overrides the grey secondary hover bg. */
+/* Flat gold wash on hover (beam variant only) — overrides the grey secondary hover bg.
+   Dropped from 0.2 to 0.08 (2026-08-06): the bloom above now carries the gold, and stacking
+   it on the old flat tint left the whole button gold with the bloom barely readable. */
 .button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']:hover
   .button_main-element {
-  background: rgba(212, 165, 74, 0.2);
+  background-color: var(--btn-sec-wash-hover);
 }
 /* Hover paints the SAME beam — the only change is speed: JS (global.js) raises the spin's
    playbackRate to BEAM_HOVER_RATE, so the line accelerates from its current angle instead
@@ -230,12 +286,12 @@
    simply snaps, which is an acceptable degradation. */
 @property --btn-tert-warm {
   syntax: '<color>';
-  initial-value: rgba(199, 154, 75, 0.55);
+  initial-value: rgba(188, 182, 172, 0.12);
   inherits: true;
 }
 @property --btn-tert-hot {
   syntax: '<color>';
-  initial-value: rgba(255, 237, 200, 0.9);
+  initial-value: rgba(248, 246, 242, 0.24);
   inherits: true;
 }
 
@@ -254,8 +310,11 @@
   --btn-tert-surface: #0b0b0b;
   --btn-tert-bloom: 46%; /* bloom radius, % of the rotating square */
   --btn-tert-veil: 0.85; /* bloom opacity at rest */
-  --btn-tert-warm: rgba(199, 154, 75, 0.55);
-  --btn-tert-hot: rgba(255, 237, 200, 0.9);
+  /* Warm GREY, not gold (2026-08-06): the bloom is barely tinted now. Both stops are
+     desaturated and low-alpha — the hue is still warm, it just no longer reads as yellow.
+     Keep the @property initial-values above in sync with these two. */
+  --btn-tert-warm: rgba(188, 182, 172, 0.12);
+  --btn-tert-hot: rgba(248, 246, 242, 0.24);
   --btn-tert-ring-warm: rgba(
     255,
     237,
@@ -264,12 +323,13 @@
   ); /* Figma stroke: radial @ 50% */
   --btn-tert-ring-grey: rgba(211, 211, 211, 0.5);
   --btn-tert-glow: 0 0 0 rgba(255, 214, 140, 0); /* outer glow, off at rest */
-  /* Hover targets, read by the :hover rule below */
-  --btn-tert-veil-hover: 1;
-  --btn-tert-warm-hover: rgba(251, 208, 124, 0.75);
-  --btn-tert-hot-hover: rgba(255, 237, 181, 1);
-  --btn-tert-glow-size: 18px;
-  --btn-tert-glow-color: rgba(255, 214, 140, 0.3);
+  /* Hover targets, read by the :hover rule below. Deliberately close to the rest values —
+     the hover is a small lift in warmth, not a colour change. */
+  --btn-tert-veil-hover: 0.95;
+  --btn-tert-warm-hover: rgba(196, 190, 178, 0.18);
+  --btn-tert-hot-hover: rgba(250, 248, 245, 0.34);
+  --btn-tert-glow-size: 6px;
+  --btn-tert-glow-color: rgba(255, 246, 232, 0.06);
   /* The colour transition has to be declared where the value CHANGES (here), not only on
      ::before, or the inherited value snaps before the child can interpolate it. */
   transition:
@@ -394,9 +454,13 @@
     .button_main-element {
     transform: none;
   }
-  /* No spin — the beam variant falls back to a static uniform gold ring */
+  /* No spin — the beam variant falls back to a static uniform gold ring, and its hover
+     bloom stops orbiting. The bloom still FADES IN on hover: colour is not motion, same
+     call as tertiary's colour ramp. */
   .button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
-    .button_main-element {
+    .button_main-element,
+  .button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']
+    .button_main-element::before {
     animation: none;
   }
   .button_main-wrap[data-wf--element-button--variant*='secondary'][data-gradient-animation='True']

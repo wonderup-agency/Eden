@@ -7,8 +7,8 @@
 
 const { gsap } = window
 
-// Minimum visible fill. A bar at true 0 paints nothing, so a tab paused at the very start
-// of its segment (hover pause) reads as "the underline is broken". ~2px of ink instead.
+// Minimum visible fill. A bar at true 0 paints nothing, so a tab whose clock is paused at
+// the very start of its segment reads as "the underline is broken". ~2px of ink instead.
 // Measured in px, not %: 1% of a 40px paradigm number is sub-pixel and still invisible.
 const MIN_PX = 2
 const FLOOR_MAX = 0.35 // never let the stub swallow a very narrow track
@@ -17,6 +17,14 @@ const FLOOR_FALLBACK = 0.01 // track not laid out yet (measures 0)
 // rewinding while the next tab was already filling forwards.
 const FILL_OUT = {
   opacity: 0,
+  duration: 0.35,
+  ease: 'power2.out',
+  overwrite: true,
+}
+// Locked bar: completes to full and stays there.
+const FILL_LOCK = {
+  scaleX: 1,
+  opacity: 1,
   duration: 0.35,
   ease: 'power2.out',
   overwrite: true,
@@ -39,6 +47,16 @@ export function armFill(bar) {
     opacity: 1,
     transformOrigin: 'left center',
   })
+}
+
+// Lock: run the bar to full and leave it there — the click signal that the cycle stops on
+// this tab. Tweened from wherever it stands (so it never rewinds) and short enough to read
+// as feedback rather than as progress.
+// The caller MUST pause its clock first: `overwrite` kills the timeline's own bar tween,
+// and a timeline emptied while still playing fires onComplete on the next tick.
+export function lockFill(bar) {
+  if (!bar) return
+  gsap.to(bar, { ...FILL_LOCK, transformOrigin: 'left center' })
 }
 
 // Full bar, immediately — a state indicator with nothing to time.

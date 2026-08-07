@@ -4,10 +4,12 @@
   point cloud for the visuals: one parametric shape per tab (loop / lattice / flow /
   spiral), each with its own perpetual motion, morphing along the incoming shape's own
   curve on every switch. No PNG sampling — the source <img>s are the static fallback only.
+  Hover never pauses the cycle; clicking a number LOCKS it there with its underline full.
   CSS → ./styles/compouding.css (bundled via src/styles.js) · Docs → .claude/rules/components/compouding.md
 */
 
 import { REVEAL_FROM, REVEAL_TO, splitElement } from '../utils/word-reveal.js'
+import { armFill, clearFill, lockFill } from '../utils/tab-underline.js'
 import {
   SHAPE_ORDER,
   TUNING,
@@ -19,6 +21,7 @@ const { gsap } = window
 
 // ---- Chrome (underline + text) ----
 const OUT_FADE = 0.3 // outgoing text fade
+const LOCKED_CLASS = 'is-locked' // hook for CSS / the Designer — no rule ships with it
 // Autoplay dwell scales with the tab's text length (more words → longer).
 const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
 const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the tab's message
@@ -59,6 +62,14 @@ const STAGE_PAD = 32
 const BIG_DOT_CHANCE = 0.12
 const SMALL_R = [0.3, 0.62]
 const BIG_R = [0.75, 1.3]
+// Smallest RADIUS a dot is ever drawn at, in DEVICE px (divided by the DPR at draw time).
+// Below roughly this the sprite is smaller than the pixel grid it lands on, so the resampler
+// redistributes its ink differently on every frame as it drifts across the grid — the dot's
+// apparent brightness flickers while its motion is perfectly smooth. That reads as the fine
+// grain vibrating, and no amount of shimmer/speed tuning touches it, because it is a
+// rasterisation artefact and not motion. A floored dot spends the size it didn't get on
+// alpha instead (see drawCloud), so it delivers the same ink without ever being sub-pixel.
+const DOT_MIN_PX = 0.75
 // Morph (the transition): per-point staggered "wave" ordered by the TARGET shape's own
 // parametrization (see point-shapes.js `order`) — so each state builds along its curve.
 const MORPH_DURATION = 3.5
@@ -119,7 +130,6 @@ function setupRoot(root) {
   const visuals = gsap.utils.toArray(
     root.querySelectorAll('[data-paradigm-visual]')
   )
-  const messagesWrap = root.querySelector('[data-paradigm-messages]')
   const visualsWrap = root.querySelector('.tabs-compouding_visual-wrapper')
 
   const count = Math.min(titles.length, links.length, visuals.length)
@@ -406,6 +416,8 @@ function setupRoot(root) {
     const inkFrom = morphing ? TUNING[fromState.kind]?.ink || UNIT_INK : inkTo
     const inkDR = inkTo[0] - inkFrom[0]
     const inkDA = inkTo[1] - inkFrom[1]
+    // The context is scaled by the DPR, so the device-px floor is that many CSS px here.
+    const dotMin = DOT_MIN_PX / (cdpr || 1)
     const fade = introActive ? introFade.v : 1
     const ispan = 1 + INTRO_STAGGER
     const icovX = coverX * INTRO_SCATTER
@@ -487,7 +499,18 @@ function setupRoot(root) {
       if (al < ALPHA_SKIP) continue // invisible: the draw is the expensive half of the frame
       const sx = cx + (bx + offX[i]) * rscale
       const sy = cy + (by + offY[i]) * rscale
-      const r = pointR[i] * rm * (1 + glow * 0.7) * (inkFrom[0] + inkDR * lpv)
+      let r = pointR[i] * rm * (1 + glow * 0.7) * (inkFrom[0] + inkDR * lpv)
+      // Never draw sub-pixel (see DOT_MIN_PX): hold the floor and pay for it in alpha. At
+      // this scale a dot's ink is alpha × area, so k² keeps the weight it would have had —
+      // what it loses is the per-frame resampling variance, i.e. the flicker. The POSITION
+      // stays fractional: rounding it to the grid would trade the flicker for a worse
+      // artefact, points teleporting a pixel at a time instead of gliding.
+      if (r < dotMin) {
+        const k = r / dotMin
+        al *= k * k
+        r = dotMin
+        if (al < ALPHA_SKIP) continue
+      }
       cctx.globalAlpha = al > 1 ? 1 : al
       cctx.drawImage(sprite, sx - r, sy - r, r * 2, r * 2)
     }
@@ -664,10 +687,13 @@ function setupRoot(root) {
   let started = false
   let progressTl = null
   let onScreen = false
-  let hover = false
+  let lockedIndex = -1 // >= 0 → the user clicked this tab and the cycle holds on it
   let docVisible = !document.hidden
 
-  const shouldPlay = () => started && onScreen && !hover && docVisible
+  const isLocked = () => lockedIndex >= 0
+  // Off-screen / hidden tab pause the cycle. A locked tab pauses only the clock — the point
+  // cloud keeps its perpetual motion, so the visual never freezes on the held tab.
+  const shouldPlay = () => started && onScreen && !isLocked() && docVisible
   const sync = () => {
     if (!progressTl) return
     shouldPlay() ? progressTl.play() : progressTl.pause()
@@ -696,22 +722,18 @@ function setupRoot(root) {
 
   // Every non-active number's fill stays empty (inactive).
   const setStaticFills = (i) => {
-    bars.forEach((bar, k) => {
-      if (k === i) return
-      gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
-    })
+    bars.forEach((bar, k) => k !== i && clearFill(bar))
   }
 
   // Underline = autoplay progress, active-only: only the active number's fill grows
-  // 0→1 over its text-scaled dwell; the others stay empty. Advances on complete.
+  // floor→1 over its text-scaled dwell; the others stay empty. Advances on complete.
   const runProgress = () => {
     progressTl && progressTl.kill()
     setStaticFills(index)
+    armFill(bars[index]) // starts at the visible floor, not 0
     progressTl = gsap.timeline({ onComplete: () => goTo((index + 1) % count) })
-    const bar = bars[index]
-    gsap.set(bar, { scaleX: 0, transformOrigin: 'left center' })
     progressTl.to(
-      bar,
+      bars[index],
       {
         scaleX: 1,
         duration: autoplayDuration(messages[index]),
@@ -737,9 +759,33 @@ function setupRoot(root) {
     goTo(0)
   }
 
+  // Click-to-lock: the cycle holds on the clicked tab, its underline full. Pause the clock
+  // BEFORE filling the bar — lockFill overwrites the timeline's own bar tween, and a
+  // timeline emptied while still playing fires onComplete on the next tick.
+  const markLocked = () => {
+    root.classList.toggle(LOCKED_CLASS, isLocked())
+    links.forEach((l, k) => l.classList.toggle(LOCKED_CLASS, k === lockedIndex))
+  }
+  const lock = (i) => {
+    lockedIndex = i
+    progressTl?.pause()
+    markLocked()
+    lockFill(bars[i])
+  }
+  const unlock = () => {
+    lockedIndex = -1
+    markLocked()
+    runProgress() // rebuilds the clock from this tab; armFill resets the bar to its floor
+  }
+
+  // Click / keyboard: jump to that tab AND lock it; activating the locked tab releases it.
   const select = (i) => {
+    if (lockedIndex === i) return unlock()
     started = true
-    goTo(i)
+    // Already on this tab (and running): lock it in place — re-running goTo would replay the
+    // word reveal and the cloud morph for nothing.
+    if (i !== index || !progressTl) goTo(i)
+    lock(i)
   }
 
   const wireButton = (el, onActivate, label) => {
@@ -761,7 +807,7 @@ function setupRoot(root) {
     .slice(0, count)
     .forEach((l, i) => wireButton(l, () => select(i), 'Go to slide ' + (i + 1)))
 
-  // Visibility / hover / tab-focus gating (drives autoplay AND the cloud loop).
+  // Visibility / tab-focus gating (drives autoplay AND the cloud loop).
   const io = new window.IntersectionObserver(
     (entries) => {
       onScreen = entries[0].isIntersecting
@@ -784,25 +830,13 @@ function setupRoot(root) {
   )
   io.observe(root)
 
-  // Pause autoplay only while hovering the content (text + visual).
-  ;[messagesWrap, visualsWrap].forEach((el) => {
-    if (!el) return
-    el.addEventListener('mouseenter', () => {
-      hover = true
-      sync()
-    })
-    el.addEventListener('mouseleave', () => {
-      hover = false
-      sync()
-    })
-  })
   document.addEventListener('visibilitychange', () => {
     docVisible = !document.hidden
     sync()
   })
 
-  // Cloud hover-nebula over the visual stage (desktop only). Separate from the autoplay
-  // pause above — hovering loosens the cloud but doesn't need to stop the morph.
+  // Cloud hover-nebula over the visual stage (desktop only) — the one thing hover still
+  // does here: it loosens the cloud, it never touches the cycle.
   if (cloudEnabled) {
     visualsWrap.addEventListener('pointermove', (e) => {
       if (!desktopHover.matches || !cscale) return

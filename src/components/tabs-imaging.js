@@ -3,17 +3,18 @@
   Autoplay tabs — the underline IS the clock: a pausable tween per tab whose dwell is that
   tab's own VIDEO duration (text-scaled when it has no video), and whose completion advances
   the tab. On switch the incoming image wipes open (clip-path) while its content de-blurs in.
-  Starts on scroll-in; hover pauses the underline only — the video keeps looping, so the tab
-  holds without the frame freezing. Click / keyboard also switch.
+  Starts on scroll-in; hover never pauses it. Clicking a tab LOCKS the cycle there with its
+  underline full, until that tab is clicked again — its video keeps looping meanwhile.
   CSS → ./styles/tabs-imaging.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-imaging.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
-import { armFill, clearFill } from '../utils/tab-underline.js'
+import { armFill, clearFill, lockFill } from '../utils/tab-underline.js'
 
 const { gsap } = window
 
 const ACTIVE_CLASS = 'is-active'
+const LOCKED_CLASS = 'is-locked' // hook for CSS / the Designer — no rule ships with it
 // Fallback autoplay dwell (tabs with no video) — scales with the tab's text length.
 const AUTOPLAY_BASE = 3.5 // seconds baseline per tab
 const AUTOPLAY_PER_WORD = 0.35 // extra seconds per word of the panel's text
@@ -22,10 +23,6 @@ const AUTOPLAY_MAX = 11 // ceiling
 // Dwell correction threshold: how far the real video duration must differ from the fallback
 // the clock started on before the active tab is re-run on it.
 const DWELL_SLACK = 0.25
-// Hover only holds the underline on a real pointer at desktop width. On touch a tap fires
-// `mouseenter` with NO matching `mouseleave`, so tapping a tab would freeze the progress for
-// good; `(hover: hover)` also rules out a large tablet that clears the width gate.
-const HOVER_QUERY = '(min-width: 992px) and (hover: hover)'
 
 // Image: vertical clip-path wipe (top→bottom). Flip the inset() sides to reverse.
 const IMG_CLIP_HIDDEN = 'inset(0% 0% 100% 0%)' // clipped from the bottom
@@ -107,7 +104,7 @@ function setupTabs(root) {
   let dwellUsed = 0 // seconds the running clock was built with
   let activeVideo = null
   let started = false // autoplay kicked off (section reached)
-  let hover = false
+  let lockedIndex = -1 // >= 0 → the user clicked this tab and the cycle holds on it
   let onScreen = false
   // Set the instant a tab takes over, unlike activeIndex which lags until the switch
   // animation completes — a late `loadedmetadata` has to know which tab is really current.
@@ -123,7 +120,7 @@ function setupTabs(root) {
 
   // Prep each tab video: muted inline autoplay (autoplay-with-sound is blocked, so it would
   // never play at all), LOOP on — the underline owns the dwell now, so a video whose tab is
-  // being held on hover has to keep going rather than stop dead on its last frame.
+  // locked has to keep going rather than stop dead on its last frame.
   const metaHandlers = []
   parts.forEach((part, i) => {
     const v = part.video
@@ -139,9 +136,10 @@ function setupTabs(root) {
     v.removeAttribute('autoplay')
     v.pause()
     // The duration IS this tab's dwell, so a clock started before metadata landed is running
-    // on the text-scaled placeholder — re-run it on the real duration.
+    // on the text-scaled placeholder — re-run it on the real duration. Never while locked:
+    // there's no running clock to correct, and re-running would reset the full bar.
     const onMeta = () => {
-      if (!started || i !== segIndex) return
+      if (!started || isLocked() || i !== segIndex) return
       if (Math.abs(dwellFor(i) - dwellUsed) > DWELL_SLACK) startProgress(i)
     }
     v.addEventListener('loadedmetadata', onMeta)
@@ -176,21 +174,19 @@ function setupTabs(root) {
     bars.forEach((bar, k) => k !== index && clearFill(bar))
   }
 
-  // Off-screen / hidden tab pause everything. HOVER pauses only the underline clock: the
-  // video keeps looping, so the panel never freezes on a still frame while the progress —
-  // and with it the tab — holds where the user is reading. Desktop-pointer only (HOVER_QUERY).
-  const canHover = window.matchMedia(HOVER_QUERY)
-  const hoverHolds = () => hover && canHover.matches
+  // Off-screen / hidden tab pause everything. A LOCKED tab pauses only the underline clock:
+  // its video keeps looping (video.loop), so the panel never freezes on the tab the user
+  // chose to hold.
+  const isLocked = () => lockedIndex >= 0
   const sync = () => {
     const on = started && onScreen && !document.hidden
     if (activeVideo) on ? playVideo(activeVideo) : activeVideo.pause()
-    if (progressTl)
-      on && !hoverHolds() ? progressTl.resume() : progressTl.pause()
+    if (progressTl) on && !isLocked() ? progressTl.resume() : progressTl.pause()
   }
 
   // The underline IS the clock: the active bar grows floor→1 over that tab's dwell and its
-  // completion advances the tab. Being a tween is the point — it can be paused on hover while
-  // the video plays on, which reading the playhead every frame could never do.
+  // completion advances the tab. Being a tween is the point — it can be paused by a lock
+  // while the video plays on, which reading the playhead every frame could never do.
   function startProgress(index) {
     if (progressTl) {
       progressTl.kill()
@@ -247,9 +243,8 @@ function setupTabs(root) {
     inLink.setAttribute('aria-selected', 'true')
     inLink.setAttribute('tabindex', '0')
 
-    // Start the fill immediately (in parallel with the reveal). Always create the tween
-    // — even when hovered — so a click while the cursor is over the section still leaves
-    // a live tween to resume on mouseleave; sync() pauses it right away if needed.
+    // Start the fill immediately (in parallel with the reveal); sync() pauses it right away
+    // if the section is off-screen.
     if (started) startProgress(index)
 
     const inParts = parts[index]
@@ -305,6 +300,40 @@ function setupTabs(root) {
   const goTo = (index) =>
     reduceMotion.matches ? switchTabInstant(index) : switchTab(index)
 
+  // Click-to-lock: the cycle holds on the clicked tab, its underline full. Pause the clock
+  // BEFORE filling the bar — lockFill overwrites the timeline's own bar tween, and a
+  // timeline emptied while still playing fires onComplete on the next tick.
+  const markLocked = () => {
+    root.classList.toggle(LOCKED_CLASS, isLocked())
+    links.forEach((l, k) => l.classList.toggle(LOCKED_CLASS, k === lockedIndex))
+  }
+  const lock = (index) => {
+    lockedIndex = index
+    progressTl?.pause()
+    markLocked()
+    lockFill(bars[index])
+    sync() // the tab's video keeps looping
+  }
+  // Release: rebuild the clock from this tab (armFill resets the bar to its visible floor,
+  // startProgress restarts the video from 0).
+  const unlock = () => {
+    const index = lockedIndex
+    lockedIndex = -1
+    markLocked()
+    started ? startProgress(index) : sync()
+  }
+
+  // Click / keyboard: switch to that tab AND lock it; activating the locked tab releases it.
+  // Bails while a switch is animating, so a dropped switch can't leave the bar locked on one
+  // tab and the panel on another.
+  const activateTab = (index) => {
+    if (reduceMotion.matches) return switchTabInstant(index)
+    if (isAnimating) return
+    if (lockedIndex === index) return unlock()
+    if (index !== activeIndex) goTo(index)
+    lock(index)
+  }
+
   // Initial state: first tab visible, rest hidden (before paint, no CLS). Fills start
   // empty; the active underline fills once autoplay starts (on scroll-in).
   links.forEach((link) => link.classList.remove(ACTIVE_CLASS))
@@ -320,17 +349,15 @@ function setupTabs(root) {
   })
   activeIndex = 0
 
-  // Click — switch and (re)start the autoplay cycle from there.
+  // Click — switch to that tab and lock the cycle on it (a second click releases it).
   const onClick = links.map((link, i) => {
-    const handler = () => {
-      if (i === activeIndex) return
-      goTo(i)
-    }
+    const handler = () => activateTab(i)
     link.addEventListener('click', handler)
     return handler
   })
 
-  // Keyboard — arrow/Home/End move focus + activate; Enter/Space activate.
+  // Keyboard — arrow/Home/End move focus + activate; Enter/Space activate. Every explicit
+  // activation locks, same as a click.
   const onKeydown = (e) => {
     const current = links.indexOf(document.activeElement)
     if (current === -1) return
@@ -343,36 +370,19 @@ function setupTabs(root) {
     else if (e.key === 'End') next = count - 1
     else if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault()
-      goTo(current)
+      activateTab(current)
       return
     } else return
     e.preventDefault()
     links[next].focus()
-    goTo(next)
+    activateTab(next)
   }
   root.addEventListener('keydown', onKeydown)
 
-  // Hover pause / resume + tab-visibility gating (skipped under reduced motion).
-  const onEnter = () => {
-    hover = true
-    sync()
-  }
-  const onLeave = () => {
-    hover = false
-    sync()
-  }
-  // The listeners stay bound across breakpoints — only the gate is reactive — so a `hover`
-  // left true by a tap can't stick once the query stops matching (rotate / resize).
-  const onHoverQuery = () => {
-    hover = false
-    sync()
-  }
+  // Tab-visibility gating (skipped under reduced motion).
   const onVisibility = () => sync()
   let io = null
   if (!reduceMotion.matches) {
-    root.addEventListener('mouseenter', onEnter)
-    root.addEventListener('mouseleave', onLeave)
-    canHover.addEventListener('change', onHoverQuery)
     document.addEventListener('visibilitychange', onVisibility)
     // Autoplay starts when the section enters the viewport; pauses while off-screen.
     io = new window.IntersectionObserver(
@@ -380,7 +390,11 @@ function setupTabs(root) {
         onScreen = entries[0].isIntersecting
         if (onScreen && !started) {
           started = true
-          startProgress(activeIndex)
+          // A tab clicked before the section was ever reached is already locked — build its
+          // clock and re-apply the lock, so it holds instead of starting to cycle.
+          const first = isLocked() ? lockedIndex : activeIndex
+          startProgress(first)
+          if (isLocked()) lock(first)
         } else {
           sync()
         }
@@ -407,9 +421,6 @@ function setupTabs(root) {
       })
       if (io) io.disconnect()
       root.removeEventListener('keydown', onKeydown)
-      root.removeEventListener('mouseenter', onEnter)
-      root.removeEventListener('mouseleave', onLeave)
-      canHover.removeEventListener('change', onHoverQuery)
       document.removeEventListener('visibilitychange', onVisibility)
       links.forEach((link, i) => link.removeEventListener('click', onClick[i]))
     },

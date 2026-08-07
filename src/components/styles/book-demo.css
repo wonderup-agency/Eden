@@ -8,15 +8,28 @@
   and the reduced-motion query. Docs → .claude/rules/components/book-demo.md
 */
 
-/* — Gold focus sweep: the field lights the underline CHILD, so the rule can
-     only be written here. Out = fade in place, then snap scaleX back while
-     invisible (native style), same as tab-underline.js. — */
+/* ===== FOCUS UNDERLINE · bundle-owned (2026-08-06) =====
+   Was a gold gradient + glow sweeping scaleX 0→1 over 0.55s. Now a plain ink bar that
+   appears at full width — the sweep read as a progress bar on a field that isn't timing
+   anything, and the gold competed with the buttons for the accent.
+   The base look (gradient, glow, scaleX(0)) is a NATIVE Webflow style, so it's overridden
+   here rather than edited in the Designer: this sheet loads after Webflow's and ties on
+   specificity, so it wins. Same trade-off as the dropdown panel below — editing these
+   properties in the Designer no longer has any effect. */
+
+/* — No transform at all: the bar is full width from the start and only opacity moves,
+     so nothing can rewind or sweep in either direction. — */
+.book-demo_underline {
+  background: var(--base--black, #000);
+  box-shadow: none;
+  transform: none;
+  transition: opacity 0.12s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* — The field lights the underline CHILD, so this rule can only be written here.
+     `:focus-within`, not `:focus-visible`, so a click lights it too. — */
 .book-demo_control:focus-within .book-demo_underline {
   opacity: 1;
-  transform: scaleX(1);
-  transition:
-    opacity 0.12s cubic-bezier(0.4, 0, 0.2, 1),
-    transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ===== DROPDOWN PANEL · owned by the BUNDLE (moved here 2026-08-05) =====

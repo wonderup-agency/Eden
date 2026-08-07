@@ -192,7 +192,20 @@ export const TUNING = {
     // throwing its arms out). Negative reverses it to inward. Either way it never ends —
     // both ends of the path are fade-gated (`edge` + `coreFade`), so the recycle is
     // invisible in both directions; only the reading changes.
-    speed: 0.022, // full traversals per second (also the apparent spin)
+    // Raised from 0.022 (2026-08-06 audit). At 0.022 a full traversal took ~45s, against
+    // `loop`'s ~16s and `flow`'s ~12s — the galaxy was 2.8-3.9× slower than its siblings and
+    // read as a low framerate. It was not: measured in the live section it holds 75 fps with
+    // ZERO frames over 16.7ms (worst 14.4ms, 2.4ms of headroom). So the complaint was speed,
+    // never fps — don't reach for the render constants if it comes up again.
+    // Raised again 2026-08-06, this time to MATCH `loop`: the brief was "same rhythm as the
+    // infinite". Matching the lap time would have been the wrong reading — the two paths are
+    // different lengths, so equal laps still leave the galaxy visibly slower. Matched on
+    // apparent speed instead, measured as the mean distance a point covers per second at the
+    // stage scale: loop 76 px/s, spiral was 48 px/s at 0.045. 0.074 lands on 76 px/s (lap
+    // ~13.5s against loop's ~16.1s — the shorter lap IS the match).
+    // ⚠ Re-measure rather than scaling the number if `tilt` moves: the fit and the path
+    // length both change with it.
+    speed: 0.074, // full traversals per second (also the apparent spin) — ~13.5s per lap
     // Which way the arm winds, independent of `speed` (= where the points travel). Mirrors
     // the angle only, so the disc keeps the `tilt` / `lean` inclination authored below.
     // Like those two it reads live but moves the shape's EXTENTS, so the stage fit only
@@ -204,8 +217,27 @@ export const TUNING = {
     // foreshortens with the disc rather than staying a constant-width ribbon.
     // They read live, but they change the shape's extents — so the stage fit only catches
     // up on the next `makeShape` (the playground rebuilds on these two).
-    tilt: 0.74,
+    // Lowered from 0.74 (2026-08-06) to read as a disc seen from the side rather than a
+    // slightly squashed circle: aspect 1.80 → 2.44. It also renders BIGGER, not smaller —
+    // past the stage's own aspect the fit switches from height- to width-limited (760×420:
+    // scale 256 → 278).
+    tilt: 0.5,
     lean: -22, // degrees; negative tips the major axis UP to the right
+    // [sizeMul, alphaMul]: how much bigger + darker the NEAR face of the disc draws than the
+    // far one, either side of the mid-plane. `[0, 0]` = the flat ellipse this shape was until
+    // 2026-08-06 — tilt alone only foreshortens, and a foreshortened ellipse has no near or
+    // far, which is why the disc read as a flat shape however far it was tipped.
+    // Signed around the mid-plane, NOT an attenuation of the far face: the bulge sits at
+    // z ≈ 0 and carries most of the ink, so dimming outward from the near face just
+    // lightened the whole galaxy (measured: total ink −42%, near/far only 1.5×). Centred, it
+    // holds the weight (ink 964 vs 962) at 2.2× near/far.
+    // Scaled by the inclination (see spiralDepth), so it follows `tilt` instead of needing a
+    // retune with it. Reads live — it only touches out[2]/out[3], never a position, so the
+    // extents and the stage fit are untouched by it, and the renderer already interpolates
+    // both per point across a morph, so it can't snap on a tab switch.
+    // The size half is capped by grain, not by taste: at 0.6 the biggest dot reaches ~3.2px,
+    // which is where the shipping galaxy already sat. Push the contrast with the ALPHA half.
+    depth: [0.6, 0.85],
     // The arms are granulated BANDS, not lines — this is what separates "galaxy of dust"
     // from "spiral drawn with dots". Hard-capped by the angular constraint above.
     band: 0.18, // thickness scales with radius → broad outside, tight inside
@@ -379,6 +411,19 @@ function spiralLean(deg) {
     SPIRAL_LEAN.s = Math.sin((deg * Math.PI) / 180)
   }
   return SPIRAL_LEAN
+}
+
+// How much depth the inclination actually exposes: `tilt` is the cosine of the disc's
+// angle, so this is its sine. It ties the depth cue to the tilt on purpose — a face-on disc
+// (tilt 1) has no near or far face, and shading one there would read as a lighting bug.
+const NO_DEPTH = [0, 0]
+const SPIRAL_DEPTH = { tilt: NaN, k: 0 }
+function spiralDepth(tilt) {
+  if (tilt !== SPIRAL_DEPTH.tilt) {
+    SPIRAL_DEPTH.tilt = tilt
+    SPIRAL_DEPTH.k = Math.sqrt(Math.max(0, 1 - tilt * tilt))
+  }
+  return SPIRAL_DEPTH.k
 }
 
 const SPIRAL_RADIUS = { growth: -1, t: null }
@@ -593,8 +638,9 @@ function buildSpiral(n, rng) {
       const r = lutAt(spiralRadius(T.growth), 256, pw) // r = 1 on the outer turn
       const rr = r + v[i] * (T.band * r + T.bandMin)
       // Inclined disc: foreshorten the minor axis, then rotate the ellipse.
+      const sth = Math.sin(th)
       const dx = rr * Math.cos(th)
-      const dy = rr * Math.sin(th) * T.tilt
+      const dy = rr * sth * T.tilt
       const L = spiralLean(T.lean)
       out[0] = dx * L.c - dy * L.s
       out[1] = dx * L.s + dy * L.c
@@ -608,6 +654,18 @@ function buildSpiral(n, rng) {
       // Fades the arm out into the centre. Multiplied here rather than folded into out[2]
       // above so it survives the clamp applyInner does.
       out[2] *= smoothstep(0, T.coreFade, r)
+      // Depth: the half of the disc turned TOWARD the viewer draws bigger and darker, the
+      // half turned away smaller and fainter. `rr * sth` is the point's own out-of-plane
+      // coordinate — read pre-lean, since the lean rotates the picture inside its own plane
+      // and so cannot move anything nearer or further — normalized by the furthest a point
+      // can sit from the centre. Signed around the mid-plane rather than an attenuation, so
+      // the DENSE BULGE (which sits at z ≈ 0 and carries most of the ink) keeps its weight:
+      // dimming outward from the near face instead just lightened the whole galaxy.
+      // Lands after applyInner's clamp for the same reason coreFade does.
+      const D = T.depth || NO_DEPTH
+      const dep = (spiralDepth(T.tilt) * (rr * sth)) / (1 + T.band + T.bandMin)
+      out[3] *= 1 + D[0] * dep
+      out[2] *= 1 + D[1] * dep
     },
   }
 }
