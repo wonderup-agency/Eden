@@ -1,18 +1,19 @@
-/* ===== IMPACT-MAP · animated Americas map: perpetual odometer % synced with a clustered gold-dot reveal ===== */
+/* ===== IMPACT-MAP · Americas night-lights map (canvas) + perpetual odometer % ===== */
 
 [data-component='impact-map'] {
-  /* — Tokens (Figma) — */
-  --im-bg: #000000; /* frame fill: Black */
-  --im-land: #333333; /* country fill: 333333 */
-  --im-land-stroke: rgba(
+  /* — Tokens — read by impact-map.js at init (readPalette) and used to paint the
+     canvas, so colour stays tunable here. Only hex and rgb()/rgba() are parsed. — */
+  --im-bg: #000000; /* frame fill behind the canvas */
+  --im-ocean: #03060b; /* water — near-black, the section card is #000 */
+  --im-land: #0a0a0a; /* land, barely above the water: a silhouette, not a shape */
+  --im-border: rgba(
     232,
     226,
     210,
-    0.4
-  ); /* country borders: Beige, weight 0.1 */
-  --im-dot-glow: rgba(247, 201, 72, 0.5); /* dot drop shadow: gold @ 50% */
-  --im-label: rgba(255, 255, 255, 0.3);
-  --im-country: rgba(255, 255, 255, 0.4); /* country name labels */
+    0.55
+  ); /* country borders + coastline (Beige) */
+  --im-light: #ffcf5a; /* city light — yellow gold, the colour of the whole field */
+  --im-hot: #fff0c2; /* only the densest cores clip toward this (see flushBuckets) */
 }
 
 /* — Counter (value beside the caption) — */
@@ -20,88 +21,30 @@
   font-weight: 800;
 }
 
-/* — Stage: reserves aspect-ratio so there is zero CLS while the SVG loads — */
-/* MUST match the viewBox impact-map.js picks for the same breakpoint (VIEW_DESKTOP /
-   VIEW_MOBILE) — a mismatch letterboxes the map inside its own stage. */
+/* — Stage: reserves aspect-ratio so there is zero CLS while the geometry loads — */
+/* MUST match the BBOX span in impact-map.js (91° × 106°). The projection is fitted
+   to that box, so a different ratio letterboxes the map inside its own stage. Same
+   framing on every breakpoint — the bbox is already portrait. */
 [data-impact-stage] {
   position: relative;
   width: 100%;
-  aspect-ratio: 960 / 600; /* landscape — the Americas sit centered, black margins at the sides */
+  aspect-ratio: 91 / 106;
   background: var(--im-bg);
   border-radius: 0.75rem;
   overflow: hidden;
 }
-
-/* Mobile: taller portrait frame matched to the mobile bbox's 97°×130° aspect (the Pacific
-   crop), so the continent is drawn ~18% larger per degree and there is barely any black bar
-   left. Labels get a small bump: they're in viewBox units, so at 620 wide they render ~35%
-   smaller in px than on the 960 desktop frame. */
-@media (max-width: 767px) {
-  [data-impact-stage] {
-    aspect-ratio: 620 / 830;
-  }
-}
-[data-impact-stage] svg {
+.impact-map_canvas {
   display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
-}
-
-/* — Map geometry — */
-/* Every American country shares the same uniform land style. */
-[data-impact-land] path {
-  fill: var(--im-land);
-  stroke: var(--im-land-stroke);
-  stroke-width: 0.4;
-  stroke-linejoin: round;
-}
-
-/* Country name labels, sitting behind the dots — */
-[data-impact-labels] text {
-  fill: var(--im-label);
-  font-family: 'Inter', system-ui, sans-serif;
-  text-anchor: middle;
-  dominant-baseline: middle;
-}
-[data-impact-labels] .im-country {
-  fill: var(--im-country);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-}
-/* Mobile viewBox is 620 wide (vs 960), so the same font-size renders ~35% smaller in px. */
-@media (max-width: 767px) {
-  [data-impact-labels] .im-country {
-    font-size: 11px;
-  }
-}
-
-/* — Dots: each is a <g> (halo + core); GSAP fades the group in and twinkles it — */
-[data-impact-dots] > g {
-  opacity: 0;
-  transition: filter 0.3s ease;
-}
-/* Soft bloom behind the dot — the Figma drop shadow, as a real radial.
-   pointer-events:all makes the whole disc hoverable (even its transparent edge). */
-[data-impact-dots] .im-halo {
-  fill: url(#im-glow-grad);
-  pointer-events: all;
-}
-/* Bright core: hot-white centre → gold, plus a tight glow for the spread. */
-[data-impact-dots] .im-core {
-  fill: url(#im-dot-grad);
-  filter: drop-shadow(0 0 2px var(--im-dot-glow));
-}
-/* Hover: brighten the whole dot (glow + core) — CSS only, so it rides on top of
-   the GSAP opacity twinkle without fighting it. */
-[data-impact-dots] > g:hover {
-  filter: brightness(1.7) saturate(1.12);
 }
 
 /* — Odometer (rolling digits) — */
 .impact-map_odo {
   /* Cell taller than the glyph so the digit is centred by leading and never
-     clips top/bottom; the reel advances by one cell (percentage) per digit. */
+     clips top/bottom; the reel advances by one cell per digit. */
   --odo-h: 1.3em;
   display: inline-flex;
   align-items: baseline;
@@ -154,7 +97,7 @@
   border: 0;
 }
 
-/* Reduced motion: no rolling / no fade — final state shown instantly (JS also guards). */
+/* Reduced motion: no rolling digits, no dot cycle — JS paints one populated frame. */
 @media (prefers-reduced-motion: reduce) {
   .impact-map_odo .odo-reel {
     will-change: auto;
