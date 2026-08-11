@@ -5,12 +5,20 @@
   alive when idle; hover loosens it (desktop only). No autoplay — click / hover / keyboard
   switch, and the active tab's underline snaps to full as a state indicator.
   Canvas 2D, no 3D lib. Fallback (no GSAP / reduced motion / CORS-tainted): static image.
-  Below 767px it isn't tabs at all — the stats stack as text → graphic pairs (setupStacked).
+  Below 767px it isn't tabs at all — the stats stack as text → graphic pairs, each with its own
+  always-alive cloud that only ticks while it's on screen (setupStacked).
   CSS → ./styles/tabs-stats.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-stats.md
 */
 
 import { fadeOutFill, fillFull } from '../utils/tab-underline.js'
 import { MOBILE_Q } from '../utils/tabs-accordion.js'
+import {
+  createStillCloud,
+  loadImage,
+  makeSprite,
+  mulberry32,
+  sampleImage,
+} from '../utils/point-cloud.js'
 
 const { gsap } = window
 
@@ -18,9 +26,10 @@ const ACTIVE_CLASS = 'is-active'
 
 // ---- Point cloud ----
 const TARGET_POINTS = 7000 // points per state — same for all, for a 1:1 morph
-const SAMPLE_MAX = 560 // longest edge the source PNG is sampled at
-const ALPHA_MIN = 28 // min source alpha to count a pixel as "ink"
-const LUMA_MAX = 245 // opaque PNGs: count pixels darker than this
+// Stacked mobile: one cloud per stat, so the budget is per cloud — and only the one on screen
+// runs, which keeps the frame cheaper than the single desktop cloud.
+const STACKED_POINTS = 2500
+const STACKED_FIT = 0.94 // the canvas IS the image's box, so the ink can fill more of it
 const MORPH_DURATION = 1.25
 const MORPH_EASE = 'power2.inOut'
 // Active-tab underline: the incoming bar appears FULL immediately (nothing is being timed
@@ -55,93 +64,8 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 // Hover nebula is desktop-only (reactive gate, no re-binding).
 const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
 
-// Deterministic RNG so the subsample is stable across reloads.
-function mulberry32(seed) {
-  return function () {
-    seed |= 0
-    seed = (seed + 0x6d2b79f5) | 0
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed)
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
-  }
-}
-
-// Load an image with CORS enabled so its pixels can be read (getImageData).
-function loadImage(src) {
-  return new Promise((resolve) => {
-    const img = new window.Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => resolve(img)
-    img.onerror = () => resolve(null)
-    img.src = src
-  })
-}
-
-// Sample an image's "ink" pixels into n points (x/y/alpha + bbox). Throws if CORS-tainted.
-function sampleImage(img, n, rng) {
-  const scale = SAMPLE_MAX / Math.max(img.width, img.height)
-  const w = Math.max(1, Math.round(img.width * scale))
-  const h = Math.max(1, Math.round(img.height * scale))
-  const c = document.createElement('canvas')
-  c.width = w
-  c.height = h
-  const ctx = c.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(img, 0, 0, w, h)
-  const data = ctx.getImageData(0, 0, w, h).data // throws if tainted
-
-  const cand = [] // [x, y, intensity, ...]
-  for (let py = 0; py < h; py++) {
-    for (let px = 0; px < w; px++) {
-      const i = (py * w + px) * 4
-      const alpha = data[i + 3]
-      if (alpha < ALPHA_MIN) continue
-      const luma = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114
-      // transparent PNG: alpha is the ink. opaque PNG: dark pixels are ink.
-      const isInk = alpha > 200 ? luma < LUMA_MAX : true
-      if (!isInk) continue
-      const intensity = Math.min(1, (alpha / 255) * (1 - luma / 255) * 2 + 0.25)
-      cand.push(px, py, intensity)
-    }
-  }
-
-  const x = new Float32Array(n)
-  const y = new Float32Array(n)
-  const a = new Float32Array(n)
-  const m = cand.length / 3
-  if (m === 0) return { x, y, a, bbox: { minX: 0, minY: 0, maxX: w, maxY: h } }
-
-  // Deterministic shuffle, then take n (with jittered duplicates if ink is scarce).
-  const order = new Uint32Array(m)
-  for (let i = 0; i < m; i++) order[i] = i
-  for (let i = m - 1; i > 0; i--) {
-    const j = (rng() * (i + 1)) | 0
-    const t = order[i]
-    order[i] = order[j]
-    order[j] = t
-  }
-  let minX = Infinity
-  let minY = Infinity
-  let maxX = -Infinity
-  let maxY = -Infinity
-  const JIT = 1.2
-  for (let k = 0; k < n; k++) {
-    const ci = order[k % m] * 3
-    let sx = cand[ci]
-    let sy = cand[ci + 1]
-    if (k >= m) {
-      sx += (rng() - 0.5) * 2 * JIT
-      sy += (rng() - 0.5) * 2 * JIT
-    }
-    x[k] = sx
-    y[k] = sy
-    a[k] = cand[ci + 2]
-    if (sx < minX) minX = sx
-    if (sx > maxX) maxX = sx
-    if (sy < minY) minY = sy
-    if (sy > maxY) maxY = sy
-  }
-  return { x, y, a, bbox: { minX, minY, maxX, maxY } }
-}
+// mulberry32 / loadImage / sampleImage / makeSprite live in ../utils/point-cloud.js — the
+// stacked mobile clouds sample the same way, and one copy of the thresholds is the point.
 
 // Static fallback (no GSAP / reduced motion / tainted assets): toggle the active
 // tab-item image on click + keyboard (underline state is CSS).
@@ -176,11 +100,8 @@ function setupFallback(root, links, tabItems, count) {
 }
 
 // Stacked mobile layout (≤ MOBILE_Q): not tabs at all — each stat's text is followed by its
-// own graphic, one pair under the other, all three on screen. The graphic is the stat's
-// SOURCE IMAGE, not the point cloud: three canvases shimmering 21k points on a phone is not a
-// trade worth making, and the image is the same picture the cloud samples.
-// Interleaves the existing elements (no clone) and returns nothing to drive — there is no
-// state left in this mode.
+// own graphic, one pair under the other, all three on screen. Interleaves the existing
+// elements (no clone), then gives each graphic its own cloud (see setupStackedClouds).
 function setupStacked(root, links, tabItems) {
   const box = document.createElement('div')
   box.className = 'tabs-stats_stack'
@@ -201,6 +122,63 @@ function setupStacked(root, links, tabItems) {
   if (anchor?.parentElement) anchor.parentElement.insertBefore(box, anchor)
   else root.appendChild(box)
   root.classList.add('is-stacked')
+
+  const clouds = setupStackedClouds(tabItems)
+  return {
+    resize() {
+      clouds.forEach((cloud) => cloud.resize())
+    },
+  }
+}
+
+// One always-alive cloud per stacked graphic. There is no morph here — nothing to switch
+// between — so each cloud just assembles its own shape on scroll-in and then shimmers and
+// breathes, and its loop runs ONLY while it is on screen. On a phone that means one or two
+// clouds ticking at STACKED_POINTS each: cheaper per frame than the single desktop cloud at
+// TARGET_POINTS, which is what makes three of them affordable.
+// The <img> stays in the DOM behind it — it reserves the box the canvas fills (nothing else
+// gives the row its height) and it is what shows if a cloud can't be built.
+function setupStackedClouds(tabItems) {
+  const clouds = []
+  if (!gsap || reduceMotion.matches) return clouds
+  tabItems.forEach((item, i) => {
+    const img = item?.querySelector('img')
+    const stage =
+      img?.closest('[tabs-architected="image"]') || img?.parentElement
+    if (!img || !stage) return
+    createStillCloud({
+      stage,
+      src: img.currentSrc || img.src,
+      points: STACKED_POINTS,
+      fit: STACKED_FIT,
+      look: { radius: DOT_RADIUS, color: DOT_COLOR },
+      motion: {
+        drift: DRIFT,
+        driftSpeed: DRIFT_SPEED,
+        shimmerFloor: SHIMMER_FLOOR,
+        breathAmp: BREATH_AMP,
+        breathSpeed: BREATH_SPEED,
+        breathRipple: BREATH_RIPPLE,
+      },
+      intro: {
+        scatter: INTRO_SCATTER,
+        fade: INTRO_FADE,
+        hold: INTRO_HOLD,
+        duration: INTRO_DURATION,
+        stagger: INTRO_STAGGER,
+      },
+      seed: 1000 + i, // so the three don't scatter in identical patterns
+    })
+      .then((cloud) => {
+        if (!cloud) return // never loaded, or CORS-tainted → the static image stays
+        clouds.push(cloud)
+        item.classList.add('is-cloud') // hides the <img> but keeps its box (CSS)
+      })
+      // Nothing downstream awaits this, so an unhandled rejection would be silent — and the
+      // static image is a perfectly good outcome.
+      .catch((err) => console.warn('[tabs-stats] stacked cloud failed', err))
+  })
+  return clouds
 }
 
 // Wire one stats-tabs root. Returns { resize } or null if the markup is incomplete.
@@ -223,13 +201,11 @@ function setupTabs(root) {
     (img) => img.closest('.tabs-stats_tab-item') || img.parentElement
   )
 
-  // Mobile: a stack, not tabs — so no canvas, no ARIA tab scaffolding, no state. Decided
-  // ONCE at init (same call as impact-map's density budget): the canvas is never booted, so a
-  // device rotated across 767px keeps the layout it loaded with.
-  if (window.matchMedia(MOBILE_Q).matches) {
-    setupStacked(root, links, tabItems)
-    return null
-  }
+  // Mobile: a stack, not tabs — so no tab engine and no ARIA tab scaffolding, just one cloud
+  // per graphic. Decided ONCE at init (same call as impact-map's density budget): the tab
+  // engine is never booted, so a device rotated across 767px keeps the layout it loaded with.
+  if (window.matchMedia(MOBILE_Q).matches)
+    return setupStacked(root, links, tabItems)
 
   // ARIA scaffolding — tablist / tab / tabpanel with roving tabindex.
   const tablist = links[0].parentElement || root
@@ -273,7 +249,7 @@ function setupTabs(root) {
   const ctx = canvas.getContext('2d')
 
   const N = TARGET_POINTS
-  const sprite = makeSprite()
+  const sprite = makeSprite(DOT_COLOR)
 
   // Per-point random directions for the hover scatter (stable across states).
   const dispX = new Float32Array(N)
@@ -324,21 +300,6 @@ function setupTabs(root) {
   let extY = 1 // largest normalized half-height across states
   let dpr = 1
   let inView = false
-
-  function makeSprite() {
-    const s = document.createElement('canvas')
-    s.width = s.height = 16
-    const c = s.getContext('2d')
-    const g = c.createRadialGradient(8, 8, 0, 8, 8, 8)
-    g.addColorStop(0, `rgba(${DOT_COLOR},1)`)
-    g.addColorStop(0.5, `rgba(${DOT_COLOR},0.8)`)
-    g.addColorStop(1, `rgba(${DOT_COLOR},0)`)
-    c.fillStyle = g
-    c.beginPath()
-    c.arc(8, 8, 8, 0, Math.PI * 2)
-    c.fill()
-    return s
-  }
 
   function setActiveTab(i) {
     links.forEach((l, idx) => {

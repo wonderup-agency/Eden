@@ -51,17 +51,24 @@ const DOT_COLOR = '138,142,149' // light slate grey (tuned for a light bg)
 const DOT_HARD = 0.6
 const FIT = 0.8 // per-state: fraction of the stage each shape fills on its limiting axis
 // px kept clear on every side. The shimmer, breathing and hover push points OUTSIDE the
-// fitted box (~12% of the scale), so without this the cloud reaches the stage edge and
+// fitted box (~8% of the scale), so without this the cloud reaches the stage edge and
 // reads as touching whatever sits above the wrapper.
 const STAGE_PAD = 32
+// Below 767px the same pair leaves the cloud floating in a mostly empty card: the stage is
+// roughly half the desktop width while STAGE_PAD is an absolute px margin, so it eats ~18%
+// of the box instead of ~8%. Mobile fills the stage instead — the shape spans ~92% of its
+// limiting axis and the shimmer peaks just under the edge. Safe here because the hover
+// nebula (the widest push of all) is desktop-only.
+const FIT_MOBILE = 0.93
+const STAGE_PAD_MOBILE = 4
 // Varied dot sizes: mostly fine dots, a fraction a bit bigger (keep them slim).
 // These are the LINE shapes' baseline — a shape needing heavier dots scales them with its own
 // `ink` multiplier (see point-shapes.js) rather than moving this. ⚠ They are RADII, so most of
 // the cloud is sub-pixel here: a dot under 0.5px can only deliver a fraction of its alpha to
 // the pixel, so raising `ink[0]` past ~1.7 buys opacity as well as size.
-const BIG_DOT_CHANCE = 0.12
-const SMALL_R = [0.3, 0.62]
-const BIG_R = [0.75, 1.3]
+const BIG_DOT_CHANCE = 0.1
+const SMALL_R = [0.28, 0.58]
+const BIG_R = [0.7, 1.15]
 // Smallest RADIUS a dot is ever drawn at, in DEVICE px (divided by the DPR at draw time).
 // Below roughly this the sprite is smaller than the pixel grid it lands on, so the resampler
 // redistributes its ink differently on every frame as it drifts across the grid — the dot's
@@ -85,12 +92,12 @@ const HOVER_EASE = 0.11
 const HOVER_SCATTER = 0.18
 const HOVER_MIN_WIDTH = 992 // px — hover only at/above this (Webflow desktop base)
 // Ambient shimmer — residual drift that never fully stops (assembled = DRIFT×SHIMMER_FLOOR).
-const DRIFT = 0.16
+const DRIFT = 0.11
 const DRIFT_SPEED = 1.2 // shimmer oscillation rate
 const SHIMMER_FLOOR = 0.5
 const DRIFT_FREQ_VAR = 0.4 // per-point drift-frequency variation → desynced shimmer
 // Coherent breathing — a slow radial pulse rippling out from center.
-const BREATH_AMP = 0.03
+const BREATH_AMP = 0.02
 const BREATH_SPEED = 1.65
 const BREATH_RIPPLE = 2.2
 // Flow tab: the two gold nodes drawn on canvas at the lens tips. The HTML endpoint labels
@@ -113,6 +120,8 @@ const INTRO_DURATION = 2.4
 const INTRO_STAGGER = 0.7
 
 const desktopHover = window.matchMedia(`(min-width: ${HOVER_MIN_WIDTH}px)`)
+// Read live in cloudResize (not frozen at init) so a rotation across 767px refits the cloud.
+const mobileMQ = window.matchMedia(MOBILE_Q)
 
 // Outgoing tab: plain fade. The de-blur lives on the words, never the parent.
 const REVEAL_OUT = { autoAlpha: 0, duration: OUT_FADE }
@@ -196,7 +205,7 @@ function setupRoot(root) {
   let cctx = null
   let sprite = null
   let nodeSprite = null
-  const N = window.matchMedia(MOBILE_Q).matches ? POINTS_MOBILE : TARGET_POINTS
+  const N = mobileMQ.matches ? POINTS_MOBILE : TARGET_POINTS
   let states = null
   const sbuf = new Float32Array(4) // shared sample output — no per-point allocation
   const fbuf = new Float32Array(4) // ditto, for the outgoing shape during a morph
@@ -305,18 +314,20 @@ function setupRoot(root) {
       canvas.height = cssH * cdpr
       cctx.setTransform(cdpr, 0, 0, cdpr, 0, 0)
     }
+    const fit = mobileMQ.matches ? FIT_MOBILE : FIT
+    const pad = mobileMQ.matches ? STAGE_PAD_MOBILE : STAGE_PAD
     // The flow state fits into the stage MINUS its two node halos: the nodes are drawn AT
     // the lens tips, so a lens fitted edge to edge would clip half of each glow.
     for (let i = 0; i < states.length; i++) {
       const res = i === flowIndex ? NODE_GLOW_R : 0
-      const halfW = Math.max(cssW * 0.5 - res - STAGE_PAD, cssW * 0.25)
-      const halfH = Math.max(cssH * 0.5 - res - STAGE_PAD, cssH * 0.25)
+      const halfW = Math.max(cssW * 0.5 - res - pad, cssW * 0.25)
+      const halfH = Math.max(cssH * 0.5 - res - pad, cssH * 0.25)
       stateScale[i] =
         Math.min(halfW / states[i].extX, halfH / states[i].extY) *
-        FIT *
+        fit *
         (TUNING[states[i].kind]?.fill ?? 1) // per-shape stage fill
     }
-    cscale = stateScale[curState] || cssW * 0.5 * FIT
+    cscale = stateScale[curState] || cssW * 0.5 * fit
     scaleFrom = cscale
     coverX = cscale ? (cssW * 0.5) / cscale : 1
     coverY = cscale ? (cssH * 0.5) / cscale : 1

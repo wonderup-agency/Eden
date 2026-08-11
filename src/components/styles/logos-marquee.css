@@ -94,9 +94,9 @@
    half the strip washed out. Both are tuning values: adjust on a real device. */
 @media (max-width: 767px) {
   .logos_marquee-wrapper {
-    --marquee-duration: 18s;
-    --marquee-gap: 2.5rem;
-    --marquee-fade: 2rem;
+    --marquee-duration: 25s;
+    --marquee-gap: 2rem;
+    --marquee-fade: 1rem;
   }
 }
 

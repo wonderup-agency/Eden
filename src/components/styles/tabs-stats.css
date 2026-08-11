@@ -75,6 +75,38 @@
   background-color: var(--base--grey-line, #e4e2dd);
 }
 
+/* — The graphic sizes itself from its own ratio here — */
+/* Webflow sizes it to FILL a fixed-height stage: a square item (`aspect-ratio: 1`) clamped by
+   `max-height`, with the wrapper and the <img> both at `height: 100%`, and anything that
+   didn't fit clipped by the stage's `overflow: hidden`. Stacked there is no stage, so that
+   clip is gone — and the three graphics aren't square either (ratios 1.03 / 1.32 / 1.10), so
+   the square box never matched them. Handing the box back to the image removes both problems
+   at once: no spill, and no dead space around it. */
+[data-component='tabs-stats'].is-stacked .tabs-stats_tab-item {
+  display: block;
+  aspect-ratio: auto;
+  max-height: none;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+[data-component='tabs-stats'].is-stacked .tabs-stats_tab-image-wrapper {
+  height: auto;
+  position: relative; /* the injected canvas is absolute over the image */
+}
+[data-component='tabs-stats'].is-stacked .tabs-stats_tab-image {
+  width: 100%;
+  max-width: 100%;
+  height: auto; /* the intrinsic ratio decides — object-fit then has nothing to fit */
+}
+
+/* — One cloud per graphic (JS adds .is-cloud to the pair once its canvas is live) — */
+/* The <img> stays in flow behind the canvas: it is the only thing giving the row a height
+   (there is no fixed-height stage here), and it's what shows if a cloud can't be built. Hence
+   `visibility`, not `display` — the box has to survive. */
+[data-component='tabs-stats'].is-stacked .is-cloud .tabs-stats_tab-image {
+  visibility: hidden;
+}
+
 /* — Tab text: inactive grey, active gradient (background-clip: text), weight normal — */
 [data-component='tabs-stats'] {
   /* Stops spread across the full glyph run (no early hard stop) so the ramp actually reads.
