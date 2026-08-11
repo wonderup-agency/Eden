@@ -50,6 +50,31 @@
   );
 }
 
+/* — Stacked mobile layout (≤767px) — .is-stacked is added by tabs-stats.js, which MOVES each
+   link and its graphic into one pair. No canvas in this mode, and every pair carries
+   `.is-active` (they are all showing), so the gradient + the graphic's opacity come from the
+   rules below for free. — */
+[data-component='tabs-stats'].is-stacked .tabs-stats_tabs-links,
+[data-component='tabs-stats'].is-stacked .tabs-stats_tabs-content {
+  display: none; /* both left empty by the move */
+}
+[data-component='tabs-stats'] .tabs-stats_stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+[data-component='tabs-stats'] .tabs-stats_stack-item {
+  display: flex;
+  flex-direction: column; /* text, then its graphic */
+  gap: 1.5rem;
+}
+/* The grey baseline under each stat, as the tab layout has it — the JS fill is never injected
+   in this mode, so the rail is expanded here instead of by `.is-track`. */
+[data-component='tabs-stats'].is-stacked .tabs-architected_tab-link-underline {
+  transform: none;
+  background-color: var(--base--grey-line, #e4e2dd);
+}
+
 /* — Tab text: inactive grey, active gradient (background-clip: text), weight normal — */
 [data-component='tabs-stats'] {
   /* Stops spread across the full glyph run (no early hard stop) so the ramp actually reads.

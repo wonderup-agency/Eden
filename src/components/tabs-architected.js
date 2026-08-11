@@ -6,11 +6,21 @@
   muted+inline on scroll-in, loops, pauses off-screen / hidden tab. Hover never pauses it;
   clicking a tab LOCKS the cycle there with its underline full, until that tab is clicked
   again — the video keeps looping the locked tab's segment meanwhile.
+  Below 767px the section becomes an accordion instead (no cycle) — see tabs-accordion.js.
   CSS → ./styles/tabs-architected.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-architected.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
-import { armFill, fadeOutFill, lockFill } from '../utils/tab-underline.js'
+import {
+  armFill,
+  clearFill,
+  fadeOutFill,
+  lockFill,
+} from '../utils/tab-underline.js'
+import {
+  ACCORDION_CLASS,
+  createTabsAccordion,
+} from '../utils/tabs-accordion.js'
 
 const { gsap } = window
 
@@ -119,6 +129,8 @@ function setupTabs(root) {
   let started = false // autoplay kicked off (section reached)
   let onScreen = false
   let lockedIndex = -1 // >= 0 → the user clicked this tab and the cycle holds on it
+  let accordion = null // mobile drawers (≤767px); while active there is no cycle at all
+  let accordionOpen = -1 // which drawer is open, -1 = all collapsed (accordion mode only)
   let progressTl = null // the active tab's progress clock
   let dwellUsed = 0 // seconds the running clock was built with
   // Set the instant a tab takes over, unlike activeIndex which lags until the switch
@@ -165,9 +177,14 @@ function setupTabs(root) {
   // the video keeps looping its segment (holdSegment), so the visual never freezes on the
   // tab the user chose to hold.
   const isLocked = () => lockedIndex >= 0
+  // Read off the root, not off the handle: the first enable runs inside createTabsAccordion,
+  // while `accordion` here is still null (see ACCORDION_CLASS).
+  const inAccordion = () => root.classList.contains(ACCORDION_CLASS)
   const visible = () => started && onScreen && !document.hidden
   const sync = () => {
-    const on = visible()
+    // In accordion mode there is no clock, and the video lives inside the open drawer — so
+    // with every drawer collapsed there is nothing to play.
+    const on = visible() && (!inAccordion() || accordionOpen >= 0)
     if (video) on ? playVideo() : video.pause()
     if (progressTl) on && !isLocked() ? progressTl.resume() : progressTl.pause()
   }
@@ -202,7 +219,9 @@ function setupTabs(root) {
   // in rich text. `immediate` skips the tween on load / resize, where there's no switch to
   // ride. (compouding had the same thing and dropped it — this section still wants it.)
   const fitPanels = (index, immediate) => {
-    if (!textWrap || !panels[index]) return
+    // In accordion mode the panels live in the drawers, so the column is empty and whatever
+    // a panel measures there says nothing about it.
+    if (inAccordion() || !textWrap || !panels[index]) return
     const h = panels[index].offsetHeight
     if (immediate) gsap.set(textWrap, { height: h })
     else gsap.to(textWrap, { height: h, ...FIT_TWEEN })
@@ -278,7 +297,9 @@ function setupTabs(root) {
   // runs: the tween owns the switch and the playhead is already in step with it.
   const holdSegment = () => {
     if (!started || !video || reduceMotion.matches) return
-    if (!progressTl || !progressTl.paused()) return
+    // Hold whenever the clock isn't running the switch itself: a locked tab, or accordion
+    // mode, where there is no clock at all and the open drawer owns the segment.
+    if (!inAccordion() && (!progressTl || !progressTl.paused())) return
     const s = cueStart(segIndex)
     const e = cueEnd(segIndex)
     if (!(e > s)) return // last tab before metadata lands: span still unknown
@@ -363,6 +384,9 @@ function setupTabs(root) {
   // Bails while a switch is animating, so a dropped switch can't leave the bar locked on one
   // tab and the panel on another.
   const activateTab = (index) => {
+    // Accordion mode: the drawer header owns the interaction. A tap landing on the link
+    // inside it bubbles here, so this has to stand down.
+    if (inAccordion()) return
     if (reduceMotion.matches) return switchTabInstant(index)
     if (isAnimating) return
     if (lockedIndex === index) return unlock()
@@ -370,21 +394,30 @@ function setupTabs(root) {
     lock(index)
   }
 
-  // Initial state: first tab visible, rest hidden (before paint, no CLS).
-  links.forEach((link) => link.classList.remove(ACTIVE_CLASS))
-  panels.forEach((panel) => panel.classList.remove(ACTIVE_CLASS))
-  gsap.set(panels, { autoAlpha: 0 })
-  gsap.set(panels[0], { autoAlpha: 1 })
-  gsap.set(bars.filter(Boolean), { scaleX: 0, transformOrigin: 'left center' })
-  links[0].classList.add(ACTIVE_CLASS)
-  panels[0].classList.add(ACTIVE_CLASS)
-  links.forEach((link, i) => {
-    link.setAttribute('aria-selected', i === 0 ? 'true' : 'false')
-    link.setAttribute('tabindex', i === 0 ? '0' : '-1')
-  })
-  activeIndex = 0
+  // The stacked-tabs state from scratch: one tab visible, the rest hidden (before paint, no
+  // CLS). Used on load, and again when the accordion hands the section back on the way up.
+  const resetToTab = (index) => {
+    activeIndex = index
+    segIndex = index
+    isAnimating = false
+    gsap.killTweensOf(panels)
+    links.forEach((link, i) => {
+      const on = i === index
+      link.classList.toggle(ACTIVE_CLASS, on)
+      link.setAttribute('aria-selected', on ? 'true' : 'false')
+      link.setAttribute('tabindex', on ? '0' : '-1')
+    })
+    panels.forEach((panel, i) => {
+      const on = i === index
+      panel.classList.toggle(ACTIVE_CLASS, on)
+      gsap.set(panel, { autoAlpha: on ? 1 : 0 })
+    })
+    gsap.set(panels, { clearProps: 'zIndex' })
+    fitPanels(index, true) // no collapse animation on load
+  }
 
-  fitPanels(0, true) // no collapse animation on load
+  gsap.set(bars.filter(Boolean), { scaleX: 0, transformOrigin: 'left center' })
+  resetToTab(0)
   // Webfonts land after init and reflow the copy — re-measure once they're in.
   document.fonts?.ready.then(() => fitPanels(activeIndex, true))
 
@@ -407,6 +440,7 @@ function setupTabs(root) {
       if (
         started &&
         !isLocked() &&
+        !inAccordion() && // no clock to correct in accordion mode
         isFinite(gap) &&
         Math.abs(gap - dwellUsed) > SEEK_SLACK
       )
@@ -416,6 +450,62 @@ function setupTabs(root) {
     if (isFinite(video.duration) && video.duration > 0) resolveCues()
     gsap.ticker.add(holdSegment)
   }
+
+  // ---- Mobile accordion (≤767px) ----
+  // Drawers instead of tabs: every text block sits in its own drawer, so there is nothing for
+  // a cycle to switch between. The clock is dropped entirely and the section's ONE shared
+  // video is MOVED into whichever drawer is open, looping that tab's own segment
+  // (holdSegment) — the same idea as a permanent lock, minus the bar to fill.
+  accordion = createTabsAccordion({
+    root,
+    name: 'tabs-architected',
+    links,
+    bodies: panels.map((panel) => [panel]),
+    // The wrapper, not the <video>: the Designer's video box has to travel with it.
+    shared: videoHook || video,
+    anchor: root.querySelector('.tabs-architected_tabs-links'),
+    onEnable() {
+      progressTl?.kill()
+      progressTl = null
+      lockedIndex = -1
+      markLocked()
+      isAnimating = false
+      // Drop everything the stacked layout wrote: the panels are visible inside their own
+      // drawers now, and a switch caught mid-flight would otherwise strand content blurred.
+      gsap.killTweensOf(panels)
+      gsap.set(panels, { clearProps: 'opacity,visibility,zIndex' })
+      parts.forEach(({ content }) => {
+        gsap.killTweensOf(content)
+        gsap.set(content, {
+          clearProps: 'opacity,visibility,filter,transform,willChange',
+        })
+      })
+      if (textWrap) gsap.set(textWrap, { clearProps: 'height' })
+      bars.forEach((bar) => clearFill(bar)) // the drawer's hairline is the state indicator
+    },
+    onOpen(index) {
+      accordionOpen = index
+      activeIndex = index
+      segIndex = index
+      links.forEach((link, i) =>
+        link.classList.toggle(ACTIVE_CLASS, i === index)
+      )
+      panels.forEach((panel, i) =>
+        panel.classList.toggle(ACTIVE_CLASS, i === index)
+      )
+      seek(cueStart(index)) // holdSegment keeps it there; a pre-metadata seek no-ops
+      sync()
+    },
+    onClose(index) {
+      if (accordionOpen === index) accordionOpen = -1
+      sync() // nothing open → nothing to play
+    },
+    onDisable(wasOpen) {
+      accordionOpen = -1
+      resetToTab(wasOpen >= 0 ? wasOpen : 0)
+      if (started) startProgress(activeIndex)
+    },
+  })
 
   // Click — switch to that tab's segment and lock the cycle on it (second click releases).
   const onClick = links.map((link, i) => {
@@ -458,6 +548,9 @@ function setupTabs(root) {
         if (onScreen && !started) {
           started = true
           resolveCues()
+          // Accordion mode has no cycle to start — sync() just lets the open drawer's video
+          // run now that the section is on screen.
+          if (inAccordion()) return sync()
           // A tab clicked before the section was ever reached is already locked — build its
           // clock and re-apply the lock, so it holds instead of starting to cycle.
           const first = isLocked() ? lockedIndex : activeIndex
@@ -488,6 +581,7 @@ function setupTabs(root) {
     },
     destroy() {
       if (progressTl) progressTl.kill()
+      accordion?.destroy()
       if (!reduceMotion.matches) gsap.ticker.remove(holdSegment)
       if (video && !reduceMotion.matches) {
         if (onMeta) video.removeEventListener('loadedmetadata', onMeta)

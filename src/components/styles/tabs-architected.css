@@ -49,6 +49,29 @@
    Layout/sizing stay in Webflow — the one exception is the text column's vertical alignment
    above (the JS owns that column's height, so the Designer can't own its alignment). */
 
+/* — Mobile accordion (≤767px) — .is-accordion is added by src/utils/tabs-accordion.js, which
+   MOVES the links, the text blocks and the shared video into its drawers. Only the leftovers
+   are dealt with here; the drawer itself is styled by tabs-accordion.css. — */
+
+/* Both rows are left empty by the move — take them out instead of leaving two blank boxes. */
+[data-component='tabs-architected'].is-accordion .tabs-architected_tabs-links,
+[data-component='tabs-architected'].is-accordion
+  .tabs-architected_tabs-content {
+  display: none;
+}
+/* The drawer's own hairline separates the rows now; the tab underline would double it. */
+[data-component='tabs-architected'].is-accordion
+  .tabs-architected_tab-link-underline {
+  display: none;
+}
+/* The drawer header already reads "01 · Diagnostic OS", so the heading inside the text block
+   is a second copy of the same title one line below it. */
+[data-component='tabs-architected'].is-accordion
+  .tabs-architected_tab-content-inner
+  > *:has(h1, h2, h3, h4) {
+  display: none;
+}
+
 /* — Tab text: inactive grey, active black, always medium (500) — */
 /* The colour is transitioned: everything else on a switch animates, so a hard grey→black
    snap on the label was the one step that read as a glitch. */

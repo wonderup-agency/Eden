@@ -5,10 +5,12 @@
   alive when idle; hover loosens it (desktop only). No autoplay — click / hover / keyboard
   switch, and the active tab's underline snaps to full as a state indicator.
   Canvas 2D, no 3D lib. Fallback (no GSAP / reduced motion / CORS-tainted): static image.
+  Below 767px it isn't tabs at all — the stats stack as text → graphic pairs (setupStacked).
   CSS → ./styles/tabs-stats.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-stats.md
 */
 
 import { fadeOutFill, fillFull } from '../utils/tab-underline.js'
+import { MOBILE_Q } from '../utils/tabs-accordion.js'
 
 const { gsap } = window
 
@@ -173,6 +175,34 @@ function setupFallback(root, links, tabItems, count) {
   })
 }
 
+// Stacked mobile layout (≤ MOBILE_Q): not tabs at all — each stat's text is followed by its
+// own graphic, one pair under the other, all three on screen. The graphic is the stat's
+// SOURCE IMAGE, not the point cloud: three canvases shimmering 21k points on a phone is not a
+// trade worth making, and the image is the same picture the cloud samples.
+// Interleaves the existing elements (no clone) and returns nothing to drive — there is no
+// state left in this mode.
+function setupStacked(root, links, tabItems) {
+  const box = document.createElement('div')
+  box.className = 'tabs-stats_stack'
+  links.forEach((link, i) => {
+    const item = document.createElement('div')
+    item.className = 'tabs-stats_stack-item'
+    // Every pair IS active here — which is also what makes the existing `.is-active` rules
+    // do the whole job: the gradient on the stat text, and opacity 1 on its graphic.
+    link.classList.add(ACTIVE_CLASS)
+    item.appendChild(link)
+    if (tabItems[i]) {
+      tabItems[i].classList.add(ACTIVE_CLASS)
+      item.appendChild(tabItems[i])
+    }
+    box.appendChild(item)
+  })
+  const anchor = root.querySelector('.tabs-stats_tabs-links')
+  if (anchor?.parentElement) anchor.parentElement.insertBefore(box, anchor)
+  else root.appendChild(box)
+  root.classList.add('is-stacked')
+}
+
 // Wire one stats-tabs root. Returns { resize } or null if the markup is incomplete.
 function setupTabs(root) {
   const links = Array.from(root.querySelectorAll('[tabs-architected="link"]'))
@@ -192,6 +222,14 @@ function setupTabs(root) {
   const tabItems = imgs.map(
     (img) => img.closest('.tabs-stats_tab-item') || img.parentElement
   )
+
+  // Mobile: a stack, not tabs — so no canvas, no ARIA tab scaffolding, no state. Decided
+  // ONCE at init (same call as impact-map's density budget): the canvas is never booted, so a
+  // device rotated across 767px keeps the layout it loaded with.
+  if (window.matchMedia(MOBILE_Q).matches) {
+    setupStacked(root, links, tabItems)
+    return null
+  }
 
   // ARIA scaffolding — tablist / tab / tabpanel with roving tabindex.
   const tablist = links[0].parentElement || root

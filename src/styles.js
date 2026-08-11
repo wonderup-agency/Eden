@@ -22,6 +22,9 @@ import './components/styles/tabs-architected.css'
 import './components/styles/tabs-foundation-model.css'
 import './components/styles/tabs-imaging.css'
 import './components/styles/tabs-stats.css'
+// After the four tabs files on purpose: its generic drawer rules win a specificity tie
+// against a component's own class.
+import './components/styles/tabs-accordion.css'
 import './components/styles/scroll-morph.css'
 import './components/styles/halo-focus.css'
 import './components/styles/impact-map.css'

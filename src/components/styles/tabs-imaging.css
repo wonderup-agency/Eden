@@ -14,6 +14,20 @@
   will-change: clip-path;
 }
 
+/* — Mobile accordion (≤767px) — .is-accordion is added by src/utils/tabs-accordion.js, which
+   MOVES the links and the panels into its drawers. Only the leftovers are dealt with here;
+   the drawer itself is styled by tabs-accordion.css. — */
+
+/* Both rows are left empty by the move — take them out instead of leaving two blank boxes. */
+[data-component='tabs-imaging'].is-accordion .tabs-imaging_tabs-links,
+[data-component='tabs-imaging'].is-accordion .tabs-imaging_tabs-content {
+  display: none;
+}
+/* The drawer's own hairline separates the rows now; the tab underline would double it. */
+[data-component='tabs-imaging'].is-accordion .tabs-imaging_tab-link-underline {
+  display: none;
+}
+
 /* — Tab text: inactive grey, active black, always medium (500) — */
 [data-component='tabs-imaging'] [tabs-imaging='link'],
 [data-component='tabs-imaging'] [tabs-imaging='link'] * {

@@ -1,0 +1,106 @@
+/* ===== TABS-ACCORDION · mobile drawers for the tabs sections ===== */
+/* The container + header/body/icon are injected by src/utils/tabs-accordion.js below 767px,
+   and the section's own markup is MOVED into them — so everything here is layout and the
+   icon. Type, colour and spacing inside a moved link/panel stay the Designer's.
+   Hooks → .claude/rules/components/tabs-accordion.md */
+
+/* — Tokens — */
+[data-tabs-accordion] {
+  --acc-line: var(--base--grey-line, #e4e2dd);
+  --acc-line-open: var(--base--black, #000);
+  --acc-gap: 1.25rem; /* between the drawer's text and its visual */
+  --acc-pad: 1.5rem; /* under the open drawer's content */
+  --acc-icon: 0.875rem;
+  --acc-speed: 0.35s;
+
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* — Item: the hairline is the accordion's, not the tab underline's (each component hides
+     its own underline in accordion mode, so there's only ever one line per row) — */
+[data-tabs-accordion] .tabs-accordion_item {
+  border-bottom: 1px solid var(--acc-line);
+  transition: border-color var(--acc-speed) ease;
+}
+/* Closes the set at the top: the row the drawers replace carried the section's own
+   border-top, and that wrapper is hidden in accordion mode. */
+[data-tabs-accordion] .tabs-accordion_item:first-child {
+  border-top: 1px solid var(--acc-line);
+}
+[data-tabs-accordion] .tabs-accordion_item.is-open {
+  border-bottom-color: var(--acc-line-open);
+}
+
+/* — Header: the moved link fills the row, the icon sits at the end — */
+[data-tabs-accordion] .tabs-accordion_header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  min-height: 3rem; /* 48px tap target regardless of the link's own padding */
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+/* The link — targeted structurally so no component class name leaks in here. */
+[data-tabs-accordion] .tabs-accordion_header > :first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+[data-tabs-accordion] .tabs-accordion_header:focus-visible {
+  outline: 2px solid var(--base--gold, #fbd07c);
+  outline-offset: 2px;
+}
+
+/* — Icon: a 1px plus that loses its vertical bar when the drawer opens — */
+[data-tabs-accordion] .tabs-accordion_icon {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--acc-icon);
+  height: var(--acc-icon);
+  color: var(--base--black, #000);
+}
+[data-tabs-accordion] .tabs-accordion_icon::before,
+[data-tabs-accordion] .tabs-accordion_icon::after {
+  content: '';
+  position: absolute;
+  background-color: currentColor;
+  transition: transform var(--acc-speed) ease;
+}
+[data-tabs-accordion] .tabs-accordion_icon::before {
+  top: 50%;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  transform: translateY(-50%);
+}
+[data-tabs-accordion] .tabs-accordion_icon::after {
+  top: 0;
+  left: 50%;
+  width: 1px;
+  height: 100%;
+  transform: translateX(-50%);
+}
+[data-tabs-accordion] .tabs-accordion_item.is-open .tabs-accordion_icon::after {
+  transform: translateX(-50%) scaleY(0);
+}
+
+/* — Body: JS animates the height, so this is only the pre-JS baseline + the clip — */
+[data-tabs-accordion] .tabs-accordion_body {
+  height: 0;
+  overflow: hidden;
+}
+[data-tabs-accordion] .tabs-accordion_inner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--acc-gap);
+  padding-bottom: var(--acc-pad);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-tabs-accordion] .tabs-accordion_item,
+  [data-tabs-accordion] .tabs-accordion_icon::before,
+  [data-tabs-accordion] .tabs-accordion_icon::after {
+    transition: none;
+  }
+}
