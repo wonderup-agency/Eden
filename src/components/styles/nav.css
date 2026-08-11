@@ -136,6 +136,9 @@
 /* — Mobile / tablet (≤ 991px): full width, floats down via transform (cheap composited
    paint the address-bar resize can't perturb — margin/Flip would jump). Glass only. — */
 @media (max-width: 991px) {
+  [data-component='nav'] {
+    --nav-float-logo-x: 0rem;
+  }
   [data-component='nav'] [data-nav-inner] {
     transition:
       transform var(--nav-morph) var(--nav-ease),

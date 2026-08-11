@@ -51,9 +51,14 @@
 }
 
 /* — Stacked mobile layout (≤767px) — .is-stacked is added by tabs-stats.js, which MOVES each
-   link and its graphic into one pair. No canvas in this mode, and every pair carries
-   `.is-active` (they are all showing), so the gradient + the graphic's opacity come from the
-   rules below for free. — */
+   link and its graphic into one pair. Every pair carries `.is-active` (they are all showing),
+   so the gradient + the graphic's opacity come from the rules below for free. — */
+[data-component='tabs-stats'].is-stacked {
+  /* How wide the graphic (and therefore its cloud) is in its row — the one size knob here.
+     Lowering it alone makes the cloud read DENSER: the dot radius is in px and doesn't
+     shrink with the box, so STACKED_POINTS in tabs-stats.js moves with it. */
+  --stats-stacked-graphic: 72%;
+}
 [data-component='tabs-stats'].is-stacked .tabs-stats_tabs-links,
 [data-component='tabs-stats'].is-stacked .tabs-stats_tabs-content {
   display: none; /* both left empty by the move */
@@ -89,9 +94,14 @@
   padding-top: 0;
   padding-bottom: 0;
 }
+/* The cap goes on the WRAPPER, not the <img>: the injected canvas is absolute against this
+   box, so capping the image alone would leave the cloud at full row width. Centred because
+   the stat text above it is centred. */
 [data-component='tabs-stats'].is-stacked .tabs-stats_tab-image-wrapper {
   height: auto;
   position: relative; /* the injected canvas is absolute over the image */
+  max-width: var(--stats-stacked-graphic);
+  margin-inline: auto;
 }
 [data-component='tabs-stats'].is-stacked .tabs-stats_tab-image {
   width: 100%;

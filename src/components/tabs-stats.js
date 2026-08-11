@@ -28,7 +28,10 @@ const ACTIVE_CLASS = 'is-active'
 const TARGET_POINTS = 7000 // points per state — same for all, for a 1:1 morph
 // Stacked mobile: one cloud per stat, so the budget is per cloud — and only the one on screen
 // runs, which keeps the frame cheaper than the single desktop cloud.
-const STACKED_POINTS = 2500
+// Scaled with `--stats-stacked-graphic` (tabs-stats.css, 72% of the row): the dot radius is in
+// px and doesn't shrink with the box, so the same count in a smaller box reads denser. Keep the
+// two moving together.
+const STACKED_POINTS = 1800
 const STACKED_FIT = 0.94 // the canvas IS the image's box, so the ink can fill more of it
 const MORPH_DURATION = 1.25
 const MORPH_EASE = 'power2.inOut'
