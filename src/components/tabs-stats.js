@@ -361,8 +361,17 @@ function setupTabs(root) {
         // Dispersed fills the stage; converge to state 0 as pp → 1.
         const dx = startX[i] * covX
         const dy = startY[i] * covY
-        const bx = dx + (s0.x[i] - dx) * pp + fx
-        const by = dy + (s0.y[i] - dy) * pp + fy
+        let bx = dx + (s0.x[i] - dx) * pp + fx
+        let by = dy + (s0.y[i] - dy) * pp + fy
+        // Breathing, ramped in by this point's own arrival (× pp) so it is already at full
+        // amplitude when the assembled branch takes over — that hand-off is one frame, and
+        // anything this phase doesn't share snaps on it. Same order as below: drift, then dd.
+        const dd = Math.sqrt(bx * bx + by * by)
+        const breath =
+          1 +
+          Math.sin(now * BREATH_SPEED - dd * BREATH_RIPPLE) * BREATH_AMP * pp
+        bx *= breath
+        by *= breath
         ctx.globalAlpha = s0.a[i] * introFade.v
         ctx.drawImage(
           sprite,

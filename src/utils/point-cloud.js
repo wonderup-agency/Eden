@@ -235,6 +235,7 @@ export async function createStillCloud({
     coverX = scale ? (cssW * 0.5) / scale : 1
     coverY = scale ? (cssH * 0.5) / scale : 1
     draw()
+    maybeIntro() // the box may only have become measurable just now — see below
   }
 
   function draw() {
@@ -269,8 +270,16 @@ export async function createStillCloud({
         const fy = Math.sin(now * driftSpeed + driftPhase[i]) * dispY[i] * amp
         const dx = startX[i] * covX
         const dy = startY[i] * covY
-        const bx = dx + (state.x[i] - dx) * pp + fx
-        const by = dy + (state.y[i] - dy) * pp + fy
+        let bx = dx + (state.x[i] - dx) * pp + fx
+        let by = dy + (state.y[i] - dy) * pp + fy
+        // Breathing, ramped in by this point's own arrival (× pp) so it is already at full
+        // amplitude when the assembled branch takes over — that hand-off is one frame, and
+        // anything this phase doesn't share snaps on it. Same order as below: drift, then dd.
+        const dd = Math.sqrt(bx * bx + by * by)
+        const breath =
+          1 + Math.sin(now * breathSpeed - dd * breathRipple) * breathAmp * pp
+        bx *= breath
+        by *= breath
         ctx.globalAlpha = state.a[i] * introFade.v
         ctx.drawImage(
           sprite,
@@ -320,6 +329,16 @@ export async function createStillCloud({
     window.requestAnimationFrame(loop)
   }
 
+  // The intro starts on whichever happens LAST: the stage coming into view, or the stage
+  // becoming measurable. Its box is the (still-loading, `loading="lazy"`, no width/height
+  // attributes) <img> beside the canvas, so `scale` is 0 until that image lands — and a
+  // timeline started then would run against a canvas that draws nothing, leaving the cloud to
+  // pop in half-assembled once the box appeared.
+  function maybeIntro() {
+    if (!inView || !scale || assembled || introActive) return
+    runIntro()
+  }
+
   function runIntro() {
     introActive = true
     introProg.v = 0
@@ -346,7 +365,7 @@ export async function createStillCloud({
     (entries) => {
       inView = entries[0].isIntersecting
       if (!inView) return
-      if (!assembled && !introActive) runIntro()
+      maybeIntro()
       ensureLoop()
     },
     { threshold: 0.05 }
