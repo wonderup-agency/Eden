@@ -45,11 +45,18 @@
    column's height is collapsed onto the active panel by fitPanels, so there is no slack left
    inside it to centre against — only the row can align it. Leaves the row itself, and every
    other layout decision, to the Designer. — */
-[data-component='tabs-team'] [tabs-team='text-content'] {
+/* Gated on .is-enhanced, and that gate is load-bearing rather than tidy. Un-enhanced (the
+   Webflow Designer canvas, and any published paint before the bundle runs) ALL the text blocks
+   are in normal flow, so the column is N-bios tall against a photo-height row — centring a box
+   taller than its row makes it overflow equally in both directions, i.e. upward over the tabs
+   links, which is exactly what it looked like. Ungated there is no way to fix that from the
+   Designer either: two attribute selectors outrank the Webflow class, so the author's own
+   `align-self` loses. Gated, the canvas obeys the Designer and the runtime obeys this file. */
+[data-component='tabs-team'].is-enhanced [tabs-team='text-content'] {
   align-self: center;
 }
 @media (max-width: 991px) {
-  [data-component='tabs-team'] [tabs-team='text-content'] {
+  [data-component='tabs-team'].is-enhanced [tabs-team='text-content'] {
     align-self: start;
   }
 }
