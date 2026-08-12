@@ -18,11 +18,11 @@
 
 /* The photos have to occupy the same box for the crossfade — that's why width/height are
    forced here rather than left to the Designer. Size the box on the wrapper instead. */
-[data-component='tabs-headquarters'] [tabs-architected='image'] {
+[data-component='tabs-headquarters'] [tabs-headquarters='image'] {
   position: relative; /* the overlay inside it anchors here */
   overflow: hidden;
 }
-[data-component='tabs-headquarters'] [tabs-architected='image'] img {
+[data-component='tabs-headquarters'] [tabs-headquarters='image'] img {
   display: block;
   width: 100%;
   height: 100%;
@@ -31,23 +31,31 @@
 
 /* — Tab text: inactive grey, active black, always medium (500) — */
 /* The colour is transitioned: the crossfade animates, so a hard grey→black snap on the label
-   was the one step that read as a glitch. */
-[data-component='tabs-headquarters'] [tabs-architected='link'],
-[data-component='tabs-headquarters'] [tabs-architected='link'] * {
+   was the one step that read as a glitch.
+   The label is a Rich Text `h2` inside the link, hence the `*` — the rule has to reach the
+   heading, not just the link box. */
+[data-component='tabs-headquarters'] [tabs-headquarters='link'],
+[data-component='tabs-headquarters'] [tabs-headquarters='link'] * {
   color: var(--base--grey, #666);
+  /* Belt and braces on the active state below: -webkit-text-fill-color OUTRANKS `color`
+     wherever it is set, and this site sets it (tabs-stats paints its tab labels with a
+     gradient clipped to the text, and these links were copied from that section — they still
+     carry .tabs-stats_tab-link). Pinning it to currentColor means `color` is the only thing
+     that decides the ink here. */
+  -webkit-text-fill-color: currentColor;
   font-weight: 500;
   transition: color 0.35s ease;
 }
-[data-component='tabs-headquarters'] [tabs-architected='link'].is-active,
-[data-component='tabs-headquarters'] [tabs-architected='link'].is-active * {
+[data-component='tabs-headquarters'] [tabs-headquarters='link'].is-active,
+[data-component='tabs-headquarters'] [tabs-headquarters='link'].is-active * {
   color: var(--base--black, #000);
 }
-[data-component='tabs-headquarters'].is-enhanced [tabs-architected='link'] {
+[data-component='tabs-headquarters'].is-enhanced [tabs-headquarters='link'] {
   cursor: pointer;
 }
 
-/* — Underline / track / fill — grey track under every tab, black fill only on the active one.
-   A STATE indicator, not a progress bar: nothing times it, so the JS snaps it to full. */
+/* — Progress underline / track / fill — grey track under every tab (inactive), black fill only
+   on the active one, grown over that tab's dwell. The bar IS the autoplay clock. */
 
 /* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
 [data-component='tabs-headquarters'] .tabs-headquarters_tab-link-underline {
@@ -62,8 +70,8 @@
   transform: none;
   background-color: var(--base--grey-line, #e4e2dd);
 }
-/* Black fill (active-only; shown full immediately, faded out at its current width when the
-   tab is left instead of rewinding). */
+/* Black progress fill (active-only; the JS scales scaleX floor→1 across the dwell, then fades
+   it out at its current width instead of rewinding). */
 [data-component='tabs-headquarters'] .tabs-headquarters_tab-link-fill {
   display: block;
   width: 100%;
@@ -76,12 +84,12 @@
 
 /* — Reduced motion (no track/fill; keep the active underline full) — */
 @media (prefers-reduced-motion: reduce) {
-  [data-component='tabs-headquarters'] [tabs-architected='link'],
-  [data-component='tabs-headquarters'] [tabs-architected='link'] * {
+  [data-component='tabs-headquarters'] [tabs-headquarters='link'],
+  [data-component='tabs-headquarters'] [tabs-headquarters='link'] * {
     transition: none;
   }
   [data-component='tabs-headquarters']
-    [tabs-architected='link'].is-active
+    [tabs-headquarters='link'].is-active
     .tabs-headquarters_tab-link-underline {
     transform: scaleX(1);
   }
