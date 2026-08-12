@@ -16,13 +16,16 @@ import './components/styles/card-animate.css'
 import './components/styles/nav.css'
 import './components/styles/logo-wall.css'
 import './components/styles/logos-marquee.css'
+import './components/styles/event-gallery.css'
 import './components/styles/paradigm.css'
 import './components/styles/compouding.css'
 import './components/styles/tabs-architected.css'
 import './components/styles/tabs-foundation-model.css'
 import './components/styles/tabs-imaging.css'
 import './components/styles/tabs-stats.css'
-// After the four tabs files on purpose: its generic drawer rules win a specificity tie
+import './components/styles/tabs-team.css'
+import './components/styles/tabs-headquarters.css'
+// After the tabs files on purpose: its generic drawer rules win a specificity tie
 // against a component's own class.
 import './components/styles/tabs-accordion.css'
 import './components/styles/scroll-morph.css'

@@ -1,10 +1,11 @@
 /*
   Component: impact-map · data-component="impact-map"
-  Perpetual clock-derived odometer % (same for every visitor, never resets) beside a
-  night-lights map of the Americas: the glow is made of DOTS, never painted blobs —
-  hub clusters + a faint field that keeps lighting up and dying forever. Canada,
+  Perpetual clock-derived odometer % (same for every visitor, never resets), optionally
+  beside a night-lights map of the Americas: the glow is made of DOTS, never painted
+  blobs — hub clusters + a faint field that keeps lighting up and dying forever. Canada,
   Greenland and Alaska are out of frame by construction. Geometry (d3-geo + topojson +
   world-atlas) loads on demand from CDN; the canvas is injected, so Webflow ships 3 elements.
+  NO [data-impact-stage] in the markup = counter only: nothing injected, no CDN fetch.
   CSS → ./styles/impact-map.css (bundled via src/styles.js) · Docs → .claude/rules/components/impact-map.md
 */
 
@@ -784,10 +785,8 @@ async function setup(wrapper) {
 
   const stage = wrapper.querySelector('[data-impact-stage]')
   const counterEl = wrapper.querySelector('[data-impact-counter]')
-  if (!stage || !counterEl) {
-    console.warn(
-      'impact-map: missing [data-impact-stage] or [data-impact-counter]'
-    )
+  if (!counterEl) {
+    console.warn('impact-map: missing [data-impact-counter]')
     return null
   }
 
@@ -808,6 +807,12 @@ async function setup(wrapper) {
   } else {
     odo.render(current)
   }
+
+  // The map is OPTIONAL and the counter is the half that carries the section: with no
+  // [data-impact-stage] in the markup we stop here — no canvas injected, no rAF loop,
+  // and loadMap() is never reached, so d3-geo / topojson / world-atlas are not fetched
+  // at all. Delete the stage div in Webflow to get the counter on its own.
+  if (!stage) return null
 
   // The map is independent of GSAP: it owns its own rAF loop, so it still runs if
   // GSAP never loads. `still` paints one populated frame and stops (reduced motion).

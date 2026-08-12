@@ -1,0 +1,88 @@
+/* ===== TABS-HEADQUARTERS · city tabs, one photo each (no autoplay) ===== */
+/* Item stacking + the underline/track baseline. Hooks → tabs-headquarters.md. */
+
+/* — Item stacking (grid: same cell) — the N tab-items share one box and crossfade. Default
+   stretch (no align-items: start) is deliberate: they must all fill the same box or the
+   outgoing photo peeks around the incoming one mid-crossfade.
+   Gated on .is-enhanced (added by JS at runtime) so with no JS the items stay in normal flow
+   instead of piling into one unreadable stack. — */
+[data-component='tabs-headquarters'].is-enhanced
+  .tabs-headquarters_tabs-content {
+  display: grid;
+}
+[data-component='tabs-headquarters'].is-enhanced .tabs-headquarters_tab-item {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The photos have to occupy the same box for the crossfade — that's why width/height are
+   forced here rather than left to the Designer. Size the box on the wrapper instead. */
+[data-component='tabs-headquarters'] [tabs-architected='image'] {
+  position: relative; /* the overlay inside it anchors here */
+  overflow: hidden;
+}
+[data-component='tabs-headquarters'] [tabs-architected='image'] img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* — Tab text: inactive grey, active black, always medium (500) — */
+/* The colour is transitioned: the crossfade animates, so a hard grey→black snap on the label
+   was the one step that read as a glitch. */
+[data-component='tabs-headquarters'] [tabs-architected='link'],
+[data-component='tabs-headquarters'] [tabs-architected='link'] * {
+  color: var(--base--grey, #666);
+  font-weight: 500;
+  transition: color 0.35s ease;
+}
+[data-component='tabs-headquarters'] [tabs-architected='link'].is-active,
+[data-component='tabs-headquarters'] [tabs-architected='link'].is-active * {
+  color: var(--base--black, #000);
+}
+[data-component='tabs-headquarters'].is-enhanced [tabs-architected='link'] {
+  cursor: pointer;
+}
+
+/* — Underline / track / fill — grey track under every tab, black fill only on the active one.
+   A STATE indicator, not a progress bar: nothing times it, so the JS snaps it to full. */
+
+/* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
+[data-component='tabs-headquarters'] .tabs-headquarters_tab-link-underline {
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* Grey track on every tab (full width; JS adds .is-track). */
+[data-component='tabs-headquarters']
+  .tabs-headquarters_tab-link-underline.is-track {
+  transform: none;
+  background-color: var(--base--grey-line, #e4e2dd);
+}
+/* Black fill (active-only; shown full immediately, faded out at its current width when the
+   tab is left instead of rewinding). */
+[data-component='tabs-headquarters'] .tabs-headquarters_tab-link-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform, opacity;
+  background-color: var(--base--black, #000);
+}
+
+/* — Reduced motion (no track/fill; keep the active underline full) — */
+@media (prefers-reduced-motion: reduce) {
+  [data-component='tabs-headquarters'] [tabs-architected='link'],
+  [data-component='tabs-headquarters'] [tabs-architected='link'] * {
+    transition: none;
+  }
+  [data-component='tabs-headquarters']
+    [tabs-architected='link'].is-active
+    .tabs-headquarters_tab-link-underline {
+    transform: scaleX(1);
+  }
+}

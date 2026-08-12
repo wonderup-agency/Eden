@@ -1,0 +1,143 @@
+/* ===== TABS-TEAM · reading-time text tabs with one photo per tab ===== */
+/* Panel + photo stacking and the underline/track baseline. Hooks → tabs-team.md. */
+
+/* — Text panel stacking (grid: same cell) — the N text blocks stack in the text-content
+   column; only the active one shows (JS autoAlpha).
+   Gated on .is-enhanced (added by JS at runtime) so with no JS the blocks stay in normal
+   flow, one below the other, readable and crawlable. — */
+/* align-items: start is load-bearing, not cosmetic: stacked grid items stretch to the row
+   height by default, so a stretched panel would report the TALLEST tab's height and the JS
+   height-fit (fitPanels) could never measure the active panel on its own. */
+[data-component='tabs-team'].is-enhanced [tabs-team='text-content'] {
+  display: grid;
+  align-items: start;
+}
+[data-component='tabs-team'].is-enhanced .tabs-team_tab-content-inner {
+  grid-area: 1 / 1; /* every text block occupies the same grid cell */
+}
+
+/* — Photo stacking (grid: same cell) — the N photos share one box and crossfade.
+   NOT align-items: start here (unlike the text): they must all fill the same box or the
+   outgoing photo peeks around the incoming one mid-crossfade. Default stretch is what makes
+   the row height the tallest photo's and every photo that box. — */
+[data-component='tabs-team'].is-enhanced .tabs-team_image-wrapper {
+  display: grid;
+}
+[data-component='tabs-team'].is-enhanced
+  .tabs-team_image-wrapper
+  [tabs-team='image'] {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+}
+/* The hook sits on the <img> itself in the shipping markup; the wrapper form is accepted too
+   so the section survives someone wrapping each photo later. */
+[data-component='tabs-team'] img[tabs-team='image'],
+[data-component='tabs-team'] [tabs-team='image'] img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* — Text column vertical alignment: centred against the photo on desktop, top-aligned from
+   tablet down. It has to be `align-self` on the column (not `align-items` inside it): the
+   column's height is collapsed onto the active panel by fitPanels, so there is no slack left
+   inside it to centre against — only the row can align it. Leaves the row itself, and every
+   other layout decision, to the Designer. — */
+[data-component='tabs-team'] [tabs-team='text-content'] {
+  align-self: center;
+}
+@media (max-width: 991px) {
+  [data-component='tabs-team'] [tabs-team='text-content'] {
+    align-self: start;
+  }
+}
+
+/* — Tab layout is the Designer's, at every breakpoint — nothing here sizes or spaces the
+   links; the one exception is the text column's alignment above (the JS owns that column's
+   height, so the Designer can't own its alignment). */
+
+/* — Mobile accordion (≤767px) — .is-accordion is added by src/utils/tabs-accordion.js, which
+   MOVES the links, the text blocks and each tab's own photo into its drawers. Only the
+   leftovers are dealt with here; the drawer itself is styled by tabs-accordion.css. — */
+
+/* Both rows are left empty by the move — take them out instead of leaving two blank boxes. */
+[data-component='tabs-team'].is-accordion .tabs-team_tabs-links,
+[data-component='tabs-team'].is-accordion .tabs-team_tabs-content {
+  display: none;
+}
+/* The drawer's own hairline separates the rows now; the tab underline would double it. */
+[data-component='tabs-team'].is-accordion .tabs-team_tab-link-underline {
+  display: none;
+}
+/* The drawer header already carries the tab's number + name, so the heading inside the text
+   block is a second copy of it one line below. */
+[data-component='tabs-team'].is-accordion
+  .tabs-team_tab-content-inner
+  > *:has(h1, h2, h3, h4) {
+  display: none;
+}
+/* Moved out of .tabs-team_image-wrapper, the photo has no box to fill — let its own ratio
+   set the height inside the drawer instead of inheriting the stacked grid's `height: 100%`. */
+[data-component='tabs-team'].is-accordion img[tabs-team='image'],
+[data-component='tabs-team'].is-accordion [tabs-team='image'] img {
+  height: auto;
+}
+
+/* — Tab text: inactive grey, active black, always medium (500) — */
+/* The colour is transitioned: everything else on a switch animates, so a hard grey→black
+   snap on the label was the one step that read as a glitch. */
+[data-component='tabs-team'] [tabs-team='link'],
+[data-component='tabs-team'] [tabs-team='link'] * {
+  color: var(--base--grey, #666);
+  font-weight: 500;
+  transition: color 0.35s ease;
+}
+[data-component='tabs-team'] [tabs-team='link'].is-active,
+[data-component='tabs-team'] [tabs-team='link'].is-active * {
+  color: var(--base--black, #000);
+}
+[data-component='tabs-team'].is-enhanced [tabs-team='link'] {
+  cursor: pointer;
+}
+
+/* — Progress underline / track / fill (two states) — grey track under every tab (inactive),
+   black fill only on the active tab. No intermediate active-track shade. */
+
+/* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
+[data-component='tabs-team'] .tabs-team_tab-link-underline {
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
+}
+
+/* Grey track on every tab (full width; JS adds .is-track). */
+[data-component='tabs-team'] .tabs-team_tab-link-underline.is-track {
+  transform: none;
+  background-color: var(--base--grey-line, #e4e2dd);
+}
+/* Black progress fill (active-only; JS scales scaleX 0→1 across the tab's reading time, then
+   fades it out at its current width instead of rewinding). */
+[data-component='tabs-team'] .tabs-team_tab-link-fill {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform, opacity;
+  background-color: var(--base--black, #000);
+}
+
+/* — Reduced motion (no track/fill; keep the active underline full) — */
+@media (prefers-reduced-motion: reduce) {
+  [data-component='tabs-team'] [tabs-team='link'],
+  [data-component='tabs-team'] [tabs-team='link'] * {
+    transition: none;
+  }
+  [data-component='tabs-team']
+    [tabs-team='link'].is-active
+    .tabs-team_tab-link-underline {
+    transform: scaleX(1);
+  }
+}

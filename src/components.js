@@ -14,6 +14,26 @@
 
 export default [
   {
+    selector: "[data-component='tabs-headquarters']",
+    importFn: () => import('./components/tabs-headquarters.js'),
+  },
+  {
+    selector: "[data-component='scroll-clip']",
+    importFn: () => import('./components/scroll-clip.js'),
+  },
+  {
+    selector: "[data-component='tabs-team']",
+    importFn: () => import('./components/tabs-team.js'),
+  },
+  {
+    selector: "[data-component='scroll-scale']",
+    importFn: () => import('./components/scroll-scale.js'),
+  },
+  {
+    selector: "[data-component='event-gallery']",
+    importFn: () => import('./components/event-gallery.js'),
+  },
+  {
     selector: "[data-component='book-demo']",
     importFn: () => import('./components/book-demo.js'),
   },

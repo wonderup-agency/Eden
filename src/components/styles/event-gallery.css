@@ -1,0 +1,92 @@
+/* ===== EVENT-GALLERY · infinite image strip (marquee) ===== */
+/* The Designer keeps owning the images (height, radius, gap). This file only builds the
+   clipped track the JS moves them into: .event-gallery_row holds N .event-gallery_copy and
+   is animated as one composited layer. Docs → .claude/rules/components/event-gallery.md */
+
+/* — Tokens — */
+[data-component='event-gallery'] {
+  --evgal-gap: 1rem; /* fallback only — the Designer's gap on the loop wins (JS copies it) */
+  --evgal-fade: 6rem; /* edge fade width, applied ONLY with data-event-gallery-fade */
+}
+
+/* — Viewport: the existing loop element — */
+/* NO clip before the JS runs: the strip is authored to spill past its container out to the
+   screen edges, and clipping it here would visibly narrow the section for as long as the
+   bundle takes to land. Whatever clips that overflow today keeps clipping it. */
+.event-gallery_viewport {
+  display: flex;
+  /* Not the Designer's call any more: the lap maths assumes the row starts at this box's
+     left edge. Centred (which is how a strip ends up spilling both ways today) it would
+     overhang on both sides and the loop would need twice the copies to stay covered. */
+  justify-content: flex-start;
+  overflow: hidden; /* fallback — see the @supports below */
+}
+
+/* Sideways only. `hidden` would also clip vertically (a shadow, a hover scale) AND make the
+   box a scroll container; `clip` does neither, and leaves the Y axis genuinely visible. */
+@supports (overflow-x: clip) {
+  .event-gallery_viewport {
+    overflow-x: clip;
+    overflow-y: visible;
+  }
+}
+
+/* Full bleed (the default): the JS writes an inline width (the screen) and an inline
+   translateX (out of the container), so the strip is cut at the viewport edges rather than
+   the container's. This rule only stops a Designer max-width from fighting the width. */
+.event-gallery_viewport.is-bleed {
+  max-width: none;
+}
+
+/* — Row: every copy travels as one layer — */
+.event-gallery_row {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--evgal-gap);
+  will-change: transform;
+}
+
+/* — One copy of the strip — */
+.event-gallery_copy {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--evgal-gap);
+}
+
+/* The lap length IS the measured copy width, so nothing inside may shrink to fit. */
+.event-gallery_copy > * {
+  flex: 0 0 auto;
+  max-width: none;
+}
+
+/* — Optional edge fade (opt-in: data-event-gallery-fade on the root) — */
+[data-event-gallery-fade] .event-gallery_viewport,
+.event-gallery_viewport[data-event-gallery-fade] {
+  -webkit-mask: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--evgal-fade),
+    #000 calc(100% - var(--evgal-fade)),
+    transparent 100%
+  );
+  mask: linear-gradient(
+    to right,
+    transparent 0,
+    #000 var(--evgal-fade),
+    #000 calc(100% - var(--evgal-fade)),
+    transparent 100%
+  );
+}
+
+/* — Reduced motion / no WAAPI: pan it by hand instead — */
+/* The JS adds this class and builds nothing, so the original strip is left as authored. */
+.event-gallery_scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.event-gallery_scroll::-webkit-scrollbar {
+  display: none;
+}
