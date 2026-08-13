@@ -1,5 +1,6 @@
-/* ===== TABS-HEADQUARTERS · city tabs, one photo each (no autoplay) ===== */
-/* Item stacking + the underline/track baseline. Hooks → tabs-headquarters.md. */
+/* ===== TABS-HEADQUARTERS · autoplay city tabs, one photo each ===== */
+/* Item stacking (the crossfade grid) + the ≤767px stacked layout + the underline/track
+   baseline. Hooks → tabs-headquarters.md. */
 
 /* — Item stacking (grid: same cell) — the N tab-items share one box and crossfade. Default
    stretch (no align-items: start) is deliberate: they must all fill the same box or the
@@ -27,6 +28,33 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+}
+
+/* — Stacked mobile layout (≤767px) — .is-stacked is added by tabs-headquarters.js, which MOVES
+   each link and its photo into one pair. Every pair carries `.is-active` (they are all
+   showing), so the ink label comes from the rules below for free. — */
+[data-component='tabs-headquarters'].is-stacked .tabs-headquarters_tabs-links,
+[data-component='tabs-headquarters'].is-stacked
+  .tabs-headquarters_tabs-content {
+  display: none; /* both left empty by the move */
+}
+[data-component='tabs-headquarters'] .tabs-headquarters_stack {
+  display: flex;
+  flex-direction: column;
+  gap: 3rem; /* between cities */
+}
+[data-component='tabs-headquarters'] .tabs-headquarters_stack-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem; /* between a city name and its photo */
+}
+/* Nothing is selected here, so the underline is just the hairline under each name. It needs
+   saying explicitly: the tab engine never runs in this mode, so it never injects `.is-track`
+   and the baseline below would leave the bar at scaleX(0) — invisible. */
+[data-component='tabs-headquarters'].is-stacked
+  .tabs-headquarters_tab-link-underline {
+  transform: none;
+  background-color: var(--base--grey-line, #e4e2dd);
 }
 
 /* — Tab text: inactive grey, active black, always medium (500) — */

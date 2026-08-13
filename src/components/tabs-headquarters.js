@@ -9,6 +9,7 @@
 */
 
 import { armFill, fadeOutFill, lockFill } from '../utils/tab-underline.js'
+import { MOBILE_Q } from '../utils/tabs-accordion.js'
 
 const { gsap } = window
 
@@ -28,6 +29,34 @@ const DWELL_ATTR = 'data-headquarters-dwell'
 const ITEM_FADE = { duration: 0.7, ease: 'power2.inOut' }
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
+const mobileQ = window.matchMedia(MOBILE_Q)
+
+// Below 767px the section stops being tabs and becomes three name → photo pairs, all on screen.
+// Same shape as tabs-stats' stacked layout and for the same reason: with every city already
+// visible there is nothing left for a cycle to switch between, so the tab engine is never
+// booted. The existing elements are MOVED (never cloned), so nothing is duplicated in the
+// Designer and no copy can drift between two versions.
+function setupStacked(root, links, items) {
+  const box = document.createElement('div')
+  box.className = 'tabs-headquarters_stack'
+  links.forEach((link, i) => {
+    const pair = document.createElement('div')
+    pair.className = 'tabs-headquarters_stack-item'
+    // Every pair IS active here — which is also what makes the existing `.is-active` rules do
+    // the whole job: the label goes ink, no second set of rules to keep in step.
+    link.classList.add(ACTIVE_CLASS)
+    pair.appendChild(link)
+    if (items[i]) {
+      items[i].classList.add(ACTIVE_CLASS)
+      pair.appendChild(items[i])
+    }
+    box.appendChild(pair)
+  })
+  const anchor = root.querySelector('.tabs-headquarters_tabs-links')
+  if (anchor?.parentElement) anchor.parentElement.insertBefore(box, anchor)
+  else root.appendChild(box)
+  root.classList.add('is-stacked')
+}
 
 // Wire one root. Returns { destroy }, or null if the markup is incomplete.
 function setupTabs(root) {
@@ -46,8 +75,17 @@ function setupTabs(root) {
   const count = Math.min(links.length, items.length)
 
   // Gates the CSS stacking, so with no JS the items stay in normal flow (crawlable) instead of
-  // piling into one unreadable stack.
+  // piling into one unreadable pile. Also lifts the anti-FOUC head rule, which is why it has to
+  // run before the stacked branch below — that layout wants all three photos showing.
   root.classList.add('is-enhanced')
+
+  // Decided ONCE at init, like tabs-stats: a device rotated across 767px keeps the layout it
+  // loaded with. There is deliberately no live switch — rebuilding would mean booting the whole
+  // tab engine mid-session for no gain, since stacked mode holds no state to carry across.
+  if (mobileQ.matches) {
+    setupStacked(root, links, items)
+    return { destroy() {} }
+  }
 
   // Grey TRACK + injected black FILL. Reduced motion skips both (CSS shows the active bar).
   const bars = links.map((link) => {
