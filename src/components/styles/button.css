@@ -82,14 +82,9 @@
   white-space: nowrap;
 }
 
-/* — Icon nudge on hover — */
-.button_main-icon {
-  display: inline-flex;
-  transition: transform var(--anim-time) var(--anim-ease);
-}
-.button_main-wrap:hover .button_main-icon {
-  transform: translateX(0.12em);
-}
+/* — Icon nudge on hover + the data-button-icon reverse: NOT here any more —
+   Both moved to the Webflow embed (mirror: webflow-embeds/arrows.html) so the arrow
+   behaviour lives in one place with the card arrow swap. Docs → components/arrows.md */
 
 /* — Primary (gradient fill + radial border, subtle gloss) —
    `*=` so every size flavour matches (primary, primary-s, primary-m…) — same contract
@@ -467,12 +462,4 @@
     .button_main-element::after {
     background: var(--base--gold, #c79a4b);
   }
-}
-
-/* — Icon variant — opt in with data-button-icon="True" —
-   :has() guard: the attribute is set per variant in Webflow, so it also lands on buttons
-   that carry no icon; reversing a single-child flex row would shove the label to the
-   other edge. Only flip when an icon is actually there. */
-[data-button-icon='True'] .button_main-element:has(.button_main-icon) {
-  flex-direction: row-reverse;
 }

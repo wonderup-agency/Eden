@@ -9,7 +9,6 @@
 // ── Site-wide ────────────────────────────────────────────────────────
 import './components/styles/custom.css'
 import './components/styles/button.css'
-import './components/styles/card-arrow-swap.css'
 import './components/styles/card-animate.css'
 
 // ── Components ───────────────────────────────────────────────────────
