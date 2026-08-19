@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='letter']",
+    importFn: () => import('./components/letter.js'),
+  },
+  {
     selector: "[data-component='tabs-headquarters']",
     importFn: () => import('./components/tabs-headquarters.js'),
   },
