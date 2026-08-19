@@ -36,7 +36,6 @@
   z-index: 1;
   display: grid;
   place-items: center;
-  padding: 1.5rem; /* breathing room so the text never touches the viewport edges */
   pointer-events: none;
 }
 

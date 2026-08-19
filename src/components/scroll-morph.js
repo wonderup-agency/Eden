@@ -87,6 +87,8 @@ function setupRoot(root) {
     console.warn(
       '[scroll-morph] missing [data-scroll-morph-track] or [data-scroll-morph-message]'
     )
+    // Lift the gate anyway — a missing hook must not leave the whole section at opacity 0.
+    root.classList.add('is-ready')
     return null
   }
 
