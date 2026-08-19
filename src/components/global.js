@@ -245,6 +245,7 @@ function initSmoothScroll() {
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
 
   let lenis = null
+  let heightObserver = null
 
   // Drive Lenis from GSAP's ticker (shares one rAF with ScrollTrigger).
   function tick(time) {
@@ -272,12 +273,27 @@ function initSmoothScroll() {
     // Keep ScrollTrigger's scroll position in sync with Lenis.
     if (ScrollTrigger) lenis.on('scroll', ScrollTrigger.update)
 
+    // Re-measure Lenis whenever the PAGE HEIGHT changes. Lenis caches the document height
+    // at init and clamps the scroll to it; its own ResizeObserver watches
+    // document.documentElement, whose box is the viewport here (900px against a 9156px
+    // body), so it never fires and the limit stays frozen at whatever the page measured on
+    // init. Any later growth — lazy images, webfonts, a component's own enhancement — is
+    // then simply unreachable: measured on About, Lenis stopped at 7059px of a 8256px page,
+    // i.e. exactly at the top of the last section. document.body IS the element that tracks
+    // content, so observing it is the fix; RO delivers at most once per frame, after layout.
+    if (window.ResizeObserver) {
+      heightObserver = new window.ResizeObserver(() => lenis?.resize())
+      heightObserver.observe(document.body)
+    }
+
     window.lenis = lenis // expose for anchor scrolling / debugging
   }
 
   function stop() {
     if (!lenis) return
     if (gsap) gsap.ticker.remove(tick)
+    heightObserver?.disconnect()
+    heightObserver = null
     lenis.destroy()
     lenis = null
     window.lenis = null

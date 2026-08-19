@@ -91,11 +91,21 @@
    The track is the same width on every breakpoint, so the same 30s reads as sluggish on
    a narrow screen where far fewer logos are on show at once. Shorter lap = faster crawl.
    The fade also has to come down — 6rem on each edge of a ~23rem viewport leaves over
-   half the strip washed out. Both are tuning values: adjust on a real device. */
+   half the strip washed out. Both are tuning values: adjust on a real device.
+
+   The gap went 2rem → 0.75rem (2026-08-18): the strip read as too airy on a phone.
+   Note the gap is only PART of the spacing — the fixed 3/1 slot is 7.5rem wide and
+   object-fit centres each logo in it, so a 1.8:1 mark leaves 1.5rem dead on each side,
+   i.e. more air than the gap itself. --marquee-logo-ar is the lever for that half; it is
+   deliberately left at 3/1 because narrowing it makes wide marks render shorter.
+
+   The lap came down with it, and that is a correction, not a retune: px/s is one copy's
+   width / duration, and a smaller gap makes the copy 13% narrower — at the old 25s the
+   crawl would have slowed by the same 13%. 22s holds the speed it had. */
 @media (max-width: 767px) {
   .logos_marquee-wrapper {
-    --marquee-duration: 25s;
-    --marquee-gap: 2rem;
+    --marquee-duration: 22s;
+    --marquee-gap: 0.75rem;
     --marquee-fade: 1rem;
   }
 }
