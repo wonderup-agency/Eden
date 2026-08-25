@@ -55,7 +55,8 @@ const putBack = ({ node, parent, next }) => {
  * @param {string} o.name                 Component name — id prefix + the container's hook
  * @param {HTMLElement[]} o.links         One tab link per drawer; becomes the header content
  * @param {HTMLElement[][]} o.bodies      Elements moved into each drawer, in order
- * @param {HTMLElement} [o.shared]        A single visual moved into whichever drawer is open
+ * @param {HTMLElement|HTMLElement[]} [o.shared]  Element(s) moved into whichever drawer is
+ *                                        open — the section's one visual, its one CTA, …
  * @param {HTMLElement} [o.anchor]        The container is inserted before this element
  * @param {string} [o.media]              Media query the accordion lives inside
  */
@@ -78,11 +79,15 @@ export function createTabsAccordion({
     )
 
   const mq = window.matchMedia(media)
+  // One element or several: whatever the section owns ONE of and hands to the open drawer.
+  const sharedNodes = (Array.isArray(shared) ? shared : [shared]).filter(
+    Boolean
+  )
   let box = null // the injected container — also the "accordion is on" flag
   let items = []
   let marks = []
   let attrRestore = []
-  let sharedMark = null
+  let sharedMarks = []
   let openIndex = -1
   let booted = false
 
@@ -104,7 +109,7 @@ export function createTabsAccordion({
   function build() {
     box = make('div', 'tabs-accordion')
     box.setAttribute('data-tabs-accordion', name)
-    if (shared) sharedMark = mark(shared)
+    sharedMarks = sharedNodes.map(mark)
 
     links.forEach((link, i) => {
       const item = make('div', 'tabs-accordion_item')
@@ -198,7 +203,8 @@ export function createTabsAccordion({
     if (prev >= 0 && !instant && !reduceMotion.matches)
       gsap.set(items[prev].body, { height: items[prev].body.offsetHeight })
     openIndex = index
-    if (shared) items[index].inner.appendChild(shared) // the section's one visual follows
+    // The section's shared parts follow the open drawer, in the order they were passed.
+    if (sharedNodes.length) items[index].inner.append(...sharedNodes)
     if (prev >= 0) {
       setDrawer(prev, false, instant)
       onClose?.(prev)
@@ -237,14 +243,14 @@ export function createTabsAccordion({
       gsap.set(it.body, { clearProps: 'height' })
     })
     for (let k = marks.length - 1; k >= 0; k--) putBack(marks[k])
-    if (sharedMark) putBack(sharedMark)
+    for (let k = sharedMarks.length - 1; k >= 0; k--) putBack(sharedMarks[k])
     attrRestore.forEach((fn) => fn())
     box.remove()
     box = null
     items = []
     marks = []
     attrRestore = []
-    sharedMark = null
+    sharedMarks = []
     openIndex = -1
     root.classList.remove(ACCORDION_CLASS)
     onDisable?.(wasOpen)

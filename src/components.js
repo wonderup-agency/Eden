@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='impact-beyond']",
+    importFn: () => import('./components/impact-beyond.js'),
+  },
+  {
     selector: "[data-component='letter']",
     importFn: () => import('./components/letter.js'),
   },

@@ -1,18 +1,15 @@
 /*
   Component: tabs-team · data-component="tabs-team"
-  Autoplay text tabs with ONE photo per tab. Same chrome as tabs-architected (the underline IS
-  the clock, click-to-lock, mobile accordion), but the visual is a stack of photos that
-  crossfade — so the dwell is the panel's READING TIME (words ÷ READ_WPM), not a video cue gap.
+  Autoplay text tabs with ONE photo per tab, over a ROTATING window of tab links: the active
+  tab is always slot 0, the outgoing one leaves through the left edge and the next member
+  comes round on the right — so the section takes 4, 6 or 10 members without changing shape.
+  Dwell is the panel's READING TIME. Same chrome as tabs-architected (the underline IS the
+  clock, click-to-lock, mobile accordion).
   CSS → ./styles/tabs-team.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-team.md
 */
 
 import { REVEAL_FROM } from '../utils/word-reveal.js'
-import {
-  armFill,
-  clearFill,
-  fadeOutFill,
-  lockFill,
-} from '../utils/tab-underline.js'
+import { armFill, clearFill, lockFill } from '../utils/tab-underline.js'
 import {
   ACCORDION_CLASS,
   createTabsAccordion,
@@ -20,7 +17,18 @@ import {
 
 const { gsap } = window
 
+// Temporary diagnostic for the rotating window. It logs AND parks the same data on
+// window.__tabsTeam, because the prod build strips every console.* (Terser drop_console) —
+// the global is what survives a deploy, so the section can be diagnosed on the live page.
+// Set it back to false before shipping for real.
+const DEBUG = false
+const dbg = (entry) => {
+  if (!DEBUG) return
+  ;(window.__tabsTeam ||= []).push(entry)
+}
+
 const ACTIVE_CLASS = 'is-active'
+const TRACK_CLASS = 'is-track' // grey track — active tab only (must match tabs-team.css)
 const LOCKED_CLASS = 'is-locked' // hook for CSS / the Designer — no rule ships with it
 // Per-tab override in seconds (escape hatch). Deliberately NOT data-tabs-team-dwell — it's
 // typed by hand in the Designer and nothing else on the site claims the name.
@@ -36,6 +44,29 @@ const READ_WPM = 240
 const READ_BASE = 2
 const READ_MIN = 4
 const READ_MAX = 18
+
+// How many links show at once. Constant at any member count — that's what keeps the layout
+// identical with 3 members and with 10.
+const VISIBLE_SLOTS = 3
+// The row shift. One tween per link, all starting together, so it reads as a strip moving.
+const ROTATE = { duration: 0.7, ease: 'power2.inOut' }
+// A link that wrapped past the end leaves through the left over this share of the tween and
+// (only when it lands back inside the window) comes round on the right over the rest.
+const EXIT_SHARE = 0.5
+// Enter / exit fade, as a share of that leg. Without it a name pops in at the right edge.
+const FADE_SHARE = 0.6
+// The sliver of the NEXT name that must always show, in px. This is the invariant the row is
+// laid out around: the strip has to read as continuing in EVERY rotation, not only in the ones
+// where the names that happen to be on screen are short. `VISIBLE_SLOTS` is a ceiling that
+// gives way to it — a row that can't fit three names and still peek shows two and still peeks.
+const PEEK_MIN = 48
+// Cap on how gradual the right-edge dissolve is. Without it the fade spans whatever is left
+// over, and on a short run that's most of the row — the peeking name washes out end to end.
+const FADE_MAX = 160
+// Floor on the space between slots, in px. The CSS sets a real `column-gap`, but the slot
+// width IS the name's own width now — so if that rule ever goes missing, two names would sit
+// flush against each other rather than merely close.
+const MIN_GAP = 12
 
 // Content blocks de-blur + fade + rise (REVEAL_FROM = shared paradigm/hero start state).
 const CONTENT_TO = {
@@ -89,27 +120,38 @@ function setupTabs(root) {
   }
 
   const count = Math.min(links.length, panels.length)
+  if (links.length !== panels.length)
+    console.warn(
+      `[tabs-team] ${links.length} links vs ${panels.length} text blocks — only the first ${count} cycle; the rest never become active, so they never leave the parked slot`
+    )
+  // The window that actually runs. A queue only reads as a queue if SOMEBODY is waiting
+  // off-stage: with as many slots as members nobody is ever hidden, so the outgoing name has
+  // to fly out to the left and come straight back on the right — which reads as a glitch, not
+  // as a rotation. So the last member is always parked, and VISIBLE_SLOTS is the ceiling
+  // rather than the count. At 4+ members it IS VISIBLE_SLOTS, which is the shipping case.
+  let slots = Math.min(VISIBLE_SLOTS, Math.max(1, count - 1))
   if (images.length && images.length < count)
     console.warn(
       `[tabs-team] ${count} tabs but ${images.length} images — the extra tabs keep the last one`
     )
 
-  // Enhanced flag — gates the CSS stacking (text blocks AND images) so they only overlap once
-  // the bundle runs. With no JS they stay in normal flow, readable and crawlable.
+  // Enhanced flag — gates the CSS stacking (text blocks AND images) and the rotating row, so
+  // they only take effect once the bundle runs. With no JS everything stays in normal flow,
+  // readable and crawlable.
   root.classList.add('is-enhanced')
 
   // The stacked text column — its height is tweened onto the active panel (see fitPanels).
   const textWrap = root.querySelector('[tabs-team="text-content"]')
 
-  // Turn each underline into a grey TRACK + inject a black FILL child that scales 0→1.
-  // Active-only: only the active tab's fill shows. Reduced motion skips track/fill.
+  // Turn each underline into a track that can hold a black FILL child scaling 0→1. The grey
+  // track itself is added per switch (setTracks) — only the active tab carries one.
+  // Reduced motion skips track/fill entirely.
   const bars = links.map((link) => {
     const track = link.querySelector('.tabs-team_tab-link-underline')
     if (!track || reduceMotion.matches) return null
     const fill = document.createElement('span')
     fill.className = 'tabs-team_tab-link-fill'
     track.appendChild(fill)
-    track.classList.add('is-track')
     return fill
   })
 
@@ -119,6 +161,7 @@ function setupTabs(root) {
   }))
 
   let activeIndex = -1
+  let pendingIndex = 0 // where a switch is heading — activeIndex only moves on completion
   let isAnimating = false
   let started = false // autoplay kicked off (section reached)
   let onScreen = false
@@ -149,24 +192,327 @@ function setupTabs(root) {
       : progressTl.pause()
   }
 
+  // ---- The rotating links row ----
+  // The links row IS the viewport: it already carries the Designer's flex row and its gap, so
+  // nothing is injected and there is no new hook to author. Each link is translated into its
+  // slot; the DOM order NEVER changes, so the tab order and the a11y tree stay authorial.
+  const linksRow = root.querySelector('.tabs-team_tabs-links')
+  // Optional: the peek says "there are more", this says how many and where you are.
+  const counter = root.querySelector('[tabs-team="counter"]')
+  const pad = (n) => String(n).padStart(2, '0')
+  const setCounter = (index) => {
+    if (!counter) return
+    counter.innerHTML = `<span class="tabs-team_counter-current">${pad(index + 1)}</span> / ${pad(count)}`
+  }
+  if (!linksRow)
+    console.warn(
+      '[tabs-team] no .tabs-team_tabs-links — the rotating window is off, the links stay in flow'
+    )
+  const natX = [] // each link's laid-out x inside the row, transforms cleared
+  const linkW = []
+  let rowGap = 0
+  let rowW = 0 // the viewport's own width — anything past it is clipped
+  let rowSlots = null // current per-link target, so a rotation knows where each link came from
+
+  // One write (transforms off), then all the reads — never interleaved, or every link costs
+  // a forced reflow. Positions are in the row's border-box space.
+  function measureRow() {
+    if (!linksRow || inAccordion()) return false
+    gsap.killTweensOf(links)
+    gsap.set(links, { x: 0 })
+    const box = linksRow.getBoundingClientRect()
+    rowGap = parseFloat(getComputedStyle(linksRow).columnGap) || 0
+    rowW = box.width
+    links.forEach((link, i) => {
+      const r = link.getBoundingClientRect()
+      natX[i] = r.left - box.left
+      linkW[i] = r.width
+    })
+    // The spacing between slots is MEASURED off the natural layout, not read from
+    // `column-gap`: the Designer can space these links with a flex gap, with margins or with
+    // inline whitespace, and only the first of the three shows up in the computed style — the
+    // other two would resolve to 0 and the names would jam together. Median, so one odd
+    // margin can't skew it.
+    const gaps = []
+    for (let i = 1; i < links.length; i++) {
+      const g = natX[i] - (natX[i - 1] + linkW[i - 1])
+      if (g >= 0) gaps.push(g)
+    }
+    gaps.sort((a, b) => a - b)
+    rowGap = Math.max(
+      MIN_GAP,
+      gaps.length
+        ? gaps[Math.floor(gaps.length / 2)]
+        : parseFloat(getComputedStyle(linksRow).columnGap) || 0
+    )
+    // The mask starts where the WIDEST run of fully-visible names ends — widest, not the
+    // current one, because the run's width changes as the row rotates and a fade pinned to
+    // one arrangement would eat the tail of a name in another.
+    slots = fitSlots()
+    linksRow.style.setProperty(
+      '--tt-fade',
+      `${Math.round(Math.max(widestRun() + (natX[0] || 0), rowW - FADE_MAX))}px`
+    )
+    warnIfCramped()
+    if (DEBUG) logRow()
+    return rowW > 0
+  }
+
+  // How wide a run of n names is at its WORST — the widest arrangement the rotation can put
+  // on screen, not the one showing right now. Everything about the window is sized off the
+  // worst case, so nothing changes shape as the row turns.
+  function runWidth(n) {
+    let worst = 0
+    for (let a = 0; a < count; a++) {
+      let w = 0
+      for (let s = 0; s < n; s++) w += linkW[(a + s) % count] + (s ? rowGap : 0)
+      worst = Math.max(worst, w)
+    }
+    return worst
+  }
+  const widestRun = () => runWidth(slots)
+
+  // The most names that can sit in the clear while STILL leaving PEEK_MIN of the next one
+  // showing. VISIBLE_SLOTS is the ceiling; the peek is the floor and always wins.
+  function fitSlots() {
+    const room = rowW - (natX[0] || 0) - PEEK_MIN
+    const ceiling = Math.min(VISIBLE_SLOTS, Math.max(1, count - 1))
+    for (let n = ceiling; n > 1; n--) if (runWidth(n) + rowGap <= room) return n
+    return 1
+  }
+
+  let warnedCramped = false
+  function warnIfCramped() {
+    const ceiling = Math.min(VISIBLE_SLOTS, Math.max(1, count - 1))
+    if (warnedCramped || slots >= ceiling) return
+    warnedCramped = true
+    console.warn(
+      `[tabs-team] showing ${slots} names instead of ${ceiling}: fitting ${ceiling} and still peeking needs ${Math.round(runWidth(ceiling) + rowGap + PEEK_MIN + (natX[0] || 0))}px, and .tabs-team_tabs-links is ${Math.round(rowW)}px. Widen the row or lower --tabs-team-gap.`
+    )
+  }
+
+  function logRow() {
+    const cs = getComputedStyle(linksRow)
+    dbg({
+      what: 'window',
+      links: links.length,
+      panels: panels.length,
+      images: images.length,
+      count,
+      slots,
+      ceiling: Math.min(VISIBLE_SLOTS, Math.max(1, count - 1)),
+      peekMin: PEEK_MIN,
+      rowW: Math.round(rowW),
+      gapMeasured: Math.round(rowGap),
+      gapComputed: cs.columnGap,
+      display: cs.display,
+      justify: cs.justifyContent,
+      overflowX: cs.overflowX,
+      widestRun: Math.round(widestRun()),
+      names: links.map((l, i) => ({
+        i,
+        name: (l.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 28),
+        natX: Math.round(natX[i]),
+        width: Math.round(linkW[i]),
+        hasPanel: !!panels[i],
+        hasImage: !!images[i],
+      })),
+    })
+    console.log(
+      `%c[tabs-team] window · ${links.length} links / ${panels.length} blocks / ${images.length} images · count ${count}`,
+      'color:#c79a4b;font-weight:bold'
+    )
+    console.log(
+      `  row ${Math.round(rowW)}px · gap measured ${Math.round(rowGap)}px (computed column-gap ${cs.columnGap}) · display ${cs.display} · justify ${cs.justifyContent} · overflow ${cs.overflowX} · widest run ${Math.round(widestRun())}px`
+    )
+    console.table(
+      links.map((l, i) => ({
+        i,
+        name: (l.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 28),
+        natX: Math.round(natX[i]),
+        width: Math.round(linkW[i]),
+        hasPanel: !!panels[i],
+        hasImage: !!images[i],
+      }))
+    )
+  }
+
+  // Where every link belongs for a given active tab. Slot 0 is the active one, pinned to the
+  // row's content start; slots keep accumulating past the window so a link waiting off-screen
+  // sits where the strip would actually continue — clamped past the right edge so it's always
+  // clipped, whatever the column width.
+  function rowTargets(active) {
+    const t = new Array(links.length)
+    const off = rowW + rowGap
+    let x = natX[0] || 0
+    for (let s = 0; s < count; s++) {
+      const i = (active + s) % count
+      // `slots` names sit in the clear. The one after them is the PEEK: it stands exactly
+      // where the strip continues, half inside the row, and the mask dissolves it — that
+      // half-name is the whole "there are more of us" signal. Anything past it is parked
+      // beyond the right edge with nothing showing.
+      const px = s <= slots ? x : Math.max(x, off)
+      t[i] = { x: px, slot: s }
+      x = px + linkW[i] + rowGap
+    }
+    // A link with no panel to pair with is never cycled — park it out of the way.
+    for (let i = count; i < links.length; i++)
+      t[i] = { x: Math.max(x, off), slot: count }
+    return t
+  }
+
+  // Instant placement — load, resize, reduced motion, and the way back from the accordion.
+  function placeRow(active) {
+    if (!linksRow || inAccordion() || !measureRow()) return
+    const t = rowTargets(active)
+    links.forEach((link, i) => {
+      // opacity, NOT autoAlpha: visibility:hidden would drop a parked link out of the tab
+      // order, and a member waiting off-screen still has to be reachable by keyboard.
+      gsap.set(link, {
+        x: t[i].x - natX[i],
+        opacity: t[i].slot <= slots ? 1 : 0,
+      })
+    })
+    rowSlots = t
+  }
+
+  // Rotate the row into `next`, as tweens on the switch's own timeline at position 0 — the
+  // row has to read as one strip shifting, not as N elements animating on their own.
+  function rotateRow(tl, next) {
+    if (!linksRow || inAccordion() || !rowSlots) return
+    const prev = rowSlots
+    const now = rowTargets(next)
+    const steps = (next - activeIndex + count) % count
+    const exitAt = ROTATE.duration * EXIT_SHARE
+    const backAt = ROTATE.duration - exitAt
+    const offRight = rowW + rowGap
+    const trace = []
+
+    links.forEach((link, i) => {
+      const dx = now[i].x - natX[i]
+      // Three regions, not two: `clear` (a name in the open row), `peek` (the one dissolving
+      // into the mask at the right edge) and parked. What a link is allowed to do on a
+      // rotation depends on which of the three it lands in.
+      const wasShown = prev[i].slot <= slots
+      const isShown = now[i].slot <= slots
+      const isClear = now[i].slot < slots
+      // Wrapped past the end of the order: it can never slide sideways across the tabs that
+      // stayed put — it has to leave through the LEFT edge.
+      const wraps = i < count && prev[i].slot < steps
+
+      if (DEBUG)
+        trace.push({
+          i,
+          name: (link.textContent || '')
+            .trim()
+            .replace(/\s+/g, ' ')
+            .slice(0, 24),
+          slot: `${prev[i].slot}→${now[i].slot}`,
+          x: `${Math.round(prev[i].x)}→${Math.round(now[i].x)}`,
+          move: wraps
+            ? isClear
+              ? 'exit-left + around'
+              : 'exit-left + re-form'
+            : !wasShown && isShown
+              ? 'enter from right'
+              : 'slide',
+          dx: Math.round(now[i].x - prev[i].x),
+        })
+
+      if (wraps) {
+        tl.to(
+          link,
+          {
+            x: -(natX[i] + linkW[i] + rowGap),
+            duration: exitAt,
+            ease: 'power2.in',
+          },
+          0
+        )
+        tl.to(
+          link,
+          { opacity: 0, duration: exitAt * FADE_SHARE, ease: 'power1.in' },
+          0
+        )
+        if (isClear) {
+          // It has to land in the OPEN part of the row, where materialising out of nothing
+          // would be seen — so bring it round the outside instead. Only reachable on a
+          // multi-step click with few members. fromTo, not set + to: the start value is
+          // declared rather than read back off a zero-duration tween at the same position.
+          tl.fromTo(
+            link,
+            { x: offRight - natX[i] },
+            { x: dx, duration: backAt, ease: 'power2.out' },
+            exitAt
+          )
+          tl.to(
+            link,
+            { opacity: 1, duration: backAt * FADE_SHARE, ease: 'power1.out' },
+            exitAt
+          )
+          return
+        }
+        // It lands under the mask (the peek) or off-screen, so it just re-forms there — no
+        // trip around the outside. Travelling would make the whole row read as scrambling
+        // once per cycle, which is exactly what it used to do.
+        tl.set(link, { x: dx }, exitAt)
+        if (isShown)
+          tl.to(
+            link,
+            { opacity: 1, duration: backAt * FADE_SHARE, ease: 'power1.out' },
+            exitAt
+          )
+        return
+      }
+
+      tl.to(link, { x: dx, ...ROTATE }, 0)
+      if (wasShown === isShown) return
+      tl.to(
+        link,
+        {
+          opacity: isShown ? 1 : 0,
+          duration: ROTATE.duration * FADE_SHARE,
+          ease: isShown ? 'power1.out' : 'power1.in',
+        },
+        0
+      )
+    })
+    if (DEBUG) {
+      dbg({ what: 'rotate', from: activeIndex, to: next, steps, trace })
+      console.log(
+        `%c[tabs-team] rotate ${activeIndex} → ${next} (${steps} step${steps > 1 ? 's' : ''})`,
+        'color:#c79a4b'
+      )
+      console.table(trace)
+    }
+    rowSlots = now
+  }
+
   // Accessibility scaffolding — tablist / tab / tabpanel with roving tabindex.
-  root.querySelector('.tabs-team_tabs-links')?.setAttribute('role', 'tablist')
+  linksRow?.setAttribute('role', 'tablist')
   links.forEach((link, i) => {
     const panel = panels[i]
     const linkId = link.id || `tabs-team-tab-${i}`
-    const panelId = panel.id || `tabs-team-panel-${i}`
+    const panelId = panel?.id || `tabs-team-panel-${i}`
     link.id = linkId
-    panel.id = panelId
     link.setAttribute('role', 'tab')
-    link.setAttribute('aria-controls', panelId)
     link.setAttribute('tabindex', '-1')
+    if (!panel) return
+    panel.id = panelId
+    link.setAttribute('aria-controls', panelId)
     panel.setAttribute('role', 'tabpanel')
     panel.setAttribute('aria-labelledby', linkId)
   })
 
-  // Active-only fills: every non-active tab's bar fades out where it stands.
-  const setStaticFills = (index) => {
-    bars.forEach((bar, k) => k !== index && fadeOutFill(bar))
+  // The underline is the active tab's alone: with the active pinned to slot 0, a grey track
+  // under every name stops communicating anything. Everyone else loses track and fill outright
+  // — no fade-out, because the link itself is already leaving.
+  const setTracks = (index) => {
+    bars.forEach((bar, k) => {
+      if (!bar) return
+      bar.parentElement?.classList.toggle(TRACK_CLASS, k === index)
+      if (k !== index) clearFill(bar)
+    })
   }
 
   // Collapse the text column onto the active panel, so a short tab doesn't drag the tallest
@@ -207,6 +553,7 @@ function setupTabs(root) {
   function switchTab(index) {
     if (isAnimating || index === activeIndex) return
     isAnimating = true
+    pendingIndex = index
 
     const outLink = links[activeIndex]
     const outPanel = panels[activeIndex]
@@ -223,7 +570,9 @@ function setupTabs(root) {
     inLink.setAttribute('aria-selected', 'true')
     inLink.setAttribute('tabindex', '0')
 
-    fitPanels(index) // the bars + the clock are startProgress's, called right after this
+    setTracks(index)
+    setCounter(index)
+    fitPanels(index) // the fill + the clock are startProgress's, called right after this
 
     // Incoming overlays the outgoing (z-index) regardless of DOM order; it shows instantly,
     // its content de-blurs in while the outgoing fades out.
@@ -237,14 +586,15 @@ function setupTabs(root) {
         gsap.set(panels, { clearProps: 'zIndex' })
       },
     })
-    crossfadeImage(tl, index) // reads activeIndex — must run before onComplete moves it
+    rotateRow(tl, index) // reads activeIndex — must run before onComplete moves it
+    crossfadeImage(tl, index)
     if (outPanel) tl.to(outPanel, OUT_FADE, 0)
     const at = outPanel ? 0.15 : 0
     if (parts[index].content.length)
       tl.fromTo(parts[index].content, REVEAL_FROM, CONTENT_TO, at)
   }
 
-  // Reduced motion: no de-blur, no crossfade, no autoplay. Everything toggles instantly.
+  // Reduced motion: no de-blur, no crossfade, no rotation, no autoplay. Everything snaps.
   function switchTabInstant(index) {
     if (index === activeIndex) return
     resetToTab(index)
@@ -254,9 +604,9 @@ function setupTabs(root) {
   // its completion advances the tab. Being a tween is the point — a lock can pause it.
   function startProgress(index) {
     if (progressTl) progressTl.kill()
-    setStaticFills(index)
+    setTracks(index)
     const bar = bars[index]
-    if (bar) armFill(bar) // drop a FILL_OUT still fading this bar out
+    if (bar) armFill(bar)
     const dwell = dwellFor(index)
     // A timeline rather than a bare tween on the bar, so the clock still exists on a tab whose
     // underline is missing from the markup — the bar is optional, advancing isn't.
@@ -304,7 +654,8 @@ function setupTabs(root) {
     started ? startProgress(index) : sync()
   }
 
-  // Click / keyboard: jump to that tab AND lock it; activating the locked tab releases it.
+  // Click / keyboard: rotate straight to that tab AND lock it — however many slots away it
+  // is, in one movement. Activating the locked tab releases it.
   const activateTab = (index) => {
     // Accordion mode: the drawer header owns the interaction. A tap landing on the link inside
     // it bubbles here, so this has to stand down.
@@ -317,9 +668,11 @@ function setupTabs(root) {
   }
 
   // The stacked-tabs state from scratch: one tab + one image visible, the rest hidden (before
-  // paint, no CLS). Used on load, and again when the accordion hands the section back.
+  // paint, no CLS), and the row placed with that tab in slot 0. Used on load, and again when
+  // the accordion hands the section back.
   function resetToTab(index) {
     activeIndex = index
+    pendingIndex = index
     isAnimating = false
     gsap.killTweensOf(panels)
     gsap.killTweensOf(images)
@@ -340,13 +693,20 @@ function setupTabs(root) {
       gsap.set(img, { autoAlpha: on ? 1 : 0, zIndex: on ? 2 : 1 })
     })
     gsap.set(panels, { clearProps: 'zIndex' })
+    setTracks(index)
+    setCounter(index)
+    placeRow(index)
     fitPanels(index, true) // no collapse animation on load
   }
 
   gsap.set(bars.filter(Boolean), { scaleX: 0, transformOrigin: 'left center' })
   resetToTab(0)
-  // Webfonts land after init and reflow the copy — re-measure once they're in.
-  document.fonts?.ready.then(() => fitPanels(activeIndex, true))
+  // Webfonts land after init and reflow the copy — and the names' widths ARE the slot
+  // geometry, so the row has to be re-measured with them too.
+  document.fonts?.ready.then(() => {
+    placeRow(pendingIndex)
+    fitPanels(activeIndex, true)
+  })
 
   // ---- Mobile accordion (≤767px) ----
   // Drawers instead of tabs: each drawer holds its own text block AND its own image, so there
@@ -376,11 +736,20 @@ function setupTabs(root) {
         })
       })
       if (textWrap) gsap.set(textWrap, { clearProps: 'height' })
-      bars.forEach((bar) => clearFill(bar)) // the drawer's hairline is the state indicator
+      // The row is gone: a link now lives in a drawer header and must carry none of its slot
+      // transform or its parked opacity.
+      gsap.killTweensOf(links)
+      gsap.set(links, { clearProps: 'transform,opacity' })
+      rowSlots = null
+      bars.forEach((bar) => {
+        clearFill(bar) // the drawer's hairline is the state indicator
+        bar?.parentElement?.classList.remove(TRACK_CLASS)
+      })
     },
     onOpen(index) {
       accordionOpen = index
       activeIndex = index
+      pendingIndex = index
       links.forEach((link, i) =>
         link.classList.toggle(ACTIVE_CLASS, i === index)
       )
@@ -396,12 +765,13 @@ function setupTabs(root) {
     },
     onDisable(wasOpen) {
       accordionOpen = -1
+      // disable() drops .is-accordion before calling this, so the row is measurable again.
       resetToTab(wasOpen >= 0 ? wasOpen : 0)
       if (started) startProgress(activeIndex)
     },
   })
 
-  // Click — switch to that tab and lock the cycle on it (second click releases).
+  // Click — rotate to that tab and lock the cycle on it (second click releases).
   const onClick = links.map((link, i) => {
     const handler = () => activateTab(i)
     link.addEventListener('click', handler)
@@ -409,7 +779,8 @@ function setupTabs(root) {
   })
 
   // Keyboard — arrow/Home/End move focus + activate; Enter/Space activate. Every explicit
-  // activation locks, same as a click.
+  // activation locks, same as a click. Home/End address the AUTHORIAL order, not the visible
+  // slots: the window is presentation, the DOM order is the list.
   const onKeydown = (e) => {
     const current = links.indexOf(document.activeElement)
     if (current === -1) return
@@ -426,8 +797,10 @@ function setupTabs(root) {
       return
     } else return
     e.preventDefault()
-    links[next].focus()
+    // Rotate FIRST, then move focus: a link waiting off-screen would otherwise take the focus
+    // ring outside the clipped row. preventScroll keeps the viewport from scrolling to it.
     activateTab(next)
+    links[next].focus({ preventScroll: true })
   }
   root.addEventListener('keydown', onKeydown)
 
@@ -467,9 +840,11 @@ function setupTabs(root) {
   }
 
   return {
-    // Column width decides how the copy wraps, so the active panel's height moves with it.
+    // Column width decides how the copy wraps (so the active panel's height moves with it) and
+    // the row's own width decides the slot geometry — both are re-measured from scratch.
     refit() {
-      fitPanels(activeIndex, true)
+      placeRow(pendingIndex)
+      fitPanels(pendingIndex, true)
     },
     destroy() {
       if (progressTl) progressTl.kill()

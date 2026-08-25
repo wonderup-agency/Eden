@@ -6,6 +6,8 @@
   muted+inline on scroll-in, loops, pauses off-screen / hidden tab. Hover never pauses it;
   clicking a tab LOCKS the cycle there with its underline full, until that tab is clicked
   again — the video keeps looping the locked tab's segment meanwhile.
+  ONE shared CTA (.tabs-architected_button) sits under the stacked copy — the component owns
+  its placement and the room the column keeps for it.
   Below 767px the section becomes an accordion instead (no cycle) — see tabs-accordion.js.
   CSS → ./styles/tabs-architected.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-architected.md
 */
@@ -27,6 +29,9 @@ const { gsap } = window
 const ACTIVE_CLASS = 'is-active'
 const LOCKED_CLASS = 'is-locked' // hook for CSS / the Designer — no rule ships with it
 const CUE_ATTR = 'data-video-time' // seconds at which this tab's text becomes active
+// The single shared CTA — ONE per section, never one per tab.
+const BUTTON_SEL = '.tabs-architected_button, [tabs-architected="button"]'
+const BUTTON_AT = 0.35 // s behind the first tab's copy, so it lands after the cascade
 
 // Fallback autoplay dwell (only when a tab has no cue gap) — text-scaled.
 const AUTOPLAY_BASE = 3.5
@@ -95,6 +100,25 @@ function setupTabs(root) {
   // The stacked text column — its height is tweened onto the active panel (see fitPanels).
   const textWrap = root.querySelector('[tabs-architected="text-content"]')
 
+  // The single shared CTA: ONE button for the whole section, so it can't live inside the
+  // stacked panels (that would be one per tab) — it gets its own row under them.
+  const ctas = gsap.utils.toArray(root.querySelectorAll(BUTTON_SEL))
+  const button = ctas[0] || null
+  if (ctas.length > 1) {
+    console.warn(
+      `[tabs-architected] ${ctas.length} buttons found — the section takes ONE shared CTA, using the first`
+    )
+    // The extras are one-per-tab markup: left in flow they'd show a second button on their
+    // own tab, next to the shared one. The warn is stripped in production, so the state has
+    // to be right without it.
+    gsap.set(ctas.slice(1), { display: 'none' })
+  }
+  // Placement is the component's, not the Designer's: appended into the text column so it
+  // always lands in its own grid row under the active copy, wherever it was dropped in
+  // Webflow (the CSS pins it to row 2; the panels all share row 1).
+  if (button && textWrap && button.parentElement !== textWrap)
+    textWrap.appendChild(button)
+
   // The single shared video (hook on the <video> or its wrapper; `image` accepted for
   // back-compat with the original markup; else any video in root).
   const videoHook =
@@ -119,7 +143,7 @@ function setupTabs(root) {
   })
 
   // Each panel is a `.tabs-architected_tab-content-inner`; its direct children (heading,
-  // paragraph, button) de-blur in, staggered.
+  // paragraph) de-blur in, staggered. The CTA is NOT one of them — it's shared (see above).
   const parts = panels.map((panel) => ({
     content: gsap.utils.toArray(panel.children),
   }))
@@ -212,6 +236,27 @@ function setupTabs(root) {
     bars.forEach((bar, k) => k !== index && fadeOutFill(bar))
   }
 
+  // What the CTA row costs the column: the button's own box + its margins (a grid row
+  // includes the item's margins) + the column's row gap above it. All read LIVE — the label
+  // re-wraps with the column width, and the gap/margins are the Designer's, per breakpoint.
+  // A `display: none` button (hidden at some breakpoint) creates no row, so no gap either.
+  const px = (v) => {
+    const n = parseFloat(v)
+    return isFinite(n) ? n : 0
+  }
+  const ctaHeight = () => {
+    if (!button || !textWrap) return 0
+    const h = button.offsetHeight
+    if (!h) return 0
+    const cs = window.getComputedStyle(button)
+    return (
+      h +
+      px(cs.marginTop) +
+      px(cs.marginBottom) +
+      px(window.getComputedStyle(textWrap).rowGap)
+    )
+  }
+
   // Collapse the text column onto the active panel, so a short tab doesn't drag the tallest
   // tab's leftover height around with it. Measured off the DOM (the CSS `align-items: start`
   // keeps each stacked panel at its own content height, so a stretched grid item can't
@@ -222,7 +267,9 @@ function setupTabs(root) {
     // In accordion mode the panels live in the drawers, so the column is empty and whatever
     // a panel measures there says nothing about it.
     if (inAccordion() || !textWrap || !panels[index]) return
-    const h = panels[index].offsetHeight
+    // The CTA is a second row under the stack, so the column has to keep room for it —
+    // fitting the panel alone squeezes the button out of the box.
+    const h = panels[index].offsetHeight + ctaHeight()
     if (immediate) gsap.set(textWrap, { height: h })
     else gsap.to(textWrap, { height: h, ...FIT_TWEEN })
   }
@@ -231,6 +278,13 @@ function setupTabs(root) {
   const revealContent = (index) => {
     const content = parts[index].content
     if (content.length) gsap.fromTo(content, REVEAL_FROM, CONTENT_TO)
+  }
+  // The CTA is the same button on every tab, so it enters ONCE behind the first tab's copy
+  // and then holds — re-animating it on each switch would draw the eye to the one thing that
+  // isn't changing.
+  const revealButton = () => {
+    if (!button || reduceMotion.matches) return
+    gsap.to(button, { ...CONTENT_TO, stagger: 0, delay: BUTTON_AT })
   }
 
   function switchTab(index) {
@@ -417,6 +471,9 @@ function setupTabs(root) {
   }
 
   gsap.set(bars.filter(Boolean), { scaleX: 0, transformOrigin: 'left center' })
+  // Hidden until the section is reached (visibility, so it still reserves its row and the
+  // fit above can measure it). Reduced motion never hides it.
+  if (button && !reduceMotion.matches) gsap.set(button, REVEAL_FROM)
   resetToTab(0)
   // Webfonts land after init and reflow the copy — re-measure once they're in.
   document.fonts?.ready.then(() => fitPanels(activeIndex, true))
@@ -461,8 +518,10 @@ function setupTabs(root) {
     name: 'tabs-architected',
     links,
     bodies: panels.map((panel) => [panel]),
-    // The wrapper, not the <video>: the Designer's video box has to travel with it.
-    shared: videoHook || video,
+    // The wrapper, not the <video>: the Designer's video box has to travel with it. The CTA
+    // rides along — its own row is inside `.tabs-architected_tabs-content`, which accordion
+    // mode hides, so left behind it would simply vanish below 767px.
+    shared: [videoHook || video, button],
     anchor: root.querySelector('.tabs-architected_tabs-links'),
     onEnable() {
       progressTl?.kill()
@@ -481,6 +540,14 @@ function setupTabs(root) {
         })
       })
       if (textWrap) gsap.set(textWrap, { clearProps: 'height' })
+      // Its reveal never runs in accordion mode (the IO skips the cycle), so the start state
+      // would leave it hidden inside the open drawer.
+      if (button) {
+        gsap.killTweensOf(button)
+        gsap.set(button, {
+          clearProps: 'opacity,visibility,filter,transform,willChange',
+        })
+      }
       bars.forEach((bar) => clearFill(bar)) // the drawer's hairline is the state indicator
     },
     onOpen(index) {
@@ -555,6 +622,7 @@ function setupTabs(root) {
           // clock and re-apply the lock, so it holds instead of starting to cycle.
           const first = isLocked() ? lockedIndex : activeIndex
           revealContent(first)
+          revealButton()
           // The first tab never goes through switchTab, so this is what arms its bar and
           // starts its clock.
           startProgress(first)

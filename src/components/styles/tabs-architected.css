@@ -18,6 +18,22 @@
   grid-area: 1 / 1; /* every text block occupies the same grid cell */
 }
 
+/* — The single shared CTA (.tabs-architected_button) — ONE button for every tab, so it is
+   NOT part of the stacked panels: it gets its own row under them and never moves as the tabs
+   switch. Pinned explicitly rather than left to auto-placement, so it can never land in the
+   panels' cell (row 1) and paint over the copy. The JS appends it into this column, so this
+   rule matches wherever it was dropped in the Designer — and the room the column keeps for
+   it is added by fitPanels (see tabs-architected.md). — */
+[data-component='tabs-architected'].is-enhanced
+  [tabs-architected='text-content']
+  > .tabs-architected_button,
+[data-component='tabs-architected'].is-enhanced
+  [tabs-architected='text-content']
+  > [tabs-architected='button'] {
+  grid-row: 2;
+  grid-column: 1;
+}
+
 /* — Text column vertical alignment: centred against the video on desktop, top-aligned from
    tablet down. It has to be `align-self` on the column (not `align-items` inside it): the
    column's height is collapsed onto the active panel by fitPanels, so there is no slack left
@@ -50,7 +66,7 @@
    above (the JS owns that column's height, so the Designer can't own its alignment). */
 
 /* — Mobile accordion (≤767px) — .is-accordion is added by src/utils/tabs-accordion.js, which
-   MOVES the links, the text blocks and the shared video into its drawers. Only the leftovers
+   MOVES the links, the text blocks and the shared video + CTA into its drawers. Only the leftovers
    are dealt with here; the drawer itself is styled by tabs-accordion.css. — */
 
 /* Both rows are left empty by the move — take them out instead of leaving two blank boxes. */

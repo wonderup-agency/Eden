@@ -40,6 +40,70 @@
   object-fit: cover;
 }
 
+/* — Rotating links row (the window) — the links row IS the viewport: it already carries the
+   Designer's flex row and its gap, so nothing is injected and no new hook is authored. The JS
+   translates each link into its slot; the DOM order never changes, so the tab order and the
+   a11y tree stay authorial.
+   Gated on .is-enhanced: with no JS the names render in normal flow, all of them, crawlable. — */
+[data-component='tabs-team'].is-enhanced .tabs-team_tabs-links {
+  position: relative;
+  overflow: hidden; /* the window: anything parked past the right edge is clipped */
+  min-width: 0; /* so a flex/grid parent lets it shrink instead of growing to fit every name */
+  justify-content: flex-start; /* slot 0 has to anchor at the row's content start */
+  flex-wrap: nowrap; /* the slot maths tracks x only — a wrapped second line has no slots */
+  /* The slot is the name now, so this is the only spacing knob — and it is load-bearing in a
+     way a gap usually isn't: the wider it is, the fewer names fit before the peek's reserved
+     sliver, and the JS drops a name rather than give the peek up. */
+  column-gap: var(--tabs-team-gap, 1rem);
+  /* The right edge dissolves, so the name waiting behind it reads as "there are more of us"
+     instead of being cut with a knife. `--tt-fade` is written by the JS at the end of the
+     WIDEST run of fully-visible names — widest, not the current one, because the run's width
+     changes as the row rotates and a fade pinned to one arrangement would eat the tail of a
+     name in another. The LEFT edge stays crisp on purpose: the active name lives there. */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 var(--tt-fade, 100%),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    #000 0,
+    #000 var(--tt-fade, 100%),
+    transparent 100%
+  );
+}
+[data-component='tabs-team'].is-enhanced
+  .tabs-team_tabs-links
+  [tabs-team='link'] {
+  flex: 0 0 auto; /* the slot maths reads each link's own width — never let it shrink */
+  /* The slot IS the name. A fixed width in the Designer cannot hold a name of arbitrary
+     length, and with `white-space: nowrap` the overflow lands on top of the next name — so
+     the width is forced back to the text's own. Set the air with `--tabs-team-gap`, never
+     with slack inside a fixed box. */
+  width: auto;
+  min-width: 0;
+  white-space: nowrap; /* a long name is clipped by the window, never wrapped to two lines */
+  will-change: transform, opacity;
+}
+
+/* — Optional roster counter: put [tabs-team="counter"] anywhere in the section and the JS
+   fills it with the position and the total. Everything about how it looks is the Designer's;
+   these two rules only line the digits up and pick out the current one. — */
+[data-component='tabs-team'] [tabs-team='counter'] {
+  font-variant-numeric: tabular-nums;
+  color: var(--base--grey, #666);
+}
+[data-component='tabs-team'] .tabs-team_counter-current {
+  color: var(--base--black, #000);
+}
+/* The window clips, so an outward focus ring would be cut off — draw it inside. */
+[data-component='tabs-team'].is-enhanced
+  .tabs-team_tabs-links
+  [tabs-team='link']:focus-visible {
+  outline-offset: -2px;
+}
+
 /* — Text column vertical alignment: centred against the photo on desktop, top-aligned from
    tablet down. It has to be `align-self` on the column (not `align-items` inside it): the
    column's height is collapsed onto the active panel by fitPanels, so there is no slack left
@@ -109,8 +173,9 @@
   cursor: pointer;
 }
 
-/* — Progress underline / track / fill (two states) — grey track under every tab (inactive),
-   black fill only on the active tab. No intermediate active-track shade. */
+/* — Progress underline / track / fill — ACTIVE TAB ONLY. With the active tab pinned to slot 0
+   a grey track under every name stops communicating anything, so the JS puts .is-track on the
+   active link alone and the black fill runs over it. Everyone else carries no underline. */
 
 /* Baseline: collapsed (no flash). Also the reduced-motion bar (underline itself). */
 [data-component='tabs-team'] .tabs-team_tab-link-underline {
@@ -119,13 +184,14 @@
   will-change: transform;
 }
 
-/* Grey track on every tab (full width; JS adds .is-track). */
+/* Grey track — active tab only (full width; JS moves .is-track on every switch). */
 [data-component='tabs-team'] .tabs-team_tab-link-underline.is-track {
   transform: none;
   background-color: var(--base--grey-line, #e4e2dd);
 }
-/* Black progress fill (active-only; JS scales scaleX 0→1 across the tab's reading time, then
-   fades it out at its current width instead of rewinding). */
+/* Black progress fill — JS scales it 0→1 across the active tab's reading time. It is cleared
+   outright on a switch, not faded: the link it sits on is already leaving through the left
+   edge, so a fade on top of that is noise. */
 [data-component='tabs-team'] .tabs-team_tab-link-fill {
   display: block;
   width: 100%;
