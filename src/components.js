@@ -14,6 +14,10 @@
 
 export default [
   {
+    selector: "[data-component='turning-data']",
+    importFn: () => import('./components/turning-data.js'),
+  },
+  {
     selector: "[data-component='impact-beyond']",
     importFn: () => import('./components/impact-beyond.js'),
   },

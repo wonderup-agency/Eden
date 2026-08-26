@@ -6,8 +6,9 @@
   muted+inline on scroll-in, loops, pauses off-screen / hidden tab. Hover never pauses it;
   clicking a tab LOCKS the cycle there with its underline full, until that tab is clicked
   again — the video keeps looping the locked tab's segment meanwhile.
-  ONE shared CTA (.tabs-architected_button) sits under the stacked copy — the component owns
-  its placement and the room the column keeps for it.
+  ONE shared CTA (.tabs-architected_button) sits in its own row under the stacked copy, in the
+  SAME place on every tab (the row is as tall as the tallest tab) at a fixed gap — CSS owns
+  both, the JS only places the button and reveals it once.
   Below 767px the section becomes an accordion instead (no cycle) — see tabs-accordion.js.
   CSS → ./styles/tabs-architected.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-architected.md
 */
@@ -56,9 +57,6 @@ const CONTENT_TO = {
 }
 // Outgoing text just fades out underneath the incoming reveal.
 const OUT_FADE = { autoAlpha: 0, duration: 0.4, ease: 'power2.out' }
-// Text column collapses onto the active panel — matched to CONTENT_TO so the resize and
-// the de-blur read as one motion, not two.
-const FIT_TWEEN = { duration: 0.9, ease: 'sine.out' }
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
 
@@ -97,7 +95,7 @@ function setupTabs(root) {
   // one below the other, editable.
   root.classList.add('is-enhanced')
 
-  // The stacked text column — its height is tweened onto the active panel (see fitPanels).
+  // The stacked text column — the panels share its first grid row, the CTA gets the second.
   const textWrap = root.querySelector('[tabs-architected="text-content"]')
 
   // The single shared CTA: ONE button for the whole section, so it can't live inside the
@@ -236,43 +234,10 @@ function setupTabs(root) {
     bars.forEach((bar, k) => k !== index && fadeOutFill(bar))
   }
 
-  // What the CTA row costs the column: the button's own box + its margins (a grid row
-  // includes the item's margins) + the column's row gap above it. All read LIVE — the label
-  // re-wraps with the column width, and the gap/margins are the Designer's, per breakpoint.
-  // A `display: none` button (hidden at some breakpoint) creates no row, so no gap either.
-  const px = (v) => {
-    const n = parseFloat(v)
-    return isFinite(n) ? n : 0
-  }
-  const ctaHeight = () => {
-    if (!button || !textWrap) return 0
-    const h = button.offsetHeight
-    if (!h) return 0
-    const cs = window.getComputedStyle(button)
-    return (
-      h +
-      px(cs.marginTop) +
-      px(cs.marginBottom) +
-      px(window.getComputedStyle(textWrap).rowGap)
-    )
-  }
-
-  // Collapse the text column onto the active panel, so a short tab doesn't drag the tallest
-  // tab's leftover height around with it. Measured off the DOM (the CSS `align-items: start`
-  // keeps each stacked panel at its own content height, so a stretched grid item can't
-  // report the row height back) rather than counting lines — line-height math is unreliable
-  // in rich text. `immediate` skips the tween on load / resize, where there's no switch to
-  // ride. (compouding had the same thing and dropped it — this section still wants it.)
-  const fitPanels = (index, immediate) => {
-    // In accordion mode the panels live in the drawers, so the column is empty and whatever
-    // a panel measures there says nothing about it.
-    if (inAccordion() || !textWrap || !panels[index]) return
-    // The CTA is a second row under the stack, so the column has to keep room for it —
-    // fitting the panel alone squeezes the button out of the box.
-    const h = panels[index].offsetHeight + ctaHeight()
-    if (immediate) gsap.set(textWrap, { height: h })
-    else gsap.to(textWrap, { height: h, ...FIT_TWEEN })
-  }
+  // The column's height is NOT set here — the grid gives it the tallest panel + the CTA row,
+  // which is exactly what keeps the button in one place on every tab. Collapsing it onto the
+  // active panel (what this component did until 2026-08-26) moved the button per switch and,
+  // with the column centred against the video, shifted the copy with it. See the .md.
 
   // De-blur the incoming text in (first tab uses this directly on start).
   const revealContent = (index) => {
@@ -305,8 +270,6 @@ function setupTabs(root) {
     inPanel.classList.add(ACTIVE_CLASS)
     inLink.setAttribute('aria-selected', 'true')
     inLink.setAttribute('tabindex', '0')
-
-    fitPanels(index) // the bars + the clock are startProgress's, called right after this
 
     // Incoming overlays the outgoing (z-index) regardless of DOM order; it shows
     // instantly, its content de-blurs in while the outgoing fades out.
@@ -342,7 +305,6 @@ function setupTabs(root) {
       link.setAttribute('tabindex', on ? '0' : '-1')
     })
     activeIndex = index
-    fitPanels(index, true)
   }
 
   // rAF: the playhead is slaved to the active tab. While the underline clock is paused (a
@@ -467,16 +429,13 @@ function setupTabs(root) {
       gsap.set(panel, { autoAlpha: on ? 1 : 0 })
     })
     gsap.set(panels, { clearProps: 'zIndex' })
-    fitPanels(index, true) // no collapse animation on load
   }
 
   gsap.set(bars.filter(Boolean), { scaleX: 0, transformOrigin: 'left center' })
-  // Hidden until the section is reached (visibility, so it still reserves its row and the
-  // fit above can measure it). Reduced motion never hides it.
+  // Hidden until the section is reached (visibility, not display, so it still reserves its
+  // row — no CLS, and no jump when it enters). Reduced motion never hides it.
   if (button && !reduceMotion.matches) gsap.set(button, REVEAL_FROM)
   resetToTab(0)
-  // Webfonts land after init and reflow the copy — re-measure once they're in.
-  document.fonts?.ready.then(() => fitPanels(activeIndex, true))
 
   // Prep the shared video: muted + inline (autoplay-with-sound is blocked), LOOP on so it
   // wraps back to the first text.
@@ -539,7 +498,6 @@ function setupTabs(root) {
           clearProps: 'opacity,visibility,filter,transform,willChange',
         })
       })
-      if (textWrap) gsap.set(textWrap, { clearProps: 'height' })
       // Its reveal never runs in accordion mode (the IO skips the cycle), so the start state
       // would leave it hidden inside the open drawer.
       if (button) {
@@ -643,10 +601,6 @@ function setupTabs(root) {
   }
 
   return {
-    // Column width decides how the copy wraps, so the active panel's height moves with it.
-    refit() {
-      fitPanels(activeIndex, true)
-    },
     destroy() {
       if (progressTl) progressTl.kill()
       accordion?.destroy()
@@ -672,11 +626,7 @@ export default function (elements) {
     return
   }
 
-  const instances = elements.map(setupTabs).filter(Boolean)
-
-  return {
-    resize() {
-      instances.forEach((instance) => instance.refit())
-    },
-  }
+  // No lifecycle hooks: nothing is measured any more (the column's height is the grid's), so
+  // a resize needs no re-fit.
+  elements.map(setupTabs).filter(Boolean)
 }

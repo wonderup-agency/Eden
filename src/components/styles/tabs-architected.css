@@ -5,13 +5,16 @@
    column; only the active one shows (JS autoAlpha). The video stays put.
    Gated on .is-enhanced (added by JS at runtime) so in the Webflow Designer — where the
    bundle never runs — the blocks stay in normal flow, one below the other, editable. — */
-/* align-items: start is load-bearing, not cosmetic: stacked grid items stretch to the row
-   height by default, so a stretched panel would report the TALLEST tab's height and the JS
-   height-fit (fitPanels) could never measure the active panel on its own. */
+/* align-items: start keeps every stacked block at its OWN content height instead of being
+   stretched to the row — so a short tab's copy starts at the top of the cell like the others.
+   row-gap IS the distance to the CTA (the column only ever has those two rows), so the
+   Designer's gap is deliberately overridden here: the CTA has to sit at a guaranteed distance,
+   which a per-breakpoint Webflow gap can't promise. Tune it with --tabs-architected-cta-gap. */
 [data-component='tabs-architected'].is-enhanced
   [tabs-architected='text-content'] {
   display: grid;
   align-items: start;
+  row-gap: var(--tabs-architected-cta-gap, 2rem);
 }
 [data-component='tabs-architected'].is-enhanced
   .tabs-architected_tab-content-inner {
@@ -22,8 +25,13 @@
    NOT part of the stacked panels: it gets its own row under them and never moves as the tabs
    switch. Pinned explicitly rather than left to auto-placement, so it can never land in the
    panels' cell (row 1) and paint over the copy. The JS appends it into this column, so this
-   rule matches wherever it was dropped in the Designer — and the room the column keeps for
-   it is added by fitPanels (see tabs-architected.md). — */
+   rule matches wherever it was dropped in the Designer.
+   Row 1 is as tall as the TALLEST tab (every panel shares that cell and a hidden one is
+   `visibility: hidden`, so it still takes part in layout) — which is what puts the button in
+   exactly the same place on every tab. A short tab therefore reads with more air above the
+   button, deliberately: that is the cost of it never moving.
+   margin-top is zeroed so the distance is the row gap and nothing else — a Designer margin
+   would stack on top of it and the guarantee would be gone. — */
 [data-component='tabs-architected'].is-enhanced
   [tabs-architected='text-content']
   > .tabs-architected_button,
@@ -32,13 +40,14 @@
   > [tabs-architected='button'] {
   grid-row: 2;
   grid-column: 1;
+  margin-top: 0;
 }
 
 /* — Text column vertical alignment: centred against the video on desktop, top-aligned from
    tablet down. It has to be `align-self` on the column (not `align-items` inside it): the
-   column's height is collapsed onto the active panel by fitPanels, so there is no slack left
-   inside it to centre against — only the row can align it. Leaves the row itself, and every
-   other layout decision, to the Designer. — */
+   column is only as tall as its own content, so there is no slack inside it to centre
+   against — only the row can align it. Its height no longer changes per tab, so this centring
+   is static now. Leaves the row itself, and every other layout decision, to the Designer. — */
 [data-component='tabs-architected'] [tabs-architected='text-content'] {
   align-self: center;
 }
@@ -62,8 +71,9 @@
 /* A mobile override used to live here forcing each link to size to its own text. It was
    written for a horizontal row and fights the stacked mobile list now set in Webflow — and
    since bundled CSS doesn't render in the Designer canvas, the two disagreed on screen.
-   Layout/sizing stay in Webflow — the one exception is the text column's vertical alignment
-   above (the JS owns that column's height, so the Designer can't own its alignment). */
+   Layout/sizing stay in Webflow — the exceptions are above: the text column's vertical
+   alignment and the CTA's row gap, both of which the component has to own (the column's rows
+   are its layout, and the CTA's distance is a guarantee, not a per-breakpoint preference). */
 
 /* — Mobile accordion (≤767px) — .is-accordion is added by src/utils/tabs-accordion.js, which
    MOVES the links, the text blocks and the shared video + CTA into its drawers. Only the leftovers
