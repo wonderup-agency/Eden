@@ -25,3 +25,88 @@
 .whitepapers_page-button.w--current::before {
   width: 100%;
 }
+
+/* — Category filters: the row's edges dissolve while there is more to scroll to —
+   Below 767px the tag row becomes a horizontal scroller (Webflow sets `overflow: auto hidden`
+   on the list, `overflow: auto` + no scrollbar on its wrapper), so nothing tells the reader
+   there are tags past the right edge. A mask fades that edge out — same language as
+   tabs-team's rotating links row.
+
+   Unlike tabs-team's, this one is NOT static: the fade widths are driven by the element's own
+   scroll position through a scroll-driven animation, so the right edge only dissolves while
+   there is something to scroll to and the left edge picks it up once you have scrolled away
+   from the start. Two consequences that are the reason for doing it this way:
+
+   - A container that ISN'T scrollable has an inactive timeline, so the animation never
+     applies and both fade widths stay 0 — i.e. no fade when everything already fits. A static
+     mask can't tell the difference, and would leave the last tag permanently half-erased once
+     you reached the end of the row.
+   - Because of that, the rule can name BOTH candidate scrollers without having to decide
+     which one Webflow ends up scrolling: whichever isn't scrolling simply does nothing.
+
+   `@property` is what makes the two widths interpolate — an unregistered custom property
+   animates discretely (it would snap at the midpoint instead of easing). — */
+
+@property --wpf-fade-l {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+@property --wpf-fade-r {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0px;
+}
+
+@keyframes wpf-edge-left {
+  0% {
+    --wpf-fade-l: 0px;
+  }
+  15%,
+  100% {
+    --wpf-fade-l: var(--wpf-fade, 2.5rem);
+  }
+}
+@keyframes wpf-edge-right {
+  0%,
+  85% {
+    --wpf-fade-r: var(--wpf-fade, 2.5rem);
+  }
+  100% {
+    --wpf-fade-r: 0px;
+  }
+}
+
+@media screen and (max-width: 767px) {
+  .whitepapers_filters-inner,
+  .whitepapers_category-filter-list {
+    /* At both widths 0 the two ramps have zero length and sit exactly on the edges, so the
+       mask is fully opaque — the un-scrolled / non-scrollable state costs nothing visually. */
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--wpf-fade-l),
+      #000 calc(100% - var(--wpf-fade-r)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--wpf-fade-l),
+      #000 calc(100% - var(--wpf-fade-r)),
+      transparent 100%
+    );
+    animation-name: wpf-edge-left, wpf-edge-right;
+    animation-timing-function: linear;
+    animation-fill-mode: both;
+    animation-timeline: scroll(self inline);
+  }
+
+  /* No scroll-driven animations (Firefox today): fall back to a static right-edge fade on the
+     list alone. It can't retract at the end of the row, but the affordance is still there. */
+  @supports not (animation-timeline: scroll(self inline)) {
+    .whitepapers_category-filter-list {
+      --wpf-fade-r: var(--wpf-fade, 2.5rem);
+    }
+  }
+}
