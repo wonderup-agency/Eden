@@ -64,13 +64,13 @@
   }
   15%,
   100% {
-    --wpf-fade-l: var(--wpf-fade, 2.5rem);
+    --wpf-fade-l: var(--wpf-fade, 4rem);
   }
 }
 @keyframes wpf-edge-right {
   0%,
   85% {
-    --wpf-fade-r: var(--wpf-fade, 2.5rem);
+    --wpf-fade-r: var(--wpf-fade, 4rem);
   }
   100% {
     --wpf-fade-r: 0px;
@@ -80,6 +80,9 @@
 @media screen and (max-width: 767px) {
   .whitepapers_filters-inner,
   .whitepapers_category-filter-list {
+    /* How wide each dissolve is — the one knob. It's read by the keyframes below, which live
+       outside this media query, so the `var()` fallbacks there must stay in step with it. */
+    --wpf-fade: 4rem;
     /* At both widths 0 the two ramps have zero length and sit exactly on the edges, so the
        mask is fully opaque — the un-scrolled / non-scrollable state costs nothing visually. */
     -webkit-mask-image: linear-gradient(
@@ -106,7 +109,63 @@
      list alone. It can't retract at the end of the row, but the affordance is still there. */
   @supports not (animation-timeline: scroll(self inline)) {
     .whitepapers_category-filter-list {
-      --wpf-fade-r: var(--wpf-fade, 2.5rem);
+      --wpf-fade-r: var(--wpf-fade, 4rem);
     }
+  }
+}
+
+/* — Click a tag and it scrolls itself into view —
+   No JS: clicking a <label> focuses the control it wraps, and the browser scrolls a newly
+   focused control into view on its own. Two things have to be true for that to work here,
+   and neither was:
+
+   1. The radio has to be FOCUSABLE. Webflow hides it with the global `.hide` utility, i.e.
+      `display: none` — so there is nothing to focus and nothing to scroll to. It's overridden
+      to a visually-hidden-but-present box covering its label, scoped to these labels only
+      (`.hide` is a site-wide utility and must not be redefined globally). Side effect, and a
+      fix rather than a cost: the category filters were unreachable by keyboard until now.
+      They form one radio group, so they add a single tab stop and the arrow keys move (and
+      filter) within it — standard radio behaviour, and each move scrolls its tag into view too.
+   2. The scroll has to clear the edge fade. The browser scrolls the MINIMUM distance, which
+      would park the tag right under the dissolve; `scroll-margin-inline` makes it overshoot
+      by exactly the fade's width.
+
+   `pointer-events: none` keeps the click on the label itself, so the label's own cursor and
+   hover behaviour are untouched — the label forwards the activation to the input regardless. — */
+
+.whitepapers_filters-inner,
+.whitepapers_category-filter-list {
+  scroll-behavior: smooth;
+}
+
+.whitepapers_checkbox {
+  scroll-margin-inline: var(--wpf-fade, 4rem);
+}
+
+.whitepapers_checkbox .w-form-formradioinput.hide {
+  display: block;
+  position: absolute; /* the label is already position: relative in the Designer */
+  inset: 0;
+  float: none;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+/* The input is invisible, so its own focus ring is too — the label has to carry it, or making
+   the filters keyboard-reachable would leave a keyboard user with no idea where they are. */
+.whitepapers_checkbox:has(.w-form-formradioinput:focus-visible) {
+  outline: 2px solid var(--base--gold, #fbd07c);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whitepapers_filters-inner,
+  .whitepapers_category-filter-list {
+    scroll-behavior: auto;
   }
 }
