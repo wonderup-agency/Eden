@@ -8,12 +8,15 @@
 
 const { gsap, Flip } = window
 
-// Hysteresis deadzone: float past *_ON, revert below *_OFF. Mobile ON is much higher
-// because the address bar swings the viewport over the first scroll (morphing mid-swing read as jumpy).
+// Hysteresis deadzone: float past *_ON, revert below *_OFF. Mobile fires on the first
+// scroll — the un-morphed bar sat over the page title otherwise. Safe now that the mobile
+// morph is a composited translateY (the address-bar swing can't perturb it); it was 80px
+// back when the morph reflowed against the live viewport. *_OFF must stay above 0:
+// scrollY is clamped at 0, so a 0 floor could never revert.
 const FLOAT_ON_DESKTOP = 24 // px scrolled before the bar floats (desktop)
 const FLOAT_OFF_DESKTOP = 4 // px — revert near the very top (desktop)
-const FLOAT_ON_MOBILE = 80 // px — clear the address-bar-collapse zone first
-const FLOAT_OFF_MOBILE = 8 // px — a touch higher to absorb top overscroll
+const FLOAT_ON_MOBILE = 6 // px — effectively "as soon as it scrolls"
+const FLOAT_OFF_MOBILE = 2 // px — revert at the very top, absorbing overscroll jitter
 const FLIP_DURATION = 1
 const FLIP_EASE = 'power2.inOut'
 
