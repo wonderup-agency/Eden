@@ -30,7 +30,7 @@ Setup — PINNED TO A COMMIT:
 <link
   rel="preload"
   as="style"
-  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/styles.css"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@ca5d2f8/dist/styles.css"
 />
 
 <!-- modulepreload — the LCP fix (2026-08-06 audit).
@@ -53,27 +53,27 @@ Setup — PINNED TO A COMMIT:
      back to costing a round trip. -->
 <link
   rel="modulepreload"
-  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/main.js"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@ca5d2f8/dist/main.js"
   crossorigin
 />
 <link
   rel="modulepreload"
-  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/global.js"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@ca5d2f8/dist/global.js"
   crossorigin
 />
 <link
   rel="modulepreload"
-  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/word-reveal.js"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@ca5d2f8/dist/word-reveal.js"
   crossorigin
 />
 <link
   rel="modulepreload"
-  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/hero.js"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@ca5d2f8/dist/hero.js"
   crossorigin
 />
 <link
   rel="modulepreload"
-  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/nav.js"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@ca5d2f8/dist/nav.js"
   crossorigin
 />
 
@@ -100,7 +100,7 @@ Setup — PINNED TO A COMMIT:
     }
 
     var dev = localStorage.dev
-    var cdn = 'https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist'
+    var cdn = 'https://cdn.jsdelivr.net/gh/wonderup-agency/eden@ca5d2f8/dist'
     // In dev: a tunnel URL (localStorage.devUrl) wins, else localhost.
     var base = dev ? localStorage.devUrl || 'http://127.0.0.1:8080' : cdn
 
@@ -188,10 +188,10 @@ For page-specific bundles (src/pages/), add this to:
 Replace "bundle-name" with your page bundle name.
 The create-page script outputs the correct snippet automatically.
 
-  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/bundle-name.js" crossorigin>
+  <link rel="preload" as="script" href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@ca5d2f8/dist/bundle-name.js" crossorigin>
   <script>
     (function () {
-      var base = window.__devBase || (localStorage.dev ? (localStorage.devUrl || 'http://127.0.0.1:8080') : 'https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist')
+      var base = window.__devBase || (localStorage.dev ? (localStorage.devUrl || 'http://127.0.0.1:8080') : 'https://cdn.jsdelivr.net/gh/wonderup-agency/eden@ca5d2f8/dist')
       var s = document.createElement('script')
       s.src = base + '/bundle-name.js'
       s.type = 'module'
