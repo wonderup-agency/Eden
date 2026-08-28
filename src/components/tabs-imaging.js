@@ -135,7 +135,12 @@ function setupTabs(root) {
     v.loop = true
     v.playsInline = true
     v.setAttribute('playsinline', '')
-    v.preload = 'auto'
+    // 'metadata', not 'auto': there is ONE VIDEO PER TAB here, and 'auto' downloaded every
+    // one of them in full on load — measured 10.4 MB across the 9 videos of /technology,
+    // all of them fully buffered (readyState 4) while paused and off screen. Metadata is
+    // enough for what init needs (the duration IS this tab's dwell); the active tab is
+    // promoted to 'auto' in startProgress, which is the only one that has to play smoothly.
+    v.preload = 'metadata'
     // Playback is owned here (starts on scroll-in, follows the active tab) — a Webflow
     // `autoplay` attribute would run every hidden panel's video from load.
     v.autoplay = false
@@ -211,6 +216,7 @@ function setupTabs(root) {
     const bar = bars[index]
     activeVideo = parts[index].video || null
     if (activeVideo) {
+      activeVideo.preload = 'auto' // only the tab that is about to play buffers ahead
       try {
         activeVideo.currentTime = 0
       } catch {

@@ -45,7 +45,9 @@ export default defineConfig({
     dir: 'dist',
     format: 'es',
     entryFileNames: '[name].js',
-    chunkFileNames: '[name]-[hash].js',
+    chunkFileNames: '[name].js', // no hash: the CDN URL is already pinned to a commit SHA,
+    // so the hash adds nothing and would make the head's modulepreload links
+    // go stale on every build. See ARCHITECTURE.md → Critical path.
     sourcemap: true,
   },
   plugins: [

@@ -120,7 +120,9 @@ function setupTabs(root) {
     v.loop = true
     v.playsInline = true
     v.setAttribute('playsinline', '')
-    v.preload = 'auto'
+    // 'metadata', not 'auto': one video per panel, and 'auto' pulled all of them down in
+    // full on load. The active panel is promoted to 'auto' in switchTab — see tabs-imaging.
+    v.preload = 'metadata'
     v.autoplay = false
     v.removeAttribute('autoplay')
     v.pause()
@@ -177,6 +179,7 @@ function setupTabs(root) {
 
     activeVideo = parts[index].video || null
     if (activeVideo) {
+      activeVideo.preload = 'auto' // only the panel that is about to play buffers ahead
       try {
         activeVideo.currentTime = 0
       } catch {

@@ -29,14 +29,52 @@ Setup — PINNED TO A COMMIT:
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
 <link
   rel="preload"
-  as="script"
+  as="style"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/styles.css"
+/>
+
+<!-- modulepreload — the LCP fix (2026-08-06 audit).
+     The hero is held at opacity:0 by the anti-FOUC gate until our JS lifts it, and
+     main.js can only DISCOVER its chunks one hop at a time:
+       main.js → import(global.js) → import(hero.js) → import(word-reveal.js)
+     Those chunks are ~500 B each. The cost is not bytes, it is THREE SEQUENTIAL
+     round trips to jsDelivr that the browser cannot start until it has parsed the
+     previous one — and the LCP element waits behind all of them. Measured on mobile
+     before this: FCP 5.3s, LCP 5.7s, only 0.4s apart, i.e. the paint was gated on
+     this chain, not on the video bytes.
+     Declaring the graph here lets all of it download in parallel during head parse.
+     Two things this depends on, both deliberate:
+       - Chunk names carry NO content hash (rollup.config.*.js). The CDN URL is
+         already pinned to a commit SHA, so the hash bought nothing and would make
+         every one of these links go stale on each build.
+       - `modulepreload`, not `preload as="script"`: it primes the module map and
+         compiles the module, and it is the correct type for `type="module"`.
+     ⚠ Put a component on the LCP path and it has to be added here too, or it goes
+     back to costing a round trip. -->
+<link
+  rel="modulepreload"
   href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/main.js"
   crossorigin
 />
 <link
-  rel="preload"
-  as="style"
-  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/styles.css"
+  rel="modulepreload"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/global.js"
+  crossorigin
+/>
+<link
+  rel="modulepreload"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/word-reveal.js"
+  crossorigin
+/>
+<link
+  rel="modulepreload"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/hero.js"
+  crossorigin
+/>
+<link
+  rel="modulepreload"
+  href="https://cdn.jsdelivr.net/gh/wonderup-agency/eden@4682e8a/dist/nav.js"
+  crossorigin
 />
 
 <script>

@@ -283,7 +283,10 @@ function setupRoot(root) {
   const start = () => {
     if (started) return
     started = true
-    if (video) resolveCues()
+    if (video) {
+      video.preload = 'auto' // in view now — buffer ahead
+      resolveCues()
+    }
     goTo(0)
   }
 
@@ -324,7 +327,11 @@ function setupRoot(root) {
     video.loop = true
     video.playsInline = true
     video.setAttribute('playsinline', '')
-    video.preload = 'auto'
+    // 'metadata', not 'auto': this section is below the fold, and 'auto' pulled the whole
+    // clip down while the hero was still trying to paint — bandwidth the LCP needed
+    // (audit 2026-08-06). Metadata still fires `loadedmetadata`, which is all the cue
+    // resolution below needs; the clip is promoted to 'auto' when the section is reached.
+    video.preload = 'metadata'
     video.addEventListener('loadedmetadata', () => {
       resolveCues()
       // The last tab's cue gap needs the duration, and an unauthored cue set needs it for all
