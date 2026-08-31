@@ -8,7 +8,7 @@ Both configs share the same entry points and helper functions:
 
 ### Entry points
 
-- `src/main.js` — always included as the `main` entry. It imports `src/styles.js`, which is how every component's CSS reaches the build.
+- `src/main.js` — always included as the `main` entry.
 - `src/pages/*.js` — automatically discovered by `getPageEntries()`, which recursively reads `src/pages/` and maps each `.js` file to a named entry (e.g., `src/pages/blog/post.js` → entry name `blog/post`). Silently returns `{}` if the directory doesn't exist.
 
 ### `checkGlobalJs` plugin
@@ -17,26 +17,14 @@ Custom Rollup plugin that runs at `buildStart`. Checks if `src/components/global
 
 ### Output
 
-Both use `dir: 'dist'`, `format: 'es'`, `entryFileNames: '[name].js'`, `chunkFileNames: '[name].js'`.
-
-> **Chunk names carry no content hash, deliberately** (changed 2026-08-06). The CDN URL is
-> already pinned to an immutable commit SHA (`…/eden@<sha>/dist/…`), so a content hash bought
-> nothing for cache-busting — jsDelivr already caches per SHA — while making every chunk
-> filename change on each build. That mattered once the head snippet started declaring
-> `modulepreload` for the LCP-critical chunks (`global.js`, `hero.js`, `word-reveal.js`,
-> `nav.js`): with hashes, those links would 404 after every deploy. Stable names make the
-> preload list a fixed contract.
->
-> **The cost**: `@main` is no longer safe to serve from, because two builds produce the same
-> filenames with different content and a CDN/browser cache can mix them. `@main` was already
-> only an escape hatch (see `ARCHITECTURE.md` → Deployment Flow) — treat it as unusable now.
+Both use `dir: 'dist'`, `format: 'es'`, `entryFileNames: '[name].js'`, `chunkFileNames: '[name]-[hash].js'`.
 
 ## Dev config (`rollup.config.dev.js`)
 
 Plugins: `del` → `checkGlobalJs` → `resolve` → `commonjs` → `postcss`
 
 - **Sourcemaps**: Enabled (`sourcemap: true` in output, `sourceMap: true` in postcss).
-- **PostCSS**: Extracts CSS to `dist/styles.css` (`extract: 'styles.css'`), `postcss-preset-env` stage 2, minimized. The input is `src/styles.js` — a CSS-only entry point imported by `main.js` that lists every `styles/*.css` file. **Its import order is the emit order**, i.e. the cascade order. Currently ~35 KB minified / ~6.4 KB gzipped.
+- **PostCSS**: Extracts CSS to `dist/styles.css` (`extract: 'styles.css'`). Same as prod. Uses `postcss-preset-env` at stage 2 (nesting, autoprefixer). CSS is minimized. A `<link>` tag is needed in both dev and prod.
 - **Clean**: `rollup-plugin-delete` removes `dist/*` once on the first build (`runOnce: true`). In watch mode, subsequent rebuilds do not re-clean, so the dev server is uninterrupted.
 - **No terser**: Code is not minified.
 
