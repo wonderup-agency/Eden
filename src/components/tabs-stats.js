@@ -5,15 +5,14 @@
   alive when idle; hover loosens it (desktop only). No autoplay — click / hover / keyboard
   switch, and the active tab's underline snaps to full as a state indicator.
   Canvas 2D, no 3D lib. Fallback (no GSAP / reduced motion / CORS-tainted): static image.
-  Below 767px it isn't tabs at all — the stats stack as text → graphic pairs, each with its own
-  always-alive cloud that only ticks while it's on screen (setupStacked).
+  Below 767px it isn't tabs at all — and the graphics are dropped entirely: just the three
+  stats' text, stacked, no canvas anywhere (setupStacked).
   CSS → ./styles/tabs-stats.css (bundled via src/styles.js) · Docs → .claude/rules/components/tabs-stats.md
 */
 
 import { fadeOutFill, fillFull } from '../utils/tab-underline.js'
 import { MOBILE_Q } from '../utils/tabs-accordion.js'
 import {
-  createStillCloud,
   loadImage,
   makeSprite,
   mulberry32,
@@ -26,13 +25,6 @@ const ACTIVE_CLASS = 'is-active'
 
 // ---- Point cloud ----
 const TARGET_POINTS = 7000 // points per state — same for all, for a 1:1 morph
-// Stacked mobile: one cloud per stat, so the budget is per cloud — and only the one on screen
-// runs, which keeps the frame cheaper than the single desktop cloud.
-// Scaled with `--stats-stacked-graphic` (tabs-stats.css, 72% of the row): the dot radius is in
-// px and doesn't shrink with the box, so the same count in a smaller box reads denser. Keep the
-// two moving together.
-const STACKED_POINTS = 1800
-const STACKED_FIT = 0.94 // the canvas IS the image's box, so the ink can fill more of it
 const MORPH_DURATION = 1.25
 const MORPH_EASE = 'power2.inOut'
 // Active-tab underline: the incoming bar appears FULL immediately (nothing is being timed
@@ -102,86 +94,27 @@ function setupFallback(root, links, tabItems, count) {
   })
 }
 
-// Stacked mobile layout (≤ MOBILE_Q): not tabs at all — each stat's text is followed by its
-// own graphic, one pair under the other, all three on screen. Interleaves the existing
-// elements (no clone), then gives each graphic its own cloud (see setupStackedClouds).
-function setupStacked(root, links, tabItems) {
+// Stacked mobile layout (≤ MOBILE_Q): not tabs at all, and no graphics either — just the
+// stats' text, one under the other, all on screen. The tab-items are LEFT WHERE THEY ARE:
+// `.tabs-stats_tabs-content` is `display: none` in this mode, so nothing is moved, no canvas
+// is injected and no rAF loop runs — below 767px the section costs the text alone.
+function setupStacked(root, links) {
   const box = document.createElement('div')
   box.className = 'tabs-stats_stack'
-  links.forEach((link, i) => {
+  links.forEach((link) => {
     const item = document.createElement('div')
     item.className = 'tabs-stats_stack-item'
-    // Every pair IS active here — which is also what makes the existing `.is-active` rules
-    // do the whole job: the gradient on the stat text, and opacity 1 on its graphic.
+    // Every stat IS active here — which is what makes the existing `.is-active` rule paint
+    // the gradient on its text for free.
     link.classList.add(ACTIVE_CLASS)
     item.appendChild(link)
-    if (tabItems[i]) {
-      tabItems[i].classList.add(ACTIVE_CLASS)
-      item.appendChild(tabItems[i])
-    }
     box.appendChild(item)
   })
   const anchor = root.querySelector('.tabs-stats_tabs-links')
   if (anchor?.parentElement) anchor.parentElement.insertBefore(box, anchor)
   else root.appendChild(box)
   root.classList.add('is-stacked')
-
-  const clouds = setupStackedClouds(tabItems)
-  return {
-    resize() {
-      clouds.forEach((cloud) => cloud.resize())
-    },
-  }
-}
-
-// One always-alive cloud per stacked graphic. There is no morph here — nothing to switch
-// between — so each cloud just assembles its own shape on scroll-in and then shimmers and
-// breathes, and its loop runs ONLY while it is on screen. On a phone that means one or two
-// clouds ticking at STACKED_POINTS each: cheaper per frame than the single desktop cloud at
-// TARGET_POINTS, which is what makes three of them affordable.
-// The <img> stays in the DOM behind it — it reserves the box the canvas fills (nothing else
-// gives the row its height) and it is what shows if a cloud can't be built.
-function setupStackedClouds(tabItems) {
-  const clouds = []
-  if (!gsap || reduceMotion.matches) return clouds
-  tabItems.forEach((item, i) => {
-    const img = item?.querySelector('img')
-    const stage =
-      img?.closest('[tabs-architected="image"]') || img?.parentElement
-    if (!img || !stage) return
-    createStillCloud({
-      stage,
-      src: img.currentSrc || img.src,
-      points: STACKED_POINTS,
-      fit: STACKED_FIT,
-      look: { radius: DOT_RADIUS, color: DOT_COLOR },
-      motion: {
-        drift: DRIFT,
-        driftSpeed: DRIFT_SPEED,
-        shimmerFloor: SHIMMER_FLOOR,
-        breathAmp: BREATH_AMP,
-        breathSpeed: BREATH_SPEED,
-        breathRipple: BREATH_RIPPLE,
-      },
-      intro: {
-        scatter: INTRO_SCATTER,
-        fade: INTRO_FADE,
-        hold: INTRO_HOLD,
-        duration: INTRO_DURATION,
-        stagger: INTRO_STAGGER,
-      },
-      seed: 1000 + i, // so the three don't scatter in identical patterns
-    })
-      .then((cloud) => {
-        if (!cloud) return // never loaded, or CORS-tainted → the static image stays
-        clouds.push(cloud)
-        item.classList.add('is-cloud') // hides the <img> but keeps its box (CSS)
-      })
-      // Nothing downstream awaits this, so an unhandled rejection would be silent — and the
-      // static image is a perfectly good outcome.
-      .catch((err) => console.warn('[tabs-stats] stacked cloud failed', err))
-  })
-  return clouds
+  return null // nothing is measured here, so there is no resize hook to return
 }
 
 // Wire one stats-tabs root. Returns { resize } or null if the markup is incomplete.
@@ -204,11 +137,10 @@ function setupTabs(root) {
     (img) => img.closest('.tabs-stats_tab-item') || img.parentElement
   )
 
-  // Mobile: a stack, not tabs — so no tab engine and no ARIA tab scaffolding, just one cloud
-  // per graphic. Decided ONCE at init (same call as impact-map's density budget): the tab
-  // engine is never booted, so a device rotated across 767px keeps the layout it loaded with.
-  if (window.matchMedia(MOBILE_Q).matches)
-    return setupStacked(root, links, tabItems)
+  // Mobile: text only — no tab engine, no ARIA tab scaffolding, no canvas. Decided ONCE at
+  // init (same call as impact-map's density budget): the tab engine is never booted, so a
+  // device rotated across 767px keeps the layout it loaded with.
+  if (window.matchMedia(MOBILE_Q).matches) return setupStacked(root, links)
 
   // ARIA scaffolding — tablist / tab / tabpanel with roving tabindex.
   const tablist = links[0].parentElement || root

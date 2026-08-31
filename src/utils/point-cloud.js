@@ -1,9 +1,10 @@
 /*
-  Shared 2D point-cloud pieces: the image sampler both cloud users need, plus `createStillCloud`
-  — ONE image's ink on its own canvas, floating in on scroll-in and then shimmering + breathing
-  forever. No morph, no hover: that's tabs-stats' tab engine, which imports the sampler from
-  here so there is a single copy of the thresholds.
-  Docs → .claude/rules/components/tabs-stats.md (Stacked mobile layout)
+  Shared 2D point-cloud pieces: the image sampler tabs-stats' tab engine uses, plus
+  `createStillCloud` — ONE image's ink on its own canvas, floating in on scroll-in and then
+  shimmering + breathing forever. No morph, no hover.
+  `createStillCloud` has NO CALLER since 2026-08-31 (mobile stopped showing the graphics), so
+  it is tree-shaken out of the bundle. Kept for the next single-image cloud; delete it if none
+  arrives. Docs → .claude/rules/components/tabs-stats.md
 */
 
 const { gsap } = window

@@ -51,17 +51,25 @@
 }
 
 /* — Stacked mobile layout (≤767px) — .is-stacked is added by tabs-stats.js, which MOVES each
-   link and its graphic into one pair. Every pair carries `.is-active` (they are all showing),
-   so the gradient + the graphic's opacity come from the rules below for free. — */
-[data-component='tabs-stats'].is-stacked {
-  /* How wide the graphic (and therefore its cloud) is in its row — the one size knob here.
-     Lowering it alone makes the cloud read DENSER: the dot radius is in px and doesn't
-     shrink with the box, so STACKED_POINTS in tabs-stats.js moves with it. */
-  --stats-stacked-graphic: 72%;
-}
+   link into its own row. The GRAPHICS ARE NOT SHOWN below 767px (2026-08-31): the tab-items
+   stay inside `.tabs-stats_tabs-content`, which is hidden here, and no canvas is built at all.
+   Every row carries `.is-active`, so the gradient on the stat text comes from the rules below
+   for free. — */
 [data-component='tabs-stats'].is-stacked .tabs-stats_tabs-links,
 [data-component='tabs-stats'].is-stacked .tabs-stats_tabs-content {
-  display: none; /* both left empty by the move */
+  /* links: emptied by the move · content: still holds the graphics. Not scoped to the media
+     query, so a phone rotated to landscape past 767px keeps the layout it loaded with. */
+  display: none;
+}
+/* And the other direction: `.is-stacked` is decided ONCE at init, so a desktop window narrowed
+   past 767px mid-session keeps the tab engine — without this the graphics would survive there,
+   which is the state anyone testing the breakpoint by resizing would see. Hiding the stage also
+   stops the cloud's rAF loop (an IntersectionObserver never reports a `display: none` box) and
+   keeps the chart PNGs from being fetched before the JS runs on a real phone. */
+@media (max-width: 767px) {
+  [data-component='tabs-stats'] .tabs-stats_tabs-content {
+    display: none;
+  }
 }
 [data-component='tabs-stats'] .tabs-stats_stack {
   display: flex;
@@ -70,51 +78,13 @@
 }
 [data-component='tabs-stats'] .tabs-stats_stack-item {
   display: flex;
-  flex-direction: column; /* text, then its graphic */
-  gap: 1.5rem;
+  flex-direction: column;
 }
 /* The grey baseline under each stat, as the tab layout has it — the JS fill is never injected
    in this mode, so the rail is expanded here instead of by `.is-track`. */
 [data-component='tabs-stats'].is-stacked .tabs-architected_tab-link-underline {
   transform: none;
   background-color: var(--base--grey-line, #e4e2dd);
-}
-
-/* — The graphic sizes itself from its own ratio here — */
-/* Webflow sizes it to FILL a fixed-height stage: a square item (`aspect-ratio: 1`) clamped by
-   `max-height`, with the wrapper and the <img> both at `height: 100%`, and anything that
-   didn't fit clipped by the stage's `overflow: hidden`. Stacked there is no stage, so that
-   clip is gone — and the three graphics aren't square either (ratios 1.03 / 1.32 / 1.10), so
-   the square box never matched them. Handing the box back to the image removes both problems
-   at once: no spill, and no dead space around it. */
-[data-component='tabs-stats'].is-stacked .tabs-stats_tab-item {
-  display: block;
-  aspect-ratio: auto;
-  max-height: none;
-  padding-top: 0;
-  padding-bottom: 0;
-}
-/* The cap goes on the WRAPPER, not the <img>: the injected canvas is absolute against this
-   box, so capping the image alone would leave the cloud at full row width. Centred because
-   the stat text above it is centred. */
-[data-component='tabs-stats'].is-stacked .tabs-stats_tab-image-wrapper {
-  height: auto;
-  position: relative; /* the injected canvas is absolute over the image */
-  max-width: var(--stats-stacked-graphic);
-  margin-inline: auto;
-}
-[data-component='tabs-stats'].is-stacked .tabs-stats_tab-image {
-  width: 100%;
-  max-width: 100%;
-  height: auto; /* the intrinsic ratio decides — object-fit then has nothing to fit */
-}
-
-/* — One cloud per graphic (JS adds .is-cloud to the pair once its canvas is live) — */
-/* The <img> stays in flow behind the canvas: it is the only thing giving the row a height
-   (there is no fixed-height stage here), and it's what shows if a cloud can't be built. Hence
-   `visibility`, not `display` — the box has to survive. */
-[data-component='tabs-stats'].is-stacked .is-cloud .tabs-stats_tab-image {
-  visibility: hidden;
 }
 
 /* — Tab text: inactive grey, active gradient (background-clip: text), weight normal — */
