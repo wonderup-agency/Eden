@@ -17,7 +17,7 @@ const FLOAT_ON_DESKTOP = 24 // px scrolled before the bar floats (desktop)
 const FLOAT_OFF_DESKTOP = 4 // px — revert near the very top (desktop)
 const FLOAT_ON_MOBILE = 6 // px — effectively "as soon as it scrolls"
 const FLOAT_OFF_MOBILE = 2 // px — revert at the very top, absorbing overscroll jitter
-const FLIP_DURATION = 1
+const FLIP_DURATION = 0.4 // seconds — keep in sync with --nav-morph (nav.css)
 const FLIP_EASE = 'power2.inOut'
 
 // DEBUG — on-screen HUD + logs to chase the scroll "jump" (now also the bar's height,

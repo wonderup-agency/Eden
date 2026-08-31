@@ -5,7 +5,7 @@
 
 /* — Tokens — */
 [data-component='nav'] {
-  --nav-morph: 1s;
+  --nav-morph: 0.4s; /* morph duration — keep in sync with FLIP_DURATION (nav.js) */
   --nav-ease: cubic-bezier(0.45, 0, 0.55, 1);
   --nav-rest-top: 0px; /* auto-set by nav.js from the bar's measured rest offset — never author it */
   --nav-float-top: 0.25rem; /* gap from the top when floating */
